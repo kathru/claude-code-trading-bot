@@ -124,6 +124,14 @@
         <div id="holdings-BTC" class="mt-2 text-xs text-gray-500 hidden">
           Posição: <span id="qty-BTC" class="text-orange-400 font-mono font-bold">0</span> BTC
         </div>
+        <div class="mt-3 flex gap-2">
+          <button onclick="manualTrade('buy','BTC-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors">
+            Comprar $500
+          </button>
+          <button onclick="manualTrade('sell','BTC-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors">
+            Vender tudo
+          </button>
+        </div>
       </div>
 
       <!-- ETH -->
@@ -161,6 +169,14 @@
         </div>
         <div id="holdings-ETH" class="mt-2 text-xs text-gray-500 hidden">
           Posição: <span id="qty-ETH" class="text-blue-400 font-mono font-bold">0</span> ETH
+        </div>
+        <div class="mt-3 flex gap-2">
+          <button onclick="manualTrade('buy','ETH-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors">
+            Comprar $500
+          </button>
+          <button onclick="manualTrade('sell','ETH-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors">
+            Vender tudo
+          </button>
         </div>
       </div>
     </div>
@@ -362,6 +378,26 @@
             </div>
           </div>
         `).join('');
+      }
+    }
+
+    // Manual trade
+    async function manualTrade(side, pair) {
+      const btn = event.target;
+      btn.disabled = true;
+      btn.textContent = '...';
+      try {
+        const url = side === 'buy'
+          ? `/trade/buy?pair=${pair}&usd=500`
+          : `/trade/sell?pair=${pair}`;
+        const res = await fetch(url, { method: 'POST' });
+        const data = await res.json();
+        if (!data.ok) alert('Erro: ' + data.error);
+      } catch(e) {
+        alert('Erro de conexão');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = side === 'buy' ? 'Comprar $500' : 'Vender tudo';
       }
     }
 

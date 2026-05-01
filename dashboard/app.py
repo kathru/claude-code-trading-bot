@@ -55,6 +55,72 @@ async def index():
     return FileResponse(HTML_FILE)
 
 
+@app.post("/trade/buy")
+async def manual_buy(pair: str, usd: float = 500.0):
+    symbol = pair.split("-")[0]
+    ticker = client.get_ticker(pair)
+    price = float(ticker.get("price", 0))
+    if not price:
+        return {"ok": False, "error": "Preço indisponível"}
+    qty = usd / price
+    ok = engine.buy(symbol, usd, price, "manual")
+    if ok:
+        engine.update_price(symbol, price)
+        log_trade(logger, "BUY", pair, qty, price, usd, "manual")
+        notify_trade("BUY", pair, qty, price, usd)
+        state["trades"].insert(0, {
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "side": "BUY", "pair": pair, "price": price, "usd": usd,
+        })
+        state["trades"] = state["trades"][:50]
+        total = engine.portfolio_value()
+        pnl = total - engine.initial_balance
+        state["portfolio"] = {
+            "usd": round(engine.balance_usd, 2),
+            "total": round(total, 2),
+            "pnl": round(pnl, 2),
+            "pnl_pct": round((pnl / engine.initial_balance) * 100, 2),
+            "holdings": {k: round(v, 8) for k, v in engine.holdings.items()},
+        }
+        await broadcast(state)
+        return {"ok": True, "qty": qty, "price": price, "usd": usd}
+    return {"ok": False, "error": "Saldo insuficiente"}
+
+
+@app.post("/trade/sell")
+async def manual_sell(pair: str):
+    symbol = pair.split("-")[0]
+    held = engine.holdings.get(symbol, 0)
+    if held <= 0:
+        return {"ok": False, "error": f"Sem {symbol} para vender"}
+    ticker = client.get_ticker(pair)
+    price = float(ticker.get("price", 0))
+    if not price:
+        return {"ok": False, "error": "Preço indisponível"}
+    usd = held * price
+    ok = engine.sell(symbol, held, price, "manual")
+    if ok:
+        log_trade(logger, "SELL", pair, held, price, usd, "manual")
+        notify_trade("SELL", pair, held, price, usd)
+        state["trades"].insert(0, {
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "side": "SELL", "pair": pair, "price": price, "usd": usd,
+        })
+        state["trades"] = state["trades"][:50]
+        total = engine.portfolio_value()
+        pnl = total - engine.initial_balance
+        state["portfolio"] = {
+            "usd": round(engine.balance_usd, 2),
+            "total": round(total, 2),
+            "pnl": round(pnl, 2),
+            "pnl_pct": round((pnl / engine.initial_balance) * 100, 2),
+            "holdings": {k: round(v, 8) for k, v in engine.holdings.items()},
+        }
+        await broadcast(state)
+        return {"ok": True, "qty": held, "price": price, "usd": usd}
+    return {"ok": False, "error": "Falha na venda"}
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
