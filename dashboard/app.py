@@ -244,9 +244,11 @@ async def trading_loop():
         state["trades"] = state["trades"][:50]
         state["history"].append({
             "time": datetime.now().strftime("%H:%M:%S"),
+            "ts": int(time.time()),
             "total": round(total, 2),
         })
-        state["history"] = state["history"][-60:]
+        # Mantém até 1 mês de histórico (ciclos de 30s = ~86400 pontos/mês)
+        state["history"] = state["history"][-90000:]
 
         await broadcast(state)
         await asyncio.sleep(30)

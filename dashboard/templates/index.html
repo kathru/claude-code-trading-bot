@@ -34,6 +34,9 @@
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: #0d1117; }
     ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+    .period-btn { background: transparent; color: #6b7280; border: 1px solid #30363d; }
+    .period-btn:hover { color: #d1d5db; border-color: #6b7280; }
+    .period-btn.active { background: #6366f1; color: #fff; border-color: #6366f1; }
   </style>
 </head>
 <body class="min-h-screen text-gray-100">
@@ -186,7 +189,12 @@
       <div class="card p-5 lg:col-span-2">
         <div class="flex items-center justify-between mb-4">
           <h3 class="font-semibold text-white">Evolução do Portfolio</h3>
-          <span class="text-xs text-gray-500">Últimos 60 ciclos</span>
+          <div class="flex gap-1" id="period-selector">
+            <button onclick="setPeriod('1H')" data-period="1H" class="period-btn active px-2.5 py-1 rounded text-xs font-semibold transition-colors">1H</button>
+            <button onclick="setPeriod('1D')" data-period="1D" class="period-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1D</button>
+            <button onclick="setPeriod('1S')" data-period="1S" class="period-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1S</button>
+            <button onclick="setPeriod('1M')" data-period="1M" class="period-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1M</button>
+          </div>
         </div>
         <canvas id="portfolioChart" height="120"></canvas>
       </div>
@@ -334,12 +342,8 @@
 
       // Portfolio Chart
       if (s.history && s.history.length > 0) {
-        portfolioChart.data.labels = s.history.map(h => h.time);
-        portfolioChart.data.datasets[0].data = s.history.map(h => h.total);
-        const last = s.history[s.history.length - 1]?.total || 10000;
-        portfolioChart.data.datasets[0].borderColor = last >= 10000 ? '#6366f1' : '#ef4444';
-        portfolioChart.data.datasets[0].backgroundColor = last >= 10000 ? 'rgba(99,102,241,0.08)' : 'rgba(239,68,68,0.08)';
-        portfolioChart.update('none');
+        fullHistory = s.history;
+        renderChart();
       }
 
       // Allocation Chart
@@ -379,6 +383,40 @@
           </div>
         `).join('');
       }
+    }
+
+    // Period filter
+    let currentPeriod = '1H';
+    let fullHistory = [];
+
+    const periodSeconds = { '1H': 3600, '1D': 86400, '1S': 604800, '1M': 2592000 };
+
+    function setPeriod(p) {
+      currentPeriod = p;
+      document.querySelectorAll('.period-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.period === p);
+      });
+      renderChart();
+    }
+
+    function renderChart() {
+      if (!fullHistory.length) return;
+      const now = Math.floor(Date.now() / 1000);
+      const cutoff = now - periodSeconds[currentPeriod];
+      const filtered = fullHistory.filter(h => (h.ts || 0) >= cutoff);
+      const data = filtered.length ? filtered : fullHistory;
+
+      // Reduz pontos para no máximo 200 para não sobrecarregar o gráfico
+      const step = Math.max(1, Math.floor(data.length / 200));
+      const sampled = data.filter((_, i) => i % step === 0 || i === data.length - 1);
+
+      portfolioChart.data.labels = sampled.map(h => h.time);
+      portfolioChart.data.datasets[0].data = sampled.map(h => h.total);
+      const last = sampled[sampled.length - 1]?.total || 10000;
+      const positive = last >= 10000;
+      portfolioChart.data.datasets[0].borderColor = positive ? '#6366f1' : '#ef4444';
+      portfolioChart.data.datasets[0].backgroundColor = positive ? 'rgba(99,102,241,0.08)' : 'rgba(239,68,68,0.08)';
+      portfolioChart.update('none');
     }
 
     // Manual trade
