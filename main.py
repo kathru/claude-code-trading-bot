@@ -1,0 +1,95 @@
+import os
+import time
+from dotenv import load_dotenv
+from colorama import Fore, Style, init
+
+from exchange.coinbase import CoinbaseClient
+from paper_trading.engine import PaperTradingEngine
+from strategies.ma_crossover import MACrossoverStrategy
+from strategies.rsi import RSIStrategy
+from strategies.scalping import ScalpingStrategy
+
+init(autoreset=True)
+load_dotenv("code.env")
+
+PAIRS = ["BTC-USD", "ETH-USD"]
+TRADE_USD = 500.0        # Valor por operação
+INTERVAL = 60            # Segundos entre cada ciclo
+
+def get_current_price(client: CoinbaseClient, product_id: str) -> float:
+    ticker = client.get_ticker(product_id)
+    return float(ticker.get("price", 0))
+
+def run():
+    api_key = os.getenv("API_KEY")
+    secret_key = os.getenv("SECRET_KEY")
+
+    if not api_key or not secret_key:
+        print(Fore.RED + "Erro: API_KEY ou SECRET_KEY não encontrados no code.env")
+        return
+
+    client = CoinbaseClient(api_key, secret_key)
+    engine = PaperTradingEngine(initial_balance_usd=10000.0)
+
+    strategies = [
+        MACrossoverStrategy(short_window=9, long_window=21),
+        RSIStrategy(period=14, oversold=30, overbought=70),
+        ScalpingStrategy(bb_period=20, bb_std=2.0),
+    ]
+
+    print(Fore.CYAN + "="*55)
+    print(Fore.CYAN + "   CLAUDE CODE TRADING BOT - PAPER TRADING MODE")
+    print(Fore.CYAN + "="*55)
+    print(f"  Pares:      {', '.join(PAIRS)}")
+    print(f"  Estratégias: {', '.join(s.name for s in strategies)}")
+    print(f"  Valor/trade: ${TRADE_USD}")
+    print(f"  Intervalo:   {INTERVAL}s")
+    print(Fore.CYAN + "="*55 + "\n")
+
+    cycle = 0
+    while True:
+        cycle += 1
+        print(Fore.BLUE + f"\n--- Ciclo #{cycle} ---")
+
+        for pair in PAIRS:
+            symbol = pair.split("-")[0]
+            try:
+                candles = client.get_candles(pair, granularity="FIFTEEN_MINUTE", limit=100)
+                price = get_current_price(client, pair)
+
+                if not candles or price == 0:
+                    print(Fore.YELLOW + f"[{pair}] Sem dados disponíveis")
+                    continue
+
+                engine.update_price(symbol, price)
+                print(f"[{pair}] Preço atual: ${price:,.2f}")
+
+                votes = {"BUY": 0, "SELL": 0, "HOLD": 0}
+                for strategy in strategies:
+                    df = strategy.candles_to_df(candles)
+                    signal = strategy.analyze(df)
+                    votes[signal] += 1
+                    print(f"  {strategy.name}: {signal}")
+
+                # Decisão por maioria de votos
+                decision = max(votes, key=votes.get)
+                print(f"  Decisão final: {decision} ({votes})")
+
+                if decision == "BUY" and votes["BUY"] >= 2:
+                    engine.buy(symbol, TRADE_USD, price, "consensus")
+                elif decision == "SELL" and votes["SELL"] >= 2:
+                    held = engine.holdings.get(symbol, 0)
+                    if held > 0:
+                        engine.sell(symbol, held, price, "consensus")
+
+            except Exception as e:
+                print(Fore.RED + f"[{pair}] Erro: {e}")
+
+        engine.print_status()
+
+        print(f"Aguardando {INTERVAL}s...\n")
+        time.sleep(INTERVAL)
+
+
+if __name__ == "__main__":
+    run()
