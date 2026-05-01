@@ -23,6 +23,9 @@ build/
 logs/
 __pycache__/
 
+# Estado persistido (dados locais)
+data/
+
 # OS
 .DS_Store
 Thumbs.db
