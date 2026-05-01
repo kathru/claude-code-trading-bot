@@ -61,6 +61,26 @@ async def index():
     return FileResponse(HTML_FILE)
 
 
+@app.get("/candles/{pair}")
+async def get_candles(pair: str, granularity: str = "FIVE_MINUTE", limit: int = 150):
+    try:
+        candles = client.get_candles(pair, granularity=granularity, limit=limit)
+        result = []
+        for c in sorted(candles, key=lambda x: int(x["start"])):
+            result.append({
+                "time":   int(c["start"]),
+                "open":   float(c["open"]),
+                "high":   float(c["high"]),
+                "low":    float(c["low"]),
+                "close":  float(c["close"]),
+                "volume": float(c["volume"]),
+            })
+        return result
+    except Exception as e:
+        logger.error(f"get_candles error: {e}")
+        return []
+
+
 @app.post("/trade/buy")
 async def manual_buy(pair: str, usd: float = 500.0):
     symbol = pair.split("-")[0]

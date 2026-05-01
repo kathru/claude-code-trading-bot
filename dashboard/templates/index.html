@@ -6,6 +6,7 @@
   <title>Trading Bot Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
@@ -37,6 +38,12 @@
     .period-btn { background: transparent; color: #6b7280; border: 1px solid #30363d; }
     .period-btn:hover { color: #d1d5db; border-color: #6b7280; }
     .period-btn.active { background: #6366f1; color: #fff; border-color: #6366f1; }
+    .candle-pair-btn { background: transparent; color: #6b7280; border: 1px solid #30363d; }
+    .candle-pair-btn:hover { color: #d1d5db; border-color: #6b7280; }
+    .candle-pair-btn.active { background: #f97316; color: #fff; border-color: #f97316; }
+    .candle-tf-btn { background: transparent; color: #6b7280; border: 1px solid #30363d; }
+    .candle-tf-btn:hover { color: #d1d5db; border-color: #6b7280; }
+    .candle-tf-btn.active { background: #21262d; color: #e5e7eb; border-color: #6b7280; }
   </style>
 </head>
 <body class="min-h-screen text-gray-100">
@@ -184,6 +191,37 @@
       </div>
     </div>
 
+    <!-- Candlestick Chart -->
+    <div class="card p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <h3 class="font-semibold text-white">Candles</h3>
+        <div class="flex items-center gap-3">
+          <!-- Par -->
+          <div class="flex gap-1">
+            <button onclick="setCandlePair('BTC-USD')" data-pair="BTC-USD" class="candle-pair-btn active px-3 py-1 rounded text-xs font-semibold transition-colors">BTC</button>
+            <button onclick="setCandlePair('ETH-USD')" data-pair="ETH-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold transition-colors">ETH</button>
+          </div>
+          <span class="text-gray-700">|</span>
+          <!-- Timeframe -->
+          <div class="flex gap-1">
+            <button onclick="setCandleTF('ONE_MINUTE',  1)"   data-tf="ONE_MINUTE"   class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1m</button>
+            <button onclick="setCandleTF('FIVE_MINUTE', 5)"   data-tf="FIVE_MINUTE"  class="candle-tf-btn active px-2.5 py-1 rounded text-xs font-semibold transition-colors">5m</button>
+            <button onclick="setCandleTF('FIFTEEN_MINUTE',15)" data-tf="FIFTEEN_MINUTE" class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">15m</button>
+            <button onclick="setCandleTF('ONE_HOUR',   60)"  data-tf="ONE_HOUR"     class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1h</button>
+            <button onclick="setCandleTF('ONE_DAY',   1440)" data-tf="ONE_DAY"      class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1d</button>
+          </div>
+          <!-- Preço atual -->
+          <span id="candle-price" class="font-mono text-white text-sm font-bold hidden sm:block">—</span>
+        </div>
+      </div>
+      <div id="candle-chart" style="height:360px;position:relative;"></div>
+      <div class="mt-3 flex gap-4 text-xs text-gray-500">
+        <span><span class="text-indigo-400 font-semibold">—</span> MA 9</span>
+        <span><span class="text-yellow-400 font-semibold">—</span> MA 21</span>
+        <span id="candle-info" class="ml-auto font-mono"></span>
+      </div>
+    </div>
+
     <!-- Charts -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <div class="card p-5 lg:col-span-2">
@@ -293,6 +331,7 @@
 
     function updateState(s) {
       resetCountdown();
+      if (candleSeries) loadCandles();
       // Header
       document.getElementById('last-update').textContent = s.last_update || '--:--:--';
 
@@ -432,6 +471,122 @@
         `).join('');
       }
     }
+
+    // ── Candlestick chart ───────────────────────────────────────────
+    let candlePair = 'BTC-USD';
+    let candleGranularity = 'FIVE_MINUTE';
+    let candleChart = null;
+    let candleSeries = null;
+    let ma9Series = null;
+    let ma21Series = null;
+    let volSeries = null;
+
+    function initCandleChart() {
+      const container = document.getElementById('candle-chart');
+      container.innerHTML = '';
+      candleChart = LightweightCharts.createChart(container, {
+        width: container.clientWidth,
+        height: 360,
+        layout: { background: { color: '#161b22' }, textColor: '#9ca3af' },
+        grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+        rightPriceScale: { borderColor: '#30363d' },
+        timeScale: { borderColor: '#30363d', timeVisible: true, secondsVisible: false },
+      });
+
+      candleSeries = candleChart.addCandlestickSeries({
+        upColor: '#4ade80', downColor: '#f87171',
+        borderUpColor: '#4ade80', borderDownColor: '#f87171',
+        wickUpColor: '#4ade80', wickDownColor: '#f87171',
+      });
+
+      ma9Series = candleChart.addLineSeries({
+        color: '#818cf8', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false,
+      });
+
+      ma21Series = candleChart.addLineSeries({
+        color: '#fbbf24', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false,
+      });
+
+      // Tooltip no crosshair
+      candleChart.subscribeCrosshairMove(param => {
+        if (!param.time || !param.seriesData) return;
+        const d = param.seriesData.get(candleSeries);
+        if (!d) return;
+        const info = document.getElementById('candle-info');
+        const color = d.close >= d.open ? '#4ade80' : '#f87171';
+        info.innerHTML =
+          `O <span style="color:${color}">${d.open.toFixed(2)}</span> ` +
+          `H <span style="color:#4ade80">${d.high.toFixed(2)}</span> ` +
+          `L <span style="color:#f87171">${d.low.toFixed(2)}</span> ` +
+          `C <span style="color:${color}">${d.close.toFixed(2)}</span>`;
+      });
+
+      new ResizeObserver(() => {
+        candleChart.applyOptions({ width: container.clientWidth });
+      }).observe(container);
+    }
+
+    function calcMA(data, period) {
+      return data.map((d, i) => {
+        if (i < period - 1) return null;
+        const avg = data.slice(i - period + 1, i + 1).reduce((s, x) => s + x.close, 0) / period;
+        return { time: d.time, value: parseFloat(avg.toFixed(2)) };
+      }).filter(Boolean);
+    }
+
+    async function loadCandles() {
+      try {
+        const res = await fetch(`/candles/${candlePair}?granularity=${candleGranularity}&limit=150`);
+        const data = await res.json();
+        if (!data.length) return;
+
+        candleSeries.setData(data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close })));
+        ma9Series.setData(calcMA(data, 9));
+        ma21Series.setData(calcMA(data, 21));
+
+        // Atualiza preço atual
+        const last = data[data.length - 1];
+        const priceEl = document.getElementById('candle-price');
+        priceEl.textContent = '$' + fmt(last.close);
+        priceEl.style.color = last.close >= last.open ? '#4ade80' : '#f87171';
+
+        candleChart.timeScale().fitContent();
+      } catch(e) { console.error('candles:', e); }
+    }
+
+    function setCandlePair(pair) {
+      candlePair = pair;
+      document.querySelectorAll('.candle-pair-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.pair === pair);
+        if (pair === 'ETH-USD') {
+          document.querySelectorAll('.candle-pair-btn.active').forEach(b => {
+            b.style.background = '#3b82f6'; b.style.borderColor = '#3b82f6';
+          });
+        }
+      });
+      loadCandles();
+    }
+
+    function setCandleTF(gran) {
+      candleGranularity = gran;
+      document.querySelectorAll('.candle-tf-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.tf === gran)
+      );
+      loadCandles();
+    }
+
+    // Inicializa após layout ter largura real
+    function tryInitCandle() {
+      const el = document.getElementById('candle-chart');
+      if (el && el.clientWidth > 0) {
+        initCandleChart();
+        loadCandles();
+      } else {
+        setTimeout(tryInitCandle, 100);
+      }
+    }
+    window.addEventListener('load', tryInitCandle);
 
     // Period filter
     let currentPeriod = '1H';
