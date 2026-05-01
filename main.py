@@ -9,6 +9,7 @@ from strategies.ma_crossover import MACrossoverStrategy
 from strategies.rsi import RSIStrategy
 from strategies.scalping import ScalpingStrategy
 from logger import setup_logger, log_cycle, log_trade, log_portfolio
+from notifier import notify_trade
 
 init(autoreset=True)
 load_dotenv("code.env")
@@ -86,15 +87,19 @@ def run():
                 log_cycle(logger, cycle, pair, price, signals, decision)
 
                 if decision == "BUY" and votes["BUY"] >= 2:
+                    qty = TRADE_USD / price
                     ok = engine.buy(symbol, TRADE_USD, price, "consensus")
                     if ok:
-                        log_trade(logger, "BUY", pair, TRADE_USD / price, price, TRADE_USD, "consensus")
+                        log_trade(logger, "BUY", pair, qty, price, TRADE_USD, "consensus")
+                        notify_trade("BUY", pair, qty, price, TRADE_USD)
                 elif decision == "SELL" and votes["SELL"] >= 2:
                     held = engine.holdings.get(symbol, 0)
                     if held > 0:
                         ok = engine.sell(symbol, held, price, "consensus")
                         if ok:
-                            log_trade(logger, "SELL", pair, held, price, held * price, "consensus")
+                            usd = held * price
+                            log_trade(logger, "SELL", pair, held, price, usd, "consensus")
+                            notify_trade("SELL", pair, held, price, usd)
 
             except Exception as e:
                 print(Fore.RED + f"[{pair}] Erro: {e}")

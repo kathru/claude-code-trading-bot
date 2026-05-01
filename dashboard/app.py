@@ -18,6 +18,7 @@ from strategies.ma_crossover import MACrossoverStrategy
 from strategies.rsi import RSIStrategy
 from strategies.scalping import ScalpingStrategy
 from logger import setup_logger, log_cycle, log_trade, log_portfolio
+from notifier import notify_trade
 
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), "code.env"))
 
@@ -135,9 +136,11 @@ async def trading_loop():
                 log_cycle(logger, state["cycle"], pair, price, pair_signals, decision)
 
                 if decision == "BUY" and votes["BUY"] >= 2:
+                    qty = TRADE_USD / price
                     ok = engine.buy(symbol, TRADE_USD, price, "consensus")
                     if ok:
-                        log_trade(logger, "BUY", pair, TRADE_USD / price, price, TRADE_USD, "consensus")
+                        log_trade(logger, "BUY", pair, qty, price, TRADE_USD, "consensus")
+                        notify_trade("BUY", pair, qty, price, TRADE_USD)
                         state["trades"].insert(0, {
                             "time": datetime.now().strftime("%H:%M:%S"),
                             "side": "BUY", "pair": pair,
@@ -150,6 +153,7 @@ async def trading_loop():
                         if ok:
                             usd = held * price
                             log_trade(logger, "SELL", pair, held, price, usd, "consensus")
+                            notify_trade("SELL", pair, held, price, usd)
                             state["trades"].insert(0, {
                                 "time": datetime.now().strftime("%H:%M:%S"),
                                 "side": "SELL", "pair": pair,
