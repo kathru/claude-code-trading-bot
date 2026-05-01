@@ -1,0 +1,177 @@
+import os
+import sys
+import time
+import json
+import asyncio
+from datetime import datetime
+from typing import List
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, FileResponse
+from dotenv import load_dotenv
+
+from exchange.coinbase import CoinbaseClient
+from paper_trading.engine import PaperTradingEngine
+from strategies.ma_crossover import MACrossoverStrategy
+from strategies.rsi import RSIStrategy
+from strategies.scalping import ScalpingStrategy
+
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), "code.env"))
+
+app = FastAPI()
+HTML_FILE = os.path.join(os.path.dirname(__file__), "templates", "index.html")
+
+PAIRS = ["BTC-USD", "ETH-USD"]
+TRADE_USD = 500.0
+
+client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
+engine = PaperTradingEngine(initial_balance_usd=10000.0)
+strategies = [
+    MACrossoverStrategy(short_window=9, long_window=21),
+    RSIStrategy(period=14, oversold=30, overbought=70),
+    ScalpingStrategy(bb_period=20, bb_std=2.0),
+]
+
+connected_clients: List[WebSocket] = []
+state = {
+    "prices": {},
+    "signals": {},
+    "portfolio": {"usd": 10000.0, "total": 10000.0, "pnl": 0.0, "pnl_pct": 0.0},
+    "trades": [],
+    "history": [],
+    "cycle": 0,
+    "status": "running",
+    "last_update": "",
+}
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    return FileResponse(HTML_FILE)
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    connected_clients.append(websocket)
+    await websocket.send_json(state)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        connected_clients.remove(websocket)
+
+
+async def broadcast(data: dict):
+    dead = []
+    for ws in connected_clients:
+        try:
+            await ws.send_json(data)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        connected_clients.remove(ws)
+
+
+def get_rsi_value(candles, period=14):
+    try:
+        import pandas as pd
+        df = pd.DataFrame(candles, columns=["start","low","high","open","close","volume"])
+        df = df.astype({"close": float}).sort_values("start")
+        delta = df["close"].diff()
+        gain = delta.clip(lower=0).rolling(period).mean()
+        loss = (-delta.clip(upper=0)).rolling(period).mean()
+        rs = gain / loss.replace(0, float("inf"))
+        rsi = 100 - (100 / (1 + rs))
+        return round(float(rsi.iloc[-1]), 1)
+    except Exception:
+        return 50.0
+
+
+async def trading_loop():
+    while True:
+        state["cycle"] += 1
+        state["last_update"] = datetime.now().strftime("%H:%M:%S")
+
+        for pair in PAIRS:
+            symbol = pair.split("-")[0]
+            try:
+                candles = client.get_candles(pair, granularity="FIFTEEN_MINUTE", limit=100)
+                ticker = client.get_ticker(pair)
+                price = float(ticker.get("price", 0))
+
+                if not price:
+                    continue
+
+                engine.update_price(symbol, price)
+                state["prices"][pair] = {
+                    "price": price,
+                    "price_pct_chg": float(ticker.get("price_percentage_change_24h", 0)),
+                    "volume_24h": float(ticker.get("volume_24h", 0)),
+                }
+
+                pair_signals = {}
+                votes = {"BUY": 0, "SELL": 0, "HOLD": 0}
+                for strategy in strategies:
+                    df = strategy.candles_to_df(candles)
+                    signal = strategy.analyze(df)
+                    pair_signals[strategy.name] = signal
+                    votes[signal] += 1
+
+                rsi_val = get_rsi_value(candles)
+                decision = max(votes, key=votes.get)
+                state["signals"][pair] = {
+                    "strategies": pair_signals,
+                    "votes": votes,
+                    "decision": decision,
+                    "rsi": rsi_val,
+                }
+
+                if decision == "BUY" and votes["BUY"] >= 2:
+                    ok = engine.buy(symbol, TRADE_USD, price, "consensus")
+                    if ok:
+                        state["trades"].insert(0, {
+                            "time": datetime.now().strftime("%H:%M:%S"),
+                            "side": "BUY", "pair": pair,
+                            "price": price, "usd": TRADE_USD,
+                        })
+                elif decision == "SELL" and votes["SELL"] >= 2:
+                    held = engine.holdings.get(symbol, 0)
+                    if held > 0:
+                        ok = engine.sell(symbol, held, price, "consensus")
+                        if ok:
+                            usd = held * price
+                            state["trades"].insert(0, {
+                                "time": datetime.now().strftime("%H:%M:%S"),
+                                "side": "SELL", "pair": pair,
+                                "price": price, "usd": usd,
+                            })
+
+            except Exception as e:
+                state["signals"][pair] = {"error": str(e)}
+
+        total = engine.portfolio_value()
+        pnl = total - engine.initial_balance
+        state["portfolio"] = {
+            "usd": round(engine.balance_usd, 2),
+            "total": round(total, 2),
+            "pnl": round(pnl, 2),
+            "pnl_pct": round((pnl / engine.initial_balance) * 100, 2),
+            "holdings": {k: round(v, 8) for k, v in engine.holdings.items()},
+        }
+        state["trades"] = state["trades"][:50]
+        state["history"].append({
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "total": round(total, 2),
+        })
+        state["history"] = state["history"][-60:]
+
+        await broadcast(state)
+        await asyncio.sleep(30)
+
+
+@app.on_event("startup")
+async def startup():
+    asyncio.create_task(trading_loop())
