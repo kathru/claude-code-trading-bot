@@ -1,20 +1,21 @@
 import os
 import time
 from dotenv import load_dotenv
-from colorama import Fore, Style, init
+from colorama import Fore, init
 
 from exchange.coinbase import CoinbaseClient
 from paper_trading.engine import PaperTradingEngine
 from strategies.ma_crossover import MACrossoverStrategy
 from strategies.rsi import RSIStrategy
 from strategies.scalping import ScalpingStrategy
+from logger import setup_logger, log_cycle, log_trade, log_portfolio
 
 init(autoreset=True)
 load_dotenv("code.env")
 
 PAIRS = ["BTC-USD", "ETH-USD"]
-TRADE_USD = 500.0        # Valor por operação
-INTERVAL = 60            # Segundos entre cada ciclo
+TRADE_USD = 500.0
+INTERVAL = 60
 
 def get_current_price(client: CoinbaseClient, product_id: str) -> float:
     ticker = client.get_ticker(product_id)
@@ -28,6 +29,11 @@ def run():
         print(Fore.RED + "Erro: API_KEY ou SECRET_KEY não encontrados no code.env")
         return
 
+    logger = setup_logger()
+    logger.info("="*55)
+    logger.info("CLAUDE CODE TRADING BOT - PAPER TRADING MODE")
+    logger.info("="*55)
+
     client = CoinbaseClient(api_key, secret_key)
     engine = PaperTradingEngine(initial_balance_usd=10000.0)
 
@@ -40,7 +46,7 @@ def run():
     print(Fore.CYAN + "="*55)
     print(Fore.CYAN + "   CLAUDE CODE TRADING BOT - PAPER TRADING MODE")
     print(Fore.CYAN + "="*55)
-    print(f"  Pares:      {', '.join(PAIRS)}")
+    print(f"  Pares:       {', '.join(PAIRS)}")
     print(f"  Estratégias: {', '.join(s.name for s in strategies)}")
     print(f"  Valor/trade: ${TRADE_USD}")
     print(f"  Intervalo:   {INTERVAL}s")
@@ -50,6 +56,7 @@ def run():
     while True:
         cycle += 1
         print(Fore.BLUE + f"\n--- Ciclo #{cycle} ---")
+        logger.info(f"--- Ciclo #{cycle} ---")
 
         for pair in PAIRS:
             symbol = pair.split("-")[0]
@@ -59,32 +66,44 @@ def run():
 
                 if not candles or price == 0:
                     print(Fore.YELLOW + f"[{pair}] Sem dados disponíveis")
+                    logger.warning(f"[{pair}] Sem dados disponíveis")
                     continue
 
                 engine.update_price(symbol, price)
                 print(f"[{pair}] Preço atual: ${price:,.2f}")
 
                 votes = {"BUY": 0, "SELL": 0, "HOLD": 0}
+                signals = {}
                 for strategy in strategies:
                     df = strategy.candles_to_df(candles)
                     signal = strategy.analyze(df)
                     votes[signal] += 1
+                    signals[strategy.name] = signal
                     print(f"  {strategy.name}: {signal}")
 
-                # Decisão por maioria de votos
                 decision = max(votes, key=votes.get)
                 print(f"  Decisão final: {decision} ({votes})")
+                log_cycle(logger, cycle, pair, price, signals, decision)
 
                 if decision == "BUY" and votes["BUY"] >= 2:
-                    engine.buy(symbol, TRADE_USD, price, "consensus")
+                    ok = engine.buy(symbol, TRADE_USD, price, "consensus")
+                    if ok:
+                        log_trade(logger, "BUY", pair, TRADE_USD / price, price, TRADE_USD, "consensus")
                 elif decision == "SELL" and votes["SELL"] >= 2:
                     held = engine.holdings.get(symbol, 0)
                     if held > 0:
-                        engine.sell(symbol, held, price, "consensus")
+                        ok = engine.sell(symbol, held, price, "consensus")
+                        if ok:
+                            log_trade(logger, "SELL", pair, held, price, held * price, "consensus")
 
             except Exception as e:
                 print(Fore.RED + f"[{pair}] Erro: {e}")
+                logger.error(f"[{pair}] Erro: {e}")
 
+        total = engine.portfolio_value()
+        pnl = total - engine.initial_balance
+        log_portfolio(logger, engine.balance_usd, total, pnl,
+                      (pnl / engine.initial_balance) * 100, engine.holdings)
         engine.print_status()
 
         print(f"Aguardando {INTERVAL}s...\n")

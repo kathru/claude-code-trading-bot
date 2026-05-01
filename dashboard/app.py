@@ -17,6 +17,7 @@ from paper_trading.engine import PaperTradingEngine
 from strategies.ma_crossover import MACrossoverStrategy
 from strategies.rsi import RSIStrategy
 from strategies.scalping import ScalpingStrategy
+from logger import setup_logger, log_cycle, log_trade, log_portfolio
 
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), "code.env"))
 
@@ -34,6 +35,7 @@ strategies = [
     ScalpingStrategy(bb_period=20, bb_std=2.0),
 ]
 
+logger = setup_logger("dashboard")
 connected_clients: List[WebSocket] = []
 state = {
     "prices": {},
@@ -91,9 +93,11 @@ def get_rsi_value(candles, period=14):
 
 
 async def trading_loop():
+    logger.info("Dashboard trading loop iniciado")
     while True:
         state["cycle"] += 1
         state["last_update"] = datetime.now().strftime("%H:%M:%S")
+        logger.info(f"--- Ciclo #{state['cycle']} ---")
 
         for pair in PAIRS:
             symbol = pair.split("-")[0]
@@ -128,10 +132,12 @@ async def trading_loop():
                     "decision": decision,
                     "rsi": rsi_val,
                 }
+                log_cycle(logger, state["cycle"], pair, price, pair_signals, decision)
 
                 if decision == "BUY" and votes["BUY"] >= 2:
                     ok = engine.buy(symbol, TRADE_USD, price, "consensus")
                     if ok:
+                        log_trade(logger, "BUY", pair, TRADE_USD / price, price, TRADE_USD, "consensus")
                         state["trades"].insert(0, {
                             "time": datetime.now().strftime("%H:%M:%S"),
                             "side": "BUY", "pair": pair,
@@ -143,6 +149,7 @@ async def trading_loop():
                         ok = engine.sell(symbol, held, price, "consensus")
                         if ok:
                             usd = held * price
+                            log_trade(logger, "SELL", pair, held, price, usd, "consensus")
                             state["trades"].insert(0, {
                                 "time": datetime.now().strftime("%H:%M:%S"),
                                 "side": "SELL", "pair": pair,
@@ -151,9 +158,12 @@ async def trading_loop():
 
             except Exception as e:
                 state["signals"][pair] = {"error": str(e)}
+                logger.error(f"[{pair}] Erro no ciclo: {e}")
 
         total = engine.portfolio_value()
         pnl = total - engine.initial_balance
+        log_portfolio(logger, engine.balance_usd, total, pnl,
+                      (pnl / engine.initial_balance) * 100, engine.holdings)
         state["portfolio"] = {
             "usd": round(engine.balance_usd, 2),
             "total": round(total, 2),
