@@ -26,7 +26,9 @@ app = FastAPI()
 HTML_FILE = os.path.join(os.path.dirname(__file__), "templates", "index.html")
 
 PAIRS = ["BTC-USD", "ETH-USD"]
-TRADE_USD = 500.0
+TRADE_PER_STRATEGY = 167.0   # cada estratégia opera ~$167 (~$500 total por par)
+CYCLE_INTERVAL = 15          # segundos entre ciclos
+CANDLE_GRANULARITY = "FIVE_MINUTE"
 
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
@@ -36,6 +38,9 @@ strategies = [
     ScalpingStrategy(bb_period=20, bb_std=2.0),
 ]
 
+# Controle de sinal anterior por (pair, strategy) para evitar re-execução no mesmo sinal
+last_signals: dict = {}
+
 logger = setup_logger("dashboard")
 connected_clients: List[WebSocket] = []
 state = {
@@ -43,6 +48,7 @@ state = {
     "signals": {},
     "portfolio": {"usd": 10000.0, "total": 10000.0, "pnl": 0.0, "pnl_pct": 0.0},
     "trades": [],
+    "feed": [],        # feed de sinais ao vivo
     "history": [],
     "cycle": 0,
     "status": "running",
@@ -159,20 +165,31 @@ def get_rsi_value(candles, period=14):
         return 50.0
 
 
+def _record_trade(side, pair, qty, price, usd, strategy):
+    log_trade(logger, side, pair, qty, price, usd, strategy)
+    notify_trade(side, pair, qty, price, usd)
+    state["trades"].insert(0, {
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "side": side, "pair": pair,
+        "price": price, "usd": usd,
+        "strategy": strategy,
+    })
+    state["trades"] = state["trades"][:50]
+
+
 async def trading_loop():
-    logger.info("Dashboard trading loop iniciado")
+    logger.info("Dashboard trading loop iniciado — granularidade: %s, ciclo: %ds", CANDLE_GRANULARITY, CYCLE_INTERVAL)
     while True:
         state["cycle"] += 1
-        state["last_update"] = datetime.now().strftime("%H:%M:%S")
-        logger.info(f"--- Ciclo #{state['cycle']} ---")
+        now_str = datetime.now().strftime("%H:%M:%S")
+        state["last_update"] = now_str
 
         for pair in PAIRS:
             symbol = pair.split("-")[0]
             try:
-                candles = client.get_candles(pair, granularity="FIFTEEN_MINUTE", limit=100)
+                candles = client.get_candles(pair, granularity=CANDLE_GRANULARITY, limit=100)
                 ticker = client.get_ticker(pair)
                 price = float(ticker.get("price", 0))
-
                 if not price:
                     continue
 
@@ -185,11 +202,43 @@ async def trading_loop():
 
                 pair_signals = {}
                 votes = {"BUY": 0, "SELL": 0, "HOLD": 0}
+
                 for strategy in strategies:
                     df = strategy.candles_to_df(candles)
                     signal = strategy.analyze(df)
                     pair_signals[strategy.name] = signal
                     votes[signal] += 1
+
+                    key = f"{pair}:{strategy.name}"
+                    prev = last_signals.get(key)
+
+                    # Adiciona ao feed de sinais sempre que mudar
+                    if signal != prev:
+                        last_signals[key] = signal
+                        feed_entry = {
+                            "time": now_str,
+                            "pair": pair,
+                            "strategy": strategy.name,
+                            "signal": signal,
+                            "price": price,
+                        }
+                        state["feed"].insert(0, feed_entry)
+                        state["feed"] = state["feed"][:100]
+
+                    # Cada estratégia executa independentemente quando muda de HOLD para BUY/SELL
+                    if signal == "BUY" and prev != "BUY":
+                        qty = TRADE_PER_STRATEGY / price
+                        if engine.buy(symbol, TRADE_PER_STRATEGY, price, strategy.name):
+                            _record_trade("BUY", pair, qty, price, TRADE_PER_STRATEGY, strategy.name)
+
+                    elif signal == "SELL" and prev != "SELL":
+                        # Vende 1/3 da posição por estratégia
+                        held = engine.holdings.get(symbol, 0)
+                        sell_qty = held / 3 if held > 0 else 0
+                        if sell_qty > 0:
+                            usd = sell_qty * price
+                            if engine.sell(symbol, sell_qty, price, strategy.name):
+                                _record_trade("SELL", pair, sell_qty, price, usd, strategy.name)
 
                 rsi_val = get_rsi_value(candles)
                 decision = max(votes, key=votes.get)
@@ -201,34 +250,9 @@ async def trading_loop():
                 }
                 log_cycle(logger, state["cycle"], pair, price, pair_signals, decision)
 
-                if decision == "BUY" and votes["BUY"] >= 2:
-                    qty = TRADE_USD / price
-                    ok = engine.buy(symbol, TRADE_USD, price, "consensus")
-                    if ok:
-                        log_trade(logger, "BUY", pair, qty, price, TRADE_USD, "consensus")
-                        notify_trade("BUY", pair, qty, price, TRADE_USD)
-                        state["trades"].insert(0, {
-                            "time": datetime.now().strftime("%H:%M:%S"),
-                            "side": "BUY", "pair": pair,
-                            "price": price, "usd": TRADE_USD,
-                        })
-                elif decision == "SELL" and votes["SELL"] >= 2:
-                    held = engine.holdings.get(symbol, 0)
-                    if held > 0:
-                        ok = engine.sell(symbol, held, price, "consensus")
-                        if ok:
-                            usd = held * price
-                            log_trade(logger, "SELL", pair, held, price, usd, "consensus")
-                            notify_trade("SELL", pair, held, price, usd)
-                            state["trades"].insert(0, {
-                                "time": datetime.now().strftime("%H:%M:%S"),
-                                "side": "SELL", "pair": pair,
-                                "price": price, "usd": usd,
-                            })
-
             except Exception as e:
                 state["signals"][pair] = {"error": str(e)}
-                logger.error(f"[{pair}] Erro no ciclo: {e}")
+                logger.error(f"[{pair}] Erro: {e}")
 
         total = engine.portfolio_value()
         pnl = total - engine.initial_balance
@@ -241,17 +265,15 @@ async def trading_loop():
             "pnl_pct": round((pnl / engine.initial_balance) * 100, 2),
             "holdings": {k: round(v, 8) for k, v in engine.holdings.items()},
         }
-        state["trades"] = state["trades"][:50]
         state["history"].append({
-            "time": datetime.now().strftime("%H:%M:%S"),
+            "time": now_str,
             "ts": int(time.time()),
             "total": round(total, 2),
         })
-        # Mantém até 1 mês de histórico (ciclos de 30s = ~86400 pontos/mês)
         state["history"] = state["history"][-90000:]
 
         await broadcast(state)
-        await asyncio.sleep(30)
+        await asyncio.sleep(CYCLE_INTERVAL)
 
 
 @app.on_event("startup")

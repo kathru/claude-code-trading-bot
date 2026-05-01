@@ -206,15 +206,32 @@
       </div>
     </div>
 
-    <!-- Trades -->
-    <div class="card p-5">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="font-semibold text-white">Histórico de Trades (Paper)</h3>
-        <span id="trade-badge" class="text-xs bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full">0 trades</span>
+    <!-- Trades + Feed -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+      <div class="card p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-white">Histórico de Trades</h3>
+          <span id="trade-badge" class="text-xs bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-2 py-0.5 rounded-full">0 trades</span>
+        </div>
+        <div id="trades-list" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+          <p class="text-gray-500 text-sm text-center py-8">Nenhum trade ainda...</p>
+        </div>
       </div>
-      <div id="trades-list" class="space-y-2 max-h-64 overflow-y-auto pr-1">
-        <p class="text-gray-500 text-sm text-center py-8">Nenhum trade ainda. Aguardando sinais...</p>
+
+      <div class="card p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-semibold text-white">Feed de Sinais</h3>
+          <span class="flex items-center gap-1.5 text-xs text-green-400">
+            <span class="w-1.5 h-1.5 rounded-full bg-green-400 pulse-dot"></span>
+            ao vivo
+          </span>
+        </div>
+        <div id="feed-list" class="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+          <p class="text-gray-500 text-sm text-center py-8">Aguardando sinais...</p>
+        </div>
       </div>
+
     </div>
 
   </main>
@@ -367,18 +384,44 @@
       const trades = s.trades || [];
       const tradesList = document.getElementById('trades-list');
       if (trades.length === 0) {
-        tradesList.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Nenhum trade ainda. Aguardando sinais...</p>';
+        tradesList.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Nenhum trade ainda...</p>';
       } else {
         tradesList.innerHTML = trades.map(t => `
           <div class="trade-${t.side.toLowerCase()} bg-gray-800/40 rounded-lg px-4 py-2.5 flex items-center justify-between">
             <div class="flex items-center gap-3">
               <span class="${t.side === 'BUY' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'} text-xs font-bold px-2 py-0.5 rounded">${t.side}</span>
-              <span class="font-medium text-white text-sm">${t.pair}</span>
-              <span class="text-gray-400 text-xs font-mono">$${fmt(t.price)}</span>
+              <div>
+                <p class="font-medium text-white text-sm">${t.pair}</p>
+                <p class="text-gray-500 text-xs">${t.strategy || 'manual'}</p>
+              </div>
             </div>
             <div class="text-right">
               <p class="text-white text-sm font-semibold">$${fmt(t.usd)}</p>
-              <p class="text-gray-500 text-xs">${t.time}</p>
+              <p class="text-gray-500 text-xs">${t.time} · $${fmt(t.price)}</p>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      // Feed de sinais
+      const feed = s.feed || [];
+      const feedList = document.getElementById('feed-list');
+      if (feed.length === 0) {
+        feedList.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Aguardando sinais...</p>';
+      } else {
+        const sigColor = { BUY: 'text-green-400', SELL: 'text-red-400', HOLD: 'text-gray-500' };
+        const sigDot   = { BUY: 'bg-green-400', SELL: 'bg-red-400', HOLD: 'bg-gray-600' };
+        feedList.innerHTML = feed.map(f => `
+          <div class="flex items-center justify-between py-1.5 border-b border-gray-800/60">
+            <div class="flex items-center gap-2">
+              <span class="w-1.5 h-1.5 rounded-full ${sigDot[f.signal] || 'bg-gray-600'}"></span>
+              <span class="text-gray-300 text-xs font-medium">${f.pair}</span>
+              <span class="text-gray-500 text-xs">${f.strategy}</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="font-mono text-xs text-gray-400">$${fmt(f.price)}</span>
+              <span class="text-xs font-bold ${sigColor[f.signal] || 'text-gray-500'}">${f.signal}</span>
+              <span class="text-gray-600 text-xs">${f.time}</span>
             </div>
           </div>
         `).join('');
