@@ -14,6 +14,7 @@ class PaperTradingEngine:
         self.initial_balance = initial_balance_usd
         self.balance_usd = initial_balance_usd
         self.holdings = {}
+        self.entry_prices = {}   # preço médio de entrada por símbolo
         self.trades = []
         self.prices = {}
         self._load_state()
@@ -23,22 +24,46 @@ class PaperTradingEngine:
             if os.path.exists(STATE_FILE):
                 with open(STATE_FILE, "r") as f:
                     s = json.load(f)
-                self.balance_usd = s.get("balance_usd", self.initial_balance)
-                self.holdings = s.get("holdings", {})
-                self.trades = s.get("trades", [])
+                self.balance_usd   = s.get("balance_usd", self.initial_balance)
+                self.holdings      = s.get("holdings", {})
+                self.entry_prices  = s.get("entry_prices", {})
+                self.trades        = s.get("trades", [])
+                # Recalcula entry_prices faltantes a partir do histórico de trades
+                self._recalc_missing_entry_prices()
                 print(Fore.CYAN + f"[PAPER] Estado restaurado — USD: ${self.balance_usd:.2f} | Holdings: {self.holdings}")
         except Exception as e:
             print(Fore.YELLOW + f"[PAPER] Sem estado salvo, iniciando do zero. ({e})")
+
+    def _recalc_missing_entry_prices(self):
+        """Reconstrói preço médio de entrada para posições sem entry_price salvo."""
+        for symbol, qty_held in self.holdings.items():
+            if symbol in self.entry_prices:
+                continue
+            total_qty = 0.0
+            total_cost = 0.0
+            for t in self.trades:
+                if t.get("symbol") != symbol:
+                    continue
+                if t.get("side") == "BUY":
+                    total_qty   += t.get("qty", 0)
+                    total_cost  += t.get("usd", 0)
+                elif t.get("side") == "SELL":
+                    total_qty   -= t.get("qty", 0)
+                    total_cost  -= t.get("usd", 0)
+            if total_qty > 1e-10:
+                self.entry_prices[symbol] = total_cost / total_qty
+        self._save_state()
 
     def _save_state(self):
         try:
             os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
             with open(STATE_FILE, "w") as f:
                 json.dump({
-                    "balance_usd": self.balance_usd,
-                    "holdings": self.holdings,
-                    "trades": self.trades[-200:],
-                    "saved_at": datetime.now().isoformat(),
+                    "balance_usd":  self.balance_usd,
+                    "holdings":     self.holdings,
+                    "entry_prices": self.entry_prices,
+                    "trades":       self.trades[-200:],
+                    "saved_at":     datetime.now().isoformat(),
                 }, f, indent=2)
         except Exception as e:
             print(Fore.RED + f"[PAPER] Erro ao salvar estado: {e}")
@@ -51,8 +76,13 @@ class PaperTradingEngine:
             print(Fore.RED + f"[PAPER] COMPRA negada: saldo insuficiente (${self.balance_usd:.2f})")
             return False
         qty = usd_amount / price
+        prev_qty = self.holdings.get(symbol, 0)
+        prev_entry = self.entry_prices.get(symbol, 0)
+        # Preço médio ponderado de entrada
+        total_qty = prev_qty + qty
+        self.entry_prices[symbol] = ((prev_qty * prev_entry) + (qty * price)) / total_qty
         self.balance_usd -= usd_amount
-        self.holdings[symbol] = self.holdings.get(symbol, 0) + qty
+        self.holdings[symbol] = total_qty
         self._log_trade("BUY", symbol, qty, price, usd_amount, strategy)
         self._save_state()
         return True
@@ -66,6 +96,7 @@ class PaperTradingEngine:
         self.holdings[symbol] = held - qty
         if self.holdings[symbol] < 1e-10:
             del self.holdings[symbol]
+            del self.entry_prices[symbol]   # limpa preço de entrada ao zerar posição
         self.balance_usd += usd_received
         self._log_trade("SELL", symbol, qty, price, usd_received, strategy)
         self._save_state()

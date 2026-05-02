@@ -51,6 +51,8 @@ TRADE_USD = 100.0            # valor único por operação
 CONSENSUS_MIN = 2            # mínimo de votos para executar (2 de 4 estratégias)
 CYCLE_INTERVAL = 30          # segundos entre ciclos
 CANDLE_GRANULARITY = "FIFTEEN_MINUTE"
+STOP_LOSS_PCT  = 3.0         # vende tudo se cair 3% do preço de entrada
+TAKE_PROFIT_PCT = 5.0        # vende tudo se subir 5% do preço de entrada
 
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
@@ -262,6 +264,29 @@ async def trading_loop():
                     "volume_24h": float(ticker.get("volume_24h", 0)),
                 }
 
+                # ── Stop Loss / Take Profit ──────────────────────────
+                entry = engine.entry_prices.get(symbol)
+                held  = engine.holdings.get(symbol, 0)
+                if entry and held > 0:
+                    change_pct = (price - entry) / entry * 100
+                    sl_trigger = change_pct <= -STOP_LOSS_PCT
+                    tp_trigger = change_pct >= TAKE_PROFIT_PCT
+                    reason = None
+                    if sl_trigger:
+                        reason = f"STOP_LOSS ({change_pct:.2f}% ≤ -{STOP_LOSS_PCT}%)"
+                    elif tp_trigger:
+                        reason = f"TAKE_PROFIT ({change_pct:.2f}% ≥ +{TAKE_PROFIT_PCT}%)"
+                    if reason:
+                        usd = held * price
+                        if engine.sell(symbol, held, price, reason):
+                            logger.info(f"[{pair}] {reason} acionado — vendeu {held:.6f} @ ${price:,.2f}")
+                            _record_trade("SELL", pair, held, price, usd, reason)
+                            state["feed"].insert(0, {
+                                "time": now_str, "pair": pair,
+                                "strategy": reason, "signal": "SELL", "price": price,
+                            })
+                            state["feed"] = state["feed"][:100]
+
                 order_book = client.get_order_book(pair, limit=50)
 
                 pair_signals = {}
@@ -290,15 +315,21 @@ async def trading_loop():
 
                 rsi_val = get_rsi_value(candles)
                 decision = max(votes, key=votes.get)
+                entry_price = engine.entry_prices.get(symbol)
+                change_pct  = ((price - entry_price) / entry_price * 100) if entry_price else None
                 state["signals"][pair] = {
-                    "strategies": pair_signals,
-                    "votes": votes,
-                    "decision": decision,
-                    "rsi": rsi_val,
-                    "whale_bid":  round(whale_strategy.last_whale_bid_usd),
-                    "whale_ask":  round(whale_strategy.last_whale_ask_usd),
-                    "whale_bids": whale_strategy.whale_bids,
-                    "whale_asks": whale_strategy.whale_asks,
+                    "strategies":  pair_signals,
+                    "votes":       votes,
+                    "decision":    decision,
+                    "rsi":         rsi_val,
+                    "whale_bid":   round(whale_strategy.last_whale_bid_usd),
+                    "whale_ask":   round(whale_strategy.last_whale_ask_usd),
+                    "whale_bids":  whale_strategy.whale_bids,
+                    "whale_asks":  whale_strategy.whale_asks,
+                    "entry_price": round(entry_price, 2) if entry_price else None,
+                    "change_pct":  round(change_pct, 2) if change_pct is not None else None,
+                    "sl_level":    round(entry_price * (1 - STOP_LOSS_PCT/100), 2) if entry_price else None,
+                    "tp_level":    round(entry_price * (1 + TAKE_PROFIT_PCT/100), 2) if entry_price else None,
                 }
                 log_cycle(logger, state["cycle"], pair, price, pair_signals, decision)
 
