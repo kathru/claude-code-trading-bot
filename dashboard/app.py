@@ -60,13 +60,24 @@ def _save_history(history: list):
         pass
 
 PAIRS = ["BTC-USD", "ETH-USD"]
-TRADE_BRL = 100.0            # valor por operação em R$
-CONSENSUS_MIN = 2            # mínimo de votos para executar (2 de 4 estratégias)
+TRADE_MAX_BRL  = 250.0       # máximo por operação em R$
+TRADE_MIN_BRL  = 25.0        # mínimo por operação em R$
+CONSENSUS_MIN  = 2           # mínimo de votos para executar (2 de 3 estratégias técnicas)
 CYCLE_INTERVAL = 60          # segundos entre ciclos
 CANDLE_GRANULARITY = "FIFTEEN_MINUTE"
 STOP_LOSS_PCT  = 3.0         # vende tudo se cair 3% do preço de entrada
 TAKE_PROFIT_PCT = 5.0        # vende tudo se subir 5% do preço de entrada
 WHALE_INTERVAL  = 300        # executa whale a cada 5 minutos (segundos)
+
+
+def calc_trade_brl(conviction: float) -> float:
+    """
+    Calcula o valor do trade baseado na convicção do sinal (0.0 a 1.0).
+    conviction = 1.0 → TRADE_MAX_BRL (R$250)
+    conviction = 0.0 → TRADE_MIN_BRL (R$25)
+    """
+    trade = TRADE_MIN_BRL + conviction * (TRADE_MAX_BRL - TRADE_MIN_BRL)
+    return round(max(TRADE_MIN_BRL, min(trade, TRADE_MAX_BRL)), 2)
 
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
@@ -119,8 +130,9 @@ state = {
     "cycle": 0,
     "status": "running",
     "last_update": "",
-    "usd_brl": 5.70,    # atualizado a cada ciclo
-    "trade_brl": TRADE_BRL,
+    "usd_brl":    5.70,
+    "trade_max_brl": TRADE_MAX_BRL,
+    "trade_min_brl": TRADE_MIN_BRL,
 }
 
 
@@ -150,7 +162,7 @@ async def get_candles(pair: str, granularity: str = "FIVE_MINUTE", limit: int = 
 
 
 @app.post("/trade/buy")
-async def manual_buy(pair: str, brl: float = 100.0):
+async def manual_buy(pair: str, brl: float = 250.0):
     symbol = pair.split("-")[0]
     ticker = client.get_ticker(pair)
     price = float(ticker.get("price", 0))
@@ -345,21 +357,28 @@ async def trading_loop():
                 logger.debug(f"[{pair}] tech_votes={tech_votes}")
 
                 if tech_votes["BUY"] >= CONSENSUS_MIN:
-                    trade_usd = TRADE_BRL / state["usd_brl"]
+                    # Convicção: proporção de votos BUY (2/3 = 67%, 3/3 = 100%)
+                    conviction = tech_votes["BUY"] / len(tech_strategies)
+                    trade_brl  = calc_trade_brl(conviction)
+                    trade_usd  = trade_brl / state["usd_brl"]
                     qty = trade_usd / price
-                    logger.info(f"[{pair}] TÉCNICO BUY ({tech_votes['BUY']}/3) — R${TRADE_BRL:.0f} = ${trade_usd:.2f}")
+                    logger.info(f"[{pair}] TÉCNICO BUY {tech_votes['BUY']}/3 → convicção {conviction:.0%} → R${trade_brl}")
                     if engine.buy(symbol, trade_usd, price, "técnico"):
                         _record_trade("BUY", pair, qty, price, trade_usd, "técnico")
                     else:
                         logger.warning(f"[{pair}] BUY técnico negado (saldo: ${engine.balance_usd:.2f})")
 
                 elif tech_votes["SELL"] >= CONSENSUS_MIN:
+                    conviction = tech_votes["SELL"] / len(tech_strategies)
+                    trade_brl  = calc_trade_brl(conviction)
                     held = engine.holdings.get(symbol, 0)
-                    logger.info(f"[{pair}] TÉCNICO SELL ({tech_votes['SELL']}/3)")
-                    if held > 0:
-                        usd = held * price
-                        if engine.sell(symbol, held, price, "técnico"):
-                            _record_trade("SELL", pair, held, price, usd, "técnico")
+                    # Vende proporção da posição baseada na convicção
+                    sell_qty = held * conviction if held > 0 else 0
+                    logger.info(f"[{pair}] TÉCNICO SELL {tech_votes['SELL']}/3 → convicção {conviction:.0%} → {sell_qty:.6f} {symbol}")
+                    if sell_qty > 0:
+                        usd = sell_qty * price
+                        if engine.sell(symbol, sell_qty, price, "técnico"):
+                            _record_trade("SELL", pair, sell_qty, price, usd, "técnico")
 
                 # ── Bloco whale: independente, a cada 5 minutos ──────────────
                 now_ts = time.time()
@@ -379,20 +398,33 @@ async def trading_loop():
                             "strategy": "Whale", "signal": whale_signal, "price": price})
                         state["feed"] = state["feed"][:100]
 
-                    if whale_signal == "BUY":
-                        trade_usd = TRADE_BRL / state["usd_brl"]
+                    # Convicção whale: dominância de um lado sobre o outro
+                    bid_vol = whale_strategy.last_whale_bid_usd
+                    ask_vol = whale_strategy.last_whale_ask_usd
+                    total_vol = bid_vol + ask_vol
+
+                    if whale_signal == "BUY" and total_vol > 0:
+                        # Quanto maior a dominância dos bids, mais forte o sinal
+                        dominance = bid_vol / total_vol          # 0.5 a 1.0
+                        conviction = (dominance - 0.5) / 0.5    # 0.0 a 1.0
+                        trade_brl = calc_trade_brl(conviction)
+                        trade_usd = trade_brl / state["usd_brl"]
                         qty = trade_usd / price
-                        logger.info(f"[{pair}] WHALE BUY — R${TRADE_BRL:.0f} = ${trade_usd:.2f}")
+                        logger.info(f"[{pair}] WHALE BUY → dominância {dominance:.0%} → R${trade_brl}")
                         if engine.buy(symbol, trade_usd, price, "whale"):
                             _record_trade("BUY", pair, qty, price, trade_usd, "whale")
 
-                    elif whale_signal == "SELL":
+                    elif whale_signal == "SELL" and total_vol > 0:
+                        dominance = ask_vol / total_vol
+                        conviction = (dominance - 0.5) / 0.5
+                        trade_brl = calc_trade_brl(conviction)
                         held = engine.holdings.get(symbol, 0)
-                        logger.info(f"[{pair}] WHALE SELL")
-                        if held > 0:
-                            usd = held * price
-                            if engine.sell(symbol, held, price, "whale"):
-                                _record_trade("SELL", pair, held, price, usd, "whale")
+                        sell_qty = held * conviction if held > 0 else 0
+                        logger.info(f"[{pair}] WHALE SELL → dominância {dominance:.0%} → {sell_qty:.6f} {symbol}")
+                        if sell_qty > 0:
+                            usd = sell_qty * price
+                            if engine.sell(symbol, sell_qty, price, "whale"):
+                                _record_trade("SELL", pair, sell_qty, price, usd, "whale")
 
                 rsi_val = get_rsi_value(candles)
                 entry_price = engine.entry_prices.get(symbol)
