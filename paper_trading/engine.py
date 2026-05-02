@@ -24,10 +24,11 @@ class PaperTradingEngine:
             if os.path.exists(STATE_FILE):
                 with open(STATE_FILE, "r") as f:
                     s = json.load(f)
-                self.balance_usd   = s.get("balance_usd", self.initial_balance)
-                self.holdings      = s.get("holdings", {})
-                self.entry_prices  = s.get("entry_prices", {})
-                self.trades        = s.get("trades", [])
+                self.initial_balance = s.get("initial_balance", s.get("balance_usd", self.initial_balance))
+                self.balance_usd    = s.get("balance_usd", self.initial_balance)
+                self.holdings       = s.get("holdings", {})
+                self.entry_prices   = s.get("entry_prices", {})
+                self.trades         = s.get("trades", [])
                 # Recalcula entry_prices faltantes a partir do histórico de trades
                 self._recalc_missing_entry_prices()
                 print(Fore.CYAN + f"[PAPER] Estado restaurado — USD: ${self.balance_usd:.2f} | Holdings: {self.holdings}")
@@ -59,11 +60,12 @@ class PaperTradingEngine:
             os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
             with open(STATE_FILE, "w") as f:
                 json.dump({
-                    "balance_usd":  self.balance_usd,
-                    "holdings":     self.holdings,
-                    "entry_prices": self.entry_prices,
-                    "trades":       self.trades[-200:],
-                    "saved_at":     datetime.now().isoformat(),
+                    "initial_balance": self.initial_balance,
+                    "balance_usd":     self.balance_usd,
+                    "holdings":        self.holdings,
+                    "entry_prices":    self.entry_prices,
+                    "trades":          self.trades[-200:],
+                    "saved_at":        datetime.now().isoformat(),
                 }, f, indent=2)
         except Exception as e:
             print(Fore.RED + f"[PAPER] Erro ao salvar estado: {e}")

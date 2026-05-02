@@ -481,7 +481,7 @@
       const totalBRL = total * usdBrl;
       const pnlBRL   = pnl   * usdBrl;
       const usdAvail = p.usd || 10000;
-      const initBRL  = 10000 * usdBrl;
+      const initBRL  = (p.initial_balance || 10000) * usdBrl;
 
       document.getElementById('portfolio-total').textContent = 'R$ ' + fmtBRL(totalBRL);
       document.getElementById('portfolio-total-usd').textContent =

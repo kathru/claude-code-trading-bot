@@ -109,7 +109,7 @@ def _load_trades_from_engine() -> list:
 state = {
     "prices": {},
     "signals": {},
-    "portfolio": {"usd": engine.balance_usd, "total": engine.balance_usd, "pnl": 0.0, "pnl_pct": 0.0},
+    "portfolio": {"usd": engine.balance_usd, "total": engine.balance_usd, "pnl": 0.0, "pnl_pct": 0.0, "initial_balance": engine.initial_balance},
     "trades": _load_trades_from_engine(),
     "feed": [],
     "history": _load_history(),
@@ -172,7 +172,8 @@ async def manual_buy(pair: str, brl: float = 100.0):
             "total": round(total, 2),
             "pnl": round(pnl, 2),
             "pnl_pct": round((pnl / engine.initial_balance) * 100, 2),
-            "holdings": {k: round(v, 8) for k, v in engine.holdings.items()},
+            "holdings":        {k: round(v, 8) for k, v in engine.holdings.items()},
+            "initial_balance": round(engine.initial_balance, 2),
         }
         await broadcast(state)
         return {"ok": True, "qty": qty, "price": price, "usd": usd}
@@ -206,7 +207,8 @@ async def manual_sell(pair: str):
             "total": round(total, 2),
             "pnl": round(pnl, 2),
             "pnl_pct": round((pnl / engine.initial_balance) * 100, 2),
-            "holdings": {k: round(v, 8) for k, v in engine.holdings.items()},
+            "holdings":        {k: round(v, 8) for k, v in engine.holdings.items()},
+            "initial_balance": round(engine.initial_balance, 2),
         }
         await broadcast(state)
         return {"ok": True, "qty": held, "price": price, "usd": usd}
@@ -409,7 +411,8 @@ async def trading_loop():
             "total": round(total, 2),
             "pnl": round(pnl, 2),
             "pnl_pct": round((pnl / engine.initial_balance) * 100, 2),
-            "holdings": {k: round(v, 8) for k, v in engine.holdings.items()},
+            "holdings":        {k: round(v, 8) for k, v in engine.holdings.items()},
+            "initial_balance": round(engine.initial_balance, 2),
         }
         state["history"].append({
             "time": now_str,
