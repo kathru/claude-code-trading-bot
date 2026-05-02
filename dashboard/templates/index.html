@@ -74,6 +74,10 @@
     </div>
     <div class="flex items-center gap-6">
       <div class="text-right hidden sm:block">
+        <p class="text-xs text-gray-500">USD / BRL</p>
+        <p id="usd-brl-rate" class="text-sm text-yellow-400 font-mono font-bold">R$ —</p>
+      </div>
+      <div class="text-right hidden sm:block">
         <p class="text-xs text-gray-500">Última atualização</p>
         <p id="last-update" class="text-sm text-gray-300 font-mono">--:--:--</p>
       </div>
@@ -90,18 +94,18 @@
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="card p-4 col-span-2 lg:col-span-1">
         <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Portfolio Total</p>
-        <p id="portfolio-total" class="text-3xl font-bold text-white">$10,000.00</p>
-        <p class="text-xs text-gray-500 mt-1">Saldo inicial: $10,000.00</p>
+        <p id="portfolio-total" class="text-3xl font-bold text-white">R$ —</p>
+        <p id="portfolio-total-usd" class="text-xs text-gray-500 mt-1">US$ — · Inicial: R$ —</p>
       </div>
       <div class="card p-4">
         <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">P&L</p>
-        <p id="pnl-value" class="text-2xl font-bold text-gray-400">$0.00</p>
+        <p id="pnl-value" class="text-2xl font-bold text-gray-400">R$ 0,00</p>
         <p id="pnl-pct" class="text-sm text-gray-500 mt-1">+0.00%</p>
       </div>
       <div class="card p-4">
-        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Saldo USD</p>
-        <p id="balance-usd" class="text-2xl font-bold text-white">$10,000.00</p>
-        <p class="text-xs text-gray-500 mt-1">Disponível</p>
+        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Saldo Disponível</p>
+        <p id="balance-usd" class="text-2xl font-bold text-white">R$ —</p>
+        <p id="balance-usd-raw" class="text-xs text-gray-500 mt-1">US$ —</p>
       </div>
       <div class="card p-4">
         <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Trades</p>
@@ -419,7 +423,7 @@
         plugins: { legend: { display: false } },
         scales: {
           x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: '#21262d' } },
-          y: { ticks: { color: '#6b7280', font: { size: 10 }, callback: v => '$'+v.toLocaleString() }, grid: { color: '#21262d' } }
+          y: { ticks: { color: '#6b7280', font: { size: 10 }, callback: v => 'R$'+(v*usdBrl).toLocaleString('pt-BR',{maximumFractionDigits:0}) }, grid: { color: '#21262d' } }
         }
       }
     });
@@ -446,25 +450,42 @@
     }
 
     function fmt(n) { return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+    function fmtBRL(n) { return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+    var usdBrl = 5.70;   // atualizado via WebSocket
 
     function updateState(s) {
       resetCountdown();
       if (candleSeries) loadCandles();
+
+      // Cotação USD/BRL
+      if (s.usd_brl) {
+        usdBrl = s.usd_brl;
+        document.getElementById('usd-brl-rate').textContent = 'R$ ' + fmtBRL(usdBrl);
+      }
+
       // Header
       document.getElementById('last-update').textContent = s.last_update || '--:--:--';
 
       // Portfolio
       const p = s.portfolio || {};
-      const total = p.total || 10000;
-      const pnl = p.pnl || 0;
-      const pct = p.pnl_pct || 0;
+      const total    = p.total || 10000;
+      const pnl      = p.pnl  || 0;
+      const pct      = p.pnl_pct || 0;
+      const totalBRL = total * usdBrl;
+      const pnlBRL   = pnl   * usdBrl;
+      const usdAvail = p.usd || 10000;
+      const initBRL  = 10000 * usdBrl;
 
-      document.getElementById('portfolio-total').textContent = '$' + fmt(total);
-      document.getElementById('balance-usd').textContent = '$' + fmt(p.usd || 10000);
+      document.getElementById('portfolio-total').textContent = 'R$ ' + fmtBRL(totalBRL);
+      document.getElementById('portfolio-total-usd').textContent =
+        'US$ ' + fmt(total) + ' · Inicial: R$ ' + fmtBRL(initBRL);
+
+      document.getElementById('balance-usd').textContent = 'R$ ' + fmtBRL(usdAvail * usdBrl);
+      document.getElementById('balance-usd-raw').textContent = 'US$ ' + fmt(usdAvail);
 
       const pnlEl = document.getElementById('pnl-value');
       const pctEl = document.getElementById('pnl-pct');
-      pnlEl.textContent = (pnl >= 0 ? '+' : '') + '$' + fmt(Math.abs(pnl));
+      pnlEl.textContent = (pnl >= 0 ? '+' : '-') + 'R$ ' + fmtBRL(Math.abs(pnlBRL));
       pnlEl.className = 'text-2xl font-bold ' + (pnl >= 0 ? 'text-green-400' : 'text-red-400');
       pctEl.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
       pctEl.className = 'text-sm mt-1 ' + (pct >= 0 ? 'text-green-500' : 'text-red-500');
@@ -479,11 +500,12 @@
         const sig   = (s.signals || {})[pair];
 
         if (price) {
-          document.getElementById('price-' + sym).textContent = '$' + fmt(price.price);
+          const priceBRL = price.price * usdBrl;
+          document.getElementById('price-' + sym).textContent = 'R$ ' + fmtBRL(priceBRL);
           const chg = price.price_pct_chg || 0;
           const chgEl = document.getElementById('chg-' + sym);
-          chgEl.textContent = (chg >= 0 ? '▲ +' : '▼ ') + chg.toFixed(2) + '% (24h)';
-          chgEl.className = 'text-sm ' + (chg >= 0 ? 'text-green-400' : 'text-red-400');
+          chgEl.textContent = 'US$ ' + fmt(price.price) + ' · ' + (chg >= 0 ? '▲ +' : '▼ ') + chg.toFixed(2) + '%';
+          chgEl.className = 'text-xs ' + (chg >= 0 ? 'text-green-400' : 'text-red-400');
         }
 
         if (sig && sig.strategies) {
@@ -519,9 +541,9 @@
           const sltpEl = document.getElementById('sltp-' + sym);
           if (sltpEl && sig.entry_price) {
             sltpEl.classList.remove('hidden');
-            document.getElementById('entry-' + sym).textContent = '$' + fmt(sig.entry_price);
-            document.getElementById('sl-' + sym).textContent    = '$' + fmt(sig.sl_level);
-            document.getElementById('tp-' + sym).textContent    = '$' + fmt(sig.tp_level);
+            document.getElementById('entry-' + sym).textContent = 'R$ ' + fmtBRL(sig.entry_price * usdBrl);
+            document.getElementById('sl-' + sym).textContent    = 'R$ ' + fmtBRL(sig.sl_level * usdBrl);
+            document.getElementById('tp-' + sym).textContent    = 'R$ ' + fmtBRL(sig.tp_level * usdBrl);
             const chgPct = sig.change_pct;
             const chgEl  = document.getElementById('chg-entry-' + sym);
             chgEl.textContent = (chgPct >= 0 ? '+' : '') + chgPct.toFixed(2) + '%';
@@ -588,18 +610,18 @@
       // Allocation Chart
       const holdings = p.holdings || {};
       const prices = s.prices || {};
-      const labels = ['USD'];
-      const values = [p.usd || 10000];
+      const labels = ['BRL'];
+      const values = [(p.usd || 10000) * usdBrl];
       const colors = ['#6366f1'];
-      if (holdings.BTC && prices['BTC-USD']) { labels.push('BTC'); values.push(holdings.BTC * prices['BTC-USD'].price); colors.push('#f97316'); }
-      if (holdings.ETH && prices['ETH-USD']) { labels.push('ETH'); values.push(holdings.ETH * prices['ETH-USD'].price); colors.push('#3b82f6'); }
+      if (holdings.BTC && prices['BTC-USD']) { labels.push('BTC'); values.push(holdings.BTC * prices['BTC-USD'].price * usdBrl); colors.push('#f97316'); }
+      if (holdings.ETH && prices['ETH-USD']) { labels.push('ETH'); values.push(holdings.ETH * prices['ETH-USD'].price * usdBrl); colors.push('#3b82f6'); }
       allocationChart.data.labels = labels;
       allocationChart.data.datasets[0].data = values;
       allocationChart.data.datasets[0].backgroundColor = colors;
       allocationChart.update('none');
       const tot = values.reduce((a,b) => a+b, 0);
       document.getElementById('allocation-legend').innerHTML = labels.map((l, i) =>
-        `<div class="flex justify-between"><span style="color:${colors[i]}">● ${l}</span><span>$${fmt(values[i])} (${(values[i]/tot*100).toFixed(1)}%)</span></div>`
+        `<div class="flex justify-between"><span style="color:${colors[i]}">● ${l}</span><span>R$ ${fmtBRL(values[i])} (${(values[i]/tot*100).toFixed(1)}%)</span></div>`
       ).join('');
 
       // Trades
@@ -618,8 +640,8 @@
               </div>
             </div>
             <div class="text-right">
-              <p class="text-white text-sm font-semibold">$${fmt(t.usd)}</p>
-              <p class="text-gray-500 text-xs">${t.time} · $${fmt(t.price)}</p>
+              <p class="text-white text-sm font-semibold">R$ ${fmtBRL(t.usd * usdBrl)}</p>
+              <p class="text-gray-500 text-xs">${t.time} · R$ ${fmtBRL(t.price * usdBrl)}</p>
             </div>
           </div>
         `).join('');
@@ -651,13 +673,13 @@
     }
 
     // ── Candlestick chart ───────────────────────────────────────────
-    let candlePair = 'BTC-USD';
-    let candleGranularity = 'FIVE_MINUTE';
-    let candleChart = null;
-    let candleSeries = null;
-    let ma9Series = null;
-    let ma21Series = null;
-    let volSeries = null;
+    var candlePair = 'BTC-USD';
+    var candleGranularity = 'FIVE_MINUTE';
+    var candleChart = null;
+    var candleSeries = null;
+    var ma9Series = null;
+    var ma21Series = null;
+    var volSeries = null;
 
     function initCandleChart() {
       const container = document.getElementById('candle-chart');
@@ -767,8 +789,8 @@
     window.addEventListener('load', tryInitCandle);
 
     // Period filter
-    let currentPeriod = '1H';
-    let fullHistory = [];
+    var currentPeriod = '1H';
+    var fullHistory = [];
 
     const periodSeconds = { '1m': 60, '5m': 300, '15m': 900, '1H': 3600, '1D': 86400, '1S': 604800, '1M': 2592000 };
 
@@ -821,8 +843,8 @@
     }
 
     // Countdown timer
-    let cycleCountdown = 60;
-    let countdownInterval = null;
+    var cycleCountdown = 60;
+    var countdownInterval = null;
 
     function resetCountdown() {
       cycleCountdown = 60;

@@ -3,6 +3,7 @@ import sys
 import time
 import json
 import asyncio
+import requests
 from datetime import datetime
 from typing import List
 
@@ -26,6 +27,14 @@ load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), "code.env")
 app = FastAPI()
 HTML_FILE = os.path.join(os.path.dirname(__file__), "templates", "index.html")
 HISTORY_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "portfolio_history.json")
+
+
+def _fetch_usd_brl() -> float:
+    try:
+        r = requests.get("https://api.frankfurter.app/latest?from=USD&to=BRL", timeout=5)
+        return float(r.json()["rates"]["BRL"])
+    except Exception:
+        return state.get("usd_brl", 5.70)   # fallback
 
 
 def _load_history() -> list:
@@ -103,6 +112,7 @@ state = {
     "cycle": 0,
     "status": "running",
     "last_update": "",
+    "usd_brl": 5.70,    # atualizado a cada ciclo
 }
 
 
@@ -253,6 +263,11 @@ async def trading_loop():
         state["cycle"] += 1
         now_str = datetime.now().strftime("%H:%M:%S")
         state["last_update"] = now_str
+
+        # Atualiza cotação USD/BRL a cada ciclo
+        usd_brl = await asyncio.get_event_loop().run_in_executor(None, _fetch_usd_brl)
+        state["usd_brl"] = round(usd_brl, 4)
+        logger.debug(f"USD/BRL: {usd_brl:.4f}")
 
         for pair in PAIRS:
             symbol = pair.split("-")[0]
