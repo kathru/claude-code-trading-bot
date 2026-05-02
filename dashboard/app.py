@@ -25,6 +25,26 @@ load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), "code.env")
 
 app = FastAPI()
 HTML_FILE = os.path.join(os.path.dirname(__file__), "templates", "index.html")
+HISTORY_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "portfolio_history.json")
+
+
+def _load_history() -> list:
+    try:
+        if os.path.exists(HISTORY_FILE):
+            with open(HISTORY_FILE, "r") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return []
+
+
+def _save_history(history: list):
+    try:
+        os.makedirs(os.path.dirname(HISTORY_FILE), exist_ok=True)
+        with open(HISTORY_FILE, "w") as f:
+            json.dump(history, f)
+    except Exception as e:
+        pass
 
 PAIRS = ["BTC-USD", "ETH-USD"]
 TRADE_USD = 100.0            # valor único por operação
@@ -71,7 +91,7 @@ state = {
     "portfolio": {"usd": engine.balance_usd, "total": engine.balance_usd, "pnl": 0.0, "pnl_pct": 0.0},
     "trades": _load_trades_from_engine(),
     "feed": [],
-    "history": [],
+    "history": _load_history(),
     "cycle": 0,
     "status": "running",
     "last_update": "",
@@ -323,6 +343,7 @@ async def trading_loop():
             "total": round(total, 2),
         })
         state["history"] = state["history"][-90000:]
+        _save_history(state["history"])
 
         await broadcast(state)
         await asyncio.sleep(CYCLE_INTERVAL)
