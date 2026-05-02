@@ -66,6 +66,7 @@ CYCLE_INTERVAL = 60          # segundos entre ciclos
 CANDLE_GRANULARITY = "FIFTEEN_MINUTE"
 STOP_LOSS_PCT  = 3.0         # vende tudo se cair 3% do preço de entrada
 TAKE_PROFIT_PCT = 5.0        # vende tudo se subir 5% do preço de entrada
+WHALE_INTERVAL  = 300        # executa whale a cada 5 minutos (segundos)
 
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
@@ -85,6 +86,7 @@ strategies = tech_strategies + [whale_strategy]
 
 # Controle de sinal anterior por (pair, strategy) para evitar re-execução no mesmo sinal
 last_signals: dict = {}
+last_whale_run: float = 0.0   # timestamp da última execução da análise whale
 
 logger = setup_logger("dashboard")
 connected_clients: List[WebSocket] = []
@@ -271,6 +273,7 @@ def _record_trade(side, pair, qty, price, usd, strategy):
 
 
 async def trading_loop():
+    global last_whale_run
     logger.info("Dashboard trading loop iniciado — granularidade: %s, ciclo: %ds", CANDLE_GRANULARITY, CYCLE_INTERVAL)
     while True:
         state["cycle"] += 1
@@ -358,30 +361,38 @@ async def trading_loop():
                         if engine.sell(symbol, held, price, "técnico"):
                             _record_trade("SELL", pair, held, price, usd, "técnico")
 
-                # ── Bloco whale: independente do técnico ─────────────────────
-                whale_signal = whale_strategy.analyze_book(order_book)
+                # ── Bloco whale: independente, a cada 5 minutos ──────────────
+                now_ts = time.time()
+                whale_due = (now_ts - last_whale_run) >= WHALE_INTERVAL
+                if whale_due:
+                    whale_signal = whale_strategy.analyze_book(order_book)
+                else:
+                    whale_signal = last_signals.get(f"{pair}:Whale", "HOLD")
+
                 pair_signals["Whale"] = whale_signal
                 key_w = f"{pair}:Whale"
-                if whale_signal != last_signals.get(key_w):
-                    last_signals[key_w] = whale_signal
-                    state["feed"].insert(0, {"time": now_str, "pair": pair,
-                        "strategy": "Whale", "signal": whale_signal, "price": price})
-                    state["feed"] = state["feed"][:100]
 
-                if whale_signal == "BUY":
-                    trade_usd = TRADE_BRL / state["usd_brl"]
-                    qty = trade_usd / price
-                    logger.info(f"[{pair}] WHALE BUY independente — R${TRADE_BRL:.0f} = ${trade_usd:.2f}")
-                    if engine.buy(symbol, trade_usd, price, "whale"):
-                        _record_trade("BUY", pair, qty, price, trade_usd, "whale")
+                if whale_due:
+                    if whale_signal != last_signals.get(key_w):
+                        last_signals[key_w] = whale_signal
+                        state["feed"].insert(0, {"time": now_str, "pair": pair,
+                            "strategy": "Whale", "signal": whale_signal, "price": price})
+                        state["feed"] = state["feed"][:100]
 
-                elif whale_signal == "SELL":
-                    held = engine.holdings.get(symbol, 0)
-                    logger.info(f"[{pair}] WHALE SELL independente")
-                    if held > 0:
-                        usd = held * price
-                        if engine.sell(symbol, held, price, "whale"):
-                            _record_trade("SELL", pair, held, price, usd, "whale")
+                    if whale_signal == "BUY":
+                        trade_usd = TRADE_BRL / state["usd_brl"]
+                        qty = trade_usd / price
+                        logger.info(f"[{pair}] WHALE BUY — R${TRADE_BRL:.0f} = ${trade_usd:.2f}")
+                        if engine.buy(symbol, trade_usd, price, "whale"):
+                            _record_trade("BUY", pair, qty, price, trade_usd, "whale")
+
+                    elif whale_signal == "SELL":
+                        held = engine.holdings.get(symbol, 0)
+                        logger.info(f"[{pair}] WHALE SELL")
+                        if held > 0:
+                            usd = held * price
+                            if engine.sell(symbol, held, price, "whale"):
+                                _record_trade("SELL", pair, held, price, usd, "whale")
 
                 rsi_val = get_rsi_value(candles)
                 entry_price = engine.entry_prices.get(symbol)
@@ -406,6 +417,11 @@ async def trading_loop():
             except Exception as e:
                 state["signals"][pair] = {"error": str(e)}
                 logger.error(f"[{pair}] Erro: {e}")
+
+        # Atualiza timestamp whale após processar todos os pares
+        if (time.time() - last_whale_run) >= WHALE_INTERVAL:
+            last_whale_run = time.time()
+            logger.info(f"Whale: análise concluída — próxima em {WHALE_INTERVAL//60}min")
 
         total = engine.portfolio_value()
         pnl = total - engine.initial_balance
