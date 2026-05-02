@@ -47,12 +47,30 @@ last_signals: dict = {}
 
 logger = setup_logger("dashboard")
 connected_clients: List[WebSocket] = []
+
+
+def _load_trades_from_engine() -> list:
+    """Converte trades salvos no engine para o formato do dashboard."""
+    result = []
+    for t in reversed(engine.trades[-50:]):
+        pair = t.get("symbol", "") + "-USD"
+        result.append({
+            "time":     t.get("time", "")[:19].replace("T", " ")[11:],
+            "side":     t.get("side", ""),
+            "pair":     pair,
+            "price":    t.get("price", 0),
+            "usd":      t.get("usd", 0),
+            "strategy": t.get("strategy", ""),
+        })
+    return result
+
+
 state = {
     "prices": {},
     "signals": {},
-    "portfolio": {"usd": 10000.0, "total": 10000.0, "pnl": 0.0, "pnl_pct": 0.0},
-    "trades": [],
-    "feed": [],        # feed de sinais ao vivo
+    "portfolio": {"usd": engine.balance_usd, "total": engine.balance_usd, "pnl": 0.0, "pnl_pct": 0.0},
+    "trades": _load_trades_from_engine(),
+    "feed": [],
     "history": [],
     "cycle": 0,
     "status": "running",
@@ -265,17 +283,24 @@ async def trading_loop():
                 log_cycle(logger, state["cycle"], pair, price, pair_signals, decision)
 
                 # Execução por consenso: mínimo CONSENSUS_MIN votos
-                if decision == "BUY" and votes["BUY"] >= CONSENSUS_MIN:
+                logger.debug(f"[{pair}] votes={votes} decision={decision}")
+                if votes["BUY"] >= CONSENSUS_MIN:
                     qty = TRADE_USD / price
+                    logger.info(f"[{pair}] CONSENSO BUY ({votes['BUY']}/4) — tentando comprar ${TRADE_USD}")
                     if engine.buy(symbol, TRADE_USD, price, "consensus"):
                         _record_trade("BUY", pair, qty, price, TRADE_USD, "consensus")
+                    else:
+                        logger.warning(f"[{pair}] BUY negado pelo engine (saldo: ${engine.balance_usd:.2f})")
 
-                elif decision == "SELL" and votes["SELL"] >= CONSENSUS_MIN:
+                elif votes["SELL"] >= CONSENSUS_MIN:
                     held = engine.holdings.get(symbol, 0)
+                    logger.info(f"[{pair}] CONSENSO SELL ({votes['SELL']}/4) — posição: {held}")
                     if held > 0:
                         usd = held * price
                         if engine.sell(symbol, held, price, "consensus"):
                             _record_trade("SELL", pair, held, price, usd, "consensus")
+                        else:
+                            logger.warning(f"[{pair}] SELL negado pelo engine")
 
             except Exception as e:
                 state["signals"][pair] = {"error": str(e)}
