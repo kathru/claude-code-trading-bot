@@ -76,3 +76,9 @@ class CoinbaseClient:
     def get_ticker(self, product_id: str) -> dict:
         data = self._get(f"/api/v3/brokerage/products/{product_id}")
         return data
+
+    def get_order_book(self, product_id: str, limit: int = 50) -> dict:
+        data = self._get("/api/v3/brokerage/product_book", {
+            "product_id": product_id, "limit": limit
+        })
+        return data.get("pricebook", {})

@@ -17,6 +17,7 @@ from paper_trading.engine import PaperTradingEngine
 from strategies.ma_crossover import MACrossoverStrategy
 from strategies.rsi import RSIStrategy
 from strategies.scalping import ScalpingStrategy
+from strategies.whale import WhaleStrategy
 from logger import setup_logger, log_cycle, log_trade, log_portfolio
 from notifier import notify_trade
 
@@ -32,10 +33,12 @@ CANDLE_GRANULARITY = "FIVE_MINUTE"
 
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
+whale_strategy = WhaleStrategy(whale_multiplier=5.0, top_levels=50, dominance_ratio=1.5)
 strategies = [
     MACrossoverStrategy(short_window=9, long_window=21),
     RSIStrategy(period=14, oversold=30, overbought=70),
     ScalpingStrategy(bb_period=20, bb_std=2.0),
+    whale_strategy,
 ]
 
 # Controle de sinal anterior por (pair, strategy) para evitar re-execução no mesmo sinal
@@ -220,12 +223,17 @@ async def trading_loop():
                     "volume_24h": float(ticker.get("volume_24h", 0)),
                 }
 
+                order_book = client.get_order_book(pair, limit=50)
+
                 pair_signals = {}
                 votes = {"BUY": 0, "SELL": 0, "HOLD": 0}
 
                 for strategy in strategies:
-                    df = strategy.candles_to_df(candles)
-                    signal = strategy.analyze(df)
+                    if isinstance(strategy, WhaleStrategy):
+                        signal = strategy.analyze_book(order_book)
+                    else:
+                        df = strategy.candles_to_df(candles)
+                        signal = strategy.analyze(df)
                     pair_signals[strategy.name] = signal
                     votes[signal] += 1
 
@@ -267,6 +275,8 @@ async def trading_loop():
                     "votes": votes,
                     "decision": decision,
                     "rsi": rsi_val,
+                    "whale_bid": round(whale_strategy.last_whale_bid_usd),
+                    "whale_ask": round(whale_strategy.last_whale_ask_usd),
                 }
                 log_cycle(logger, state["cycle"], pair, price, pair_signals, decision)
 
