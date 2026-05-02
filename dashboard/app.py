@@ -49,7 +49,7 @@ def _save_history(history: list):
 PAIRS = ["BTC-USD", "ETH-USD"]
 TRADE_USD = 100.0            # valor único por operação
 CONSENSUS_MIN = 2            # mínimo de votos para executar (2 de 4 estratégias)
-CYCLE_INTERVAL = 30          # segundos entre ciclos
+CYCLE_INTERVAL = 60          # segundos entre ciclos
 CANDLE_GRANULARITY = "FIFTEEN_MINUTE"
 STOP_LOSS_PCT  = 3.0         # vende tudo se cair 3% do preço de entrada
 TAKE_PROFIT_PCT = 5.0        # vende tudo se subir 5% do preço de entrada
