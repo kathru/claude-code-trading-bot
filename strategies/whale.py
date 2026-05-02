@@ -17,6 +17,8 @@ class WhaleStrategy(BaseStrategy):
         self.dominance_ratio = dominance_ratio
         self.last_whale_bid_usd = 0.0
         self.last_whale_ask_usd = 0.0
+        self.whale_bids: list = []   # [{"price": ..., "size": ..., "usd": ...}]
+        self.whale_asks: list = []
 
     def analyze(self, df: pd.DataFrame) -> str:
         # analyze() exigido pela base mas não usado — usamos analyze_book()
@@ -50,9 +52,28 @@ class WhaleStrategy(BaseStrategy):
         avg_bid = sum(bid_usd) / len(bid_usd)
         avg_ask = sum(ask_usd) / len(ask_usd)
 
-        # Soma USD de ordens whale nas primeiras 10 posições
-        whale_bid = sum(v for v in bid_usd[:10] if v >= avg_bid * self.whale_multiplier)
-        whale_ask = sum(v for v in ask_usd[:10] if v >= avg_ask * self.whale_multiplier)
+        # Coleta ordens whale nas primeiras 10 posições (com detalhes)
+        self.whale_bids = []
+        self.whale_asks = []
+
+        for o, usd in zip(bids[:10], bid_usd[:10]):
+            if usd >= avg_bid * self.whale_multiplier:
+                self.whale_bids.append({
+                    "price": round(float(o["price"]), 2),
+                    "size":  round(float(o["size"]), 6),
+                    "usd":   round(usd),
+                })
+
+        for o, usd in zip(asks[:10], ask_usd[:10]):
+            if usd >= avg_ask * self.whale_multiplier:
+                self.whale_asks.append({
+                    "price": round(float(o["price"]), 2),
+                    "size":  round(float(o["size"]), 6),
+                    "usd":   round(usd),
+                })
+
+        whale_bid = sum(w["usd"] for w in self.whale_bids)
+        whale_ask = sum(w["usd"] for w in self.whale_asks)
 
         self.last_whale_bid_usd = whale_bid
         self.last_whale_ask_usd = whale_ask

@@ -275,8 +275,10 @@ async def trading_loop():
                     "votes": votes,
                     "decision": decision,
                     "rsi": rsi_val,
-                    "whale_bid": round(whale_strategy.last_whale_bid_usd),
-                    "whale_ask": round(whale_strategy.last_whale_ask_usd),
+                    "whale_bid":  round(whale_strategy.last_whale_bid_usd),
+                    "whale_ask":  round(whale_strategy.last_whale_ask_usd),
+                    "whale_bids": whale_strategy.whale_bids,
+                    "whale_asks": whale_strategy.whale_asks,
                 }
                 log_cycle(logger, state["cycle"], pair, price, pair_signals, decision)
 
