@@ -56,7 +56,7 @@ def _save_history(history: list):
         pass
 
 PAIRS = ["BTC-USD", "ETH-USD"]
-TRADE_USD = 100.0            # valor único por operação
+TRADE_BRL = 500.0            # valor por operação em R$
 CONSENSUS_MIN = 2            # mínimo de votos para executar (2 de 4 estratégias)
 CYCLE_INTERVAL = 60          # segundos entre ciclos
 CANDLE_GRANULARITY = "FIFTEEN_MINUTE"
@@ -113,6 +113,7 @@ state = {
     "status": "running",
     "last_update": "",
     "usd_brl": 5.70,    # atualizado a cada ciclo
+    "trade_brl": TRADE_BRL,
 }
 
 
@@ -142,12 +143,13 @@ async def get_candles(pair: str, granularity: str = "FIVE_MINUTE", limit: int = 
 
 
 @app.post("/trade/buy")
-async def manual_buy(pair: str, usd: float = 100.0):
+async def manual_buy(pair: str, brl: float = 500.0):
     symbol = pair.split("-")[0]
     ticker = client.get_ticker(pair)
     price = float(ticker.get("price", 0))
     if not price:
         return {"ok": False, "error": "Preço indisponível"}
+    usd = brl / state["usd_brl"]
     qty = usd / price
     ok = engine.buy(symbol, usd, price, "manual")
     if ok:
@@ -329,10 +331,11 @@ async def trading_loop():
                 logger.debug(f"[{pair}] tech_votes={tech_votes}")
 
                 if tech_votes["BUY"] >= CONSENSUS_MIN:
-                    qty = TRADE_USD / price
-                    logger.info(f"[{pair}] TÉCNICO BUY ({tech_votes['BUY']}/3) — comprando ${TRADE_USD}")
-                    if engine.buy(symbol, TRADE_USD, price, "técnico"):
-                        _record_trade("BUY", pair, qty, price, TRADE_USD, "técnico")
+                    trade_usd = TRADE_BRL / state["usd_brl"]
+                    qty = trade_usd / price
+                    logger.info(f"[{pair}] TÉCNICO BUY ({tech_votes['BUY']}/3) — R${TRADE_BRL:.0f} = ${trade_usd:.2f}")
+                    if engine.buy(symbol, trade_usd, price, "técnico"):
+                        _record_trade("BUY", pair, qty, price, trade_usd, "técnico")
                     else:
                         logger.warning(f"[{pair}] BUY técnico negado (saldo: ${engine.balance_usd:.2f})")
 
@@ -355,10 +358,11 @@ async def trading_loop():
                     state["feed"] = state["feed"][:100]
 
                 if whale_signal == "BUY":
-                    qty = TRADE_USD / price
-                    logger.info(f"[{pair}] WHALE BUY independente — comprando ${TRADE_USD}")
-                    if engine.buy(symbol, TRADE_USD, price, "whale"):
-                        _record_trade("BUY", pair, qty, price, TRADE_USD, "whale")
+                    trade_usd = TRADE_BRL / state["usd_brl"]
+                    qty = trade_usd / price
+                    logger.info(f"[{pair}] WHALE BUY independente — R${TRADE_BRL:.0f} = ${trade_usd:.2f}")
+                    if engine.buy(symbol, trade_usd, price, "whale"):
+                        _record_trade("BUY", pair, qty, price, trade_usd, "whale")
 
                 elif whale_signal == "SELL":
                     held = engine.holdings.get(symbol, 0)
