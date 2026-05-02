@@ -27,9 +27,10 @@ app = FastAPI()
 HTML_FILE = os.path.join(os.path.dirname(__file__), "templates", "index.html")
 
 PAIRS = ["BTC-USD", "ETH-USD"]
-TRADE_PER_STRATEGY = 167.0   # cada estratégia opera ~$167 (~$500 total por par)
-CYCLE_INTERVAL = 15          # segundos entre ciclos
-CANDLE_GRANULARITY = "FIVE_MINUTE"
+TRADE_USD = 100.0            # valor único por operação
+CONSENSUS_MIN = 2            # mínimo de votos para executar (2 de 4 estratégias)
+CYCLE_INTERVAL = 30          # segundos entre ciclos
+CANDLE_GRANULARITY = "FIFTEEN_MINUTE"
 
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
@@ -237,36 +238,17 @@ async def trading_loop():
                     pair_signals[strategy.name] = signal
                     votes[signal] += 1
 
+                    # Feed ao vivo: registra sempre que o sinal mudar
                     key = f"{pair}:{strategy.name}"
                     prev = last_signals.get(key)
-
-                    # Adiciona ao feed de sinais sempre que mudar
                     if signal != prev:
                         last_signals[key] = signal
-                        feed_entry = {
-                            "time": now_str,
-                            "pair": pair,
+                        state["feed"].insert(0, {
+                            "time": now_str, "pair": pair,
                             "strategy": strategy.name,
-                            "signal": signal,
-                            "price": price,
-                        }
-                        state["feed"].insert(0, feed_entry)
+                            "signal": signal, "price": price,
+                        })
                         state["feed"] = state["feed"][:100]
-
-                    # Cada estratégia executa independentemente quando muda de HOLD para BUY/SELL
-                    if signal == "BUY" and prev != "BUY":
-                        qty = TRADE_PER_STRATEGY / price
-                        if engine.buy(symbol, TRADE_PER_STRATEGY, price, strategy.name):
-                            _record_trade("BUY", pair, qty, price, TRADE_PER_STRATEGY, strategy.name)
-
-                    elif signal == "SELL" and prev != "SELL":
-                        # Vende 1/3 da posição por estratégia
-                        held = engine.holdings.get(symbol, 0)
-                        sell_qty = held / 3 if held > 0 else 0
-                        if sell_qty > 0:
-                            usd = sell_qty * price
-                            if engine.sell(symbol, sell_qty, price, strategy.name):
-                                _record_trade("SELL", pair, sell_qty, price, usd, strategy.name)
 
                 rsi_val = get_rsi_value(candles)
                 decision = max(votes, key=votes.get)
@@ -281,6 +263,19 @@ async def trading_loop():
                     "whale_asks": whale_strategy.whale_asks,
                 }
                 log_cycle(logger, state["cycle"], pair, price, pair_signals, decision)
+
+                # Execução por consenso: mínimo CONSENSUS_MIN votos
+                if decision == "BUY" and votes["BUY"] >= CONSENSUS_MIN:
+                    qty = TRADE_USD / price
+                    if engine.buy(symbol, TRADE_USD, price, "consensus"):
+                        _record_trade("BUY", pair, qty, price, TRADE_USD, "consensus")
+
+                elif decision == "SELL" and votes["SELL"] >= CONSENSUS_MIN:
+                    held = engine.holdings.get(symbol, 0)
+                    if held > 0:
+                        usd = held * price
+                        if engine.sell(symbol, held, price, "consensus"):
+                            _record_trade("SELL", pair, held, price, usd, "consensus")
 
             except Exception as e:
                 state["signals"][pair] = {"error": str(e)}
