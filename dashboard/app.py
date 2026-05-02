@@ -25,7 +25,11 @@ from notifier import notify_trade
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), "code.env"))
 
 app = FastAPI()
-HTML_FILE = os.path.join(os.path.dirname(__file__), "templates", "index.html")
+HTML_FILE    = os.path.join(os.path.dirname(__file__), "templates", "index.html")
+STATIC_DIR   = os.path.join(os.path.dirname(__file__), "static")
+
+from fastapi.staticfiles import StaticFiles
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 HISTORY_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "portfolio_history.json")
 
 
