@@ -128,45 +128,53 @@
             <p id="chg-BTC" class="text-sm text-gray-400">—</p>
           </div>
         </div>
-        <div class="grid grid-cols-4 gap-1.5 mt-3">
-          <div id="sig-BTC-MA" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-            <p class="text-xs opacity-70 mb-0.5">MA Cross</p>
-            <p class="text-xs font-bold">HOLD</p>
-          </div>
-          <div id="sig-BTC-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-            <p class="text-xs opacity-70 mb-0.5">RSI <span id="rsi-BTC" class="font-mono">—</span></p>
-            <p class="text-xs font-bold">HOLD</p>
-          </div>
-          <div id="sig-BTC-SC" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-            <p class="text-xs opacity-70 mb-0.5">Scalping</p>
-            <p class="text-xs font-bold">HOLD</p>
-          </div>
-          <div id="sig-BTC-WH" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-            <p class="text-xs opacity-70 mb-0.5">🐋 Whale</p>
-            <p class="text-xs font-bold">HOLD</p>
-          </div>
-        </div>
-        <div id="whale-BTC" class="mt-2 grid grid-cols-2 gap-2 text-xs hidden">
-          <div class="whale-box bg-green-500/10 border border-green-500/20 rounded px-2 py-1 text-center">
-            <p class="text-gray-500">Bid Whale</p>
-            <p id="whale-bid-BTC" class="text-green-400 font-mono font-bold">$0</p>
-            <div class="whale-tooltip" id="whale-bid-tooltip-BTC">
-              <p class="text-green-400 font-semibold text-xs mb-2">🐋 Whales Comprando</p>
-              <div id="whale-bid-list-BTC" class="space-y-1"></div>
+        <!-- Técnico -->
+        <div class="mt-3">
+          <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Técnico · consenso 2/3</p>
+          <div class="grid grid-cols-3 gap-1.5">
+            <div id="sig-BTC-MA" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+              <p class="text-xs opacity-70 mb-0.5">MA Cross</p>
+              <p class="text-xs font-bold">HOLD</p>
+            </div>
+            <div id="sig-BTC-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+              <p class="text-xs opacity-70 mb-0.5">RSI <span id="rsi-BTC" class="font-mono">—</span></p>
+              <p class="text-xs font-bold">HOLD</p>
+            </div>
+            <div id="sig-BTC-SC" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+              <p class="text-xs opacity-70 mb-0.5">Scalping</p>
+              <p class="text-xs font-bold">HOLD</p>
             </div>
           </div>
-          <div class="whale-box bg-red-500/10 border border-red-500/20 rounded px-2 py-1 text-center">
-            <p class="text-gray-500">Ask Whale</p>
-            <p id="whale-ask-BTC" class="text-red-400 font-mono font-bold">$0</p>
-            <div class="whale-tooltip" id="whale-ask-tooltip-BTC">
-              <p class="text-red-400 font-semibold text-xs mb-2">🐋 Whales Vendendo</p>
-              <div id="whale-ask-list-BTC" class="space-y-1"></div>
-            </div>
+          <div class="mt-2 flex items-center justify-between">
+            <span class="text-xs text-gray-500">Decisão técnica</span>
+            <span id="decision-BTC" class="signal-hold text-xs font-bold px-3 py-1 rounded-full">HOLD</span>
           </div>
         </div>
-        <div class="mt-3 pt-3 border-t border-gray-800 flex items-center justify-between">
-          <span class="text-xs text-gray-500">Decisão final</span>
-          <span id="decision-BTC" class="signal-hold text-xs font-bold px-3 py-1 rounded-full">HOLD</span>
+        <!-- Whale independente -->
+        <div class="mt-3 pt-3 border-t border-dashed border-gray-700">
+          <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">🐋 Whale · independente</p>
+          <div id="sig-BTC-WH" class="signal-hold rounded-lg px-3 py-2 flex items-center justify-between">
+            <span class="text-xs opacity-70">Sinal Whale</span>
+            <span class="text-xs font-bold">HOLD</span>
+          </div>
+          <div id="whale-BTC" class="mt-2 grid grid-cols-2 gap-2 text-xs hidden">
+            <div class="whale-box bg-green-500/10 border border-green-500/20 rounded px-2 py-1 text-center">
+              <p class="text-gray-500">Bid Whale</p>
+              <p id="whale-bid-BTC" class="text-green-400 font-mono font-bold">$0</p>
+              <div class="whale-tooltip" id="whale-bid-tooltip-BTC">
+                <p class="text-green-400 font-semibold text-xs mb-2">🐋 Whales Comprando</p>
+                <div id="whale-bid-list-BTC" class="space-y-1"></div>
+              </div>
+            </div>
+            <div class="whale-box bg-red-500/10 border border-red-500/20 rounded px-2 py-1 text-center">
+              <p class="text-gray-500">Ask Whale</p>
+              <p id="whale-ask-BTC" class="text-red-400 font-mono font-bold">$0</p>
+              <div class="whale-tooltip" id="whale-ask-tooltip-BTC">
+                <p class="text-red-400 font-semibold text-xs mb-2">🐋 Whales Vendendo</p>
+                <div id="whale-ask-list-BTC" class="space-y-1"></div>
+              </div>
+            </div>
+          </div>
         </div>
         <div id="holdings-BTC" class="mt-2 text-xs text-gray-500 hidden">
           Posição: <span id="qty-BTC" class="text-orange-400 font-mono font-bold">0</span> BTC
@@ -216,45 +224,53 @@
             <p id="chg-ETH" class="text-sm text-gray-400">—</p>
           </div>
         </div>
-        <div class="grid grid-cols-4 gap-1.5 mt-3">
-          <div id="sig-ETH-MA" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-            <p class="text-xs opacity-70 mb-0.5">MA Cross</p>
-            <p class="text-xs font-bold">HOLD</p>
-          </div>
-          <div id="sig-ETH-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-            <p class="text-xs opacity-70 mb-0.5">RSI <span id="rsi-ETH" class="font-mono">—</span></p>
-            <p class="text-xs font-bold">HOLD</p>
-          </div>
-          <div id="sig-ETH-SC" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-            <p class="text-xs opacity-70 mb-0.5">Scalping</p>
-            <p class="text-xs font-bold">HOLD</p>
-          </div>
-          <div id="sig-ETH-WH" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-            <p class="text-xs opacity-70 mb-0.5">🐋 Whale</p>
-            <p class="text-xs font-bold">HOLD</p>
-          </div>
-        </div>
-        <div id="whale-ETH" class="mt-2 grid grid-cols-2 gap-2 text-xs hidden">
-          <div class="whale-box bg-green-500/10 border border-green-500/20 rounded px-2 py-1 text-center">
-            <p class="text-gray-500">Bid Whale</p>
-            <p id="whale-bid-ETH" class="text-green-400 font-mono font-bold">$0</p>
-            <div class="whale-tooltip" id="whale-bid-tooltip-ETH">
-              <p class="text-green-400 font-semibold text-xs mb-2">🐋 Whales Comprando</p>
-              <div id="whale-bid-list-ETH" class="space-y-1"></div>
+        <!-- Técnico -->
+        <div class="mt-3">
+          <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Técnico · consenso 2/3</p>
+          <div class="grid grid-cols-3 gap-1.5">
+            <div id="sig-ETH-MA" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+              <p class="text-xs opacity-70 mb-0.5">MA Cross</p>
+              <p class="text-xs font-bold">HOLD</p>
+            </div>
+            <div id="sig-ETH-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+              <p class="text-xs opacity-70 mb-0.5">RSI <span id="rsi-ETH" class="font-mono">—</span></p>
+              <p class="text-xs font-bold">HOLD</p>
+            </div>
+            <div id="sig-ETH-SC" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+              <p class="text-xs opacity-70 mb-0.5">Scalping</p>
+              <p class="text-xs font-bold">HOLD</p>
             </div>
           </div>
-          <div class="whale-box bg-red-500/10 border border-red-500/20 rounded px-2 py-1 text-center">
-            <p class="text-gray-500">Ask Whale</p>
-            <p id="whale-ask-ETH" class="text-red-400 font-mono font-bold">$0</p>
-            <div class="whale-tooltip" id="whale-ask-tooltip-ETH">
-              <p class="text-red-400 font-semibold text-xs mb-2">🐋 Whales Vendendo</p>
-              <div id="whale-ask-list-ETH" class="space-y-1"></div>
-            </div>
+          <div class="mt-2 flex items-center justify-between">
+            <span class="text-xs text-gray-500">Decisão técnica</span>
+            <span id="decision-ETH" class="signal-hold text-xs font-bold px-3 py-1 rounded-full">HOLD</span>
           </div>
         </div>
-        <div class="mt-3 pt-3 border-t border-gray-800 flex items-center justify-between">
-          <span class="text-xs text-gray-500">Decisão final</span>
-          <span id="decision-ETH" class="signal-hold text-xs font-bold px-3 py-1 rounded-full">HOLD</span>
+        <!-- Whale independente -->
+        <div class="mt-3 pt-3 border-t border-dashed border-gray-700">
+          <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">🐋 Whale · independente</p>
+          <div id="sig-ETH-WH" class="signal-hold rounded-lg px-3 py-2 flex items-center justify-between">
+            <span class="text-xs opacity-70">Sinal Whale</span>
+            <span class="text-xs font-bold">HOLD</span>
+          </div>
+          <div id="whale-ETH" class="mt-2 grid grid-cols-2 gap-2 text-xs hidden">
+            <div class="whale-box bg-green-500/10 border border-green-500/20 rounded px-2 py-1 text-center">
+              <p class="text-gray-500">Bid Whale</p>
+              <p id="whale-bid-ETH" class="text-green-400 font-mono font-bold">$0</p>
+              <div class="whale-tooltip" id="whale-bid-tooltip-ETH">
+                <p class="text-green-400 font-semibold text-xs mb-2">🐋 Whales Comprando</p>
+                <div id="whale-bid-list-ETH" class="space-y-1"></div>
+              </div>
+            </div>
+            <div class="whale-box bg-red-500/10 border border-red-500/20 rounded px-2 py-1 text-center">
+              <p class="text-gray-500">Ask Whale</p>
+              <p id="whale-ask-ETH" class="text-red-400 font-mono font-bold">$0</p>
+              <div class="whale-tooltip" id="whale-ask-tooltip-ETH">
+                <p class="text-red-400 font-semibold text-xs mb-2">🐋 Whales Vendendo</p>
+                <div id="whale-ask-list-ETH" class="space-y-1"></div>
+              </div>
+            </div>
+          </div>
         </div>
         <div id="holdings-ETH" class="mt-2 text-xs text-gray-500 hidden">
           Posição: <span id="qty-ETH" class="text-blue-400 font-mono font-bold">0</span> ETH
@@ -472,8 +488,10 @@
 
         if (sig && sig.strategies) {
           const strats = sig.strategies;
-          const keys = { 'MA Crossover': 'MA', 'RSI': 'RSI', 'Scalping': 'SC', 'Whale': 'WH' };
-          Object.entries(keys).forEach(([name, key]) => {
+
+          // Técnico: MA, RSI, Scalping
+          const techKeys = { 'MA Crossover': 'MA', 'RSI': 'RSI', 'Scalping': 'SC' };
+          Object.entries(techKeys).forEach(([name, key]) => {
             const el = document.getElementById('sig-' + sym + '-' + key);
             if (el) {
               const signal = strats[name] || 'HOLD';
@@ -484,10 +502,18 @@
           if (document.getElementById('rsi-' + sym) && sig.rsi)
             document.getElementById('rsi-' + sym).textContent = sig.rsi;
 
-          const dec = sig.decision || 'HOLD';
+          const dec = sig.tech_decision || 'HOLD';
           const decEl = document.getElementById('decision-' + sym);
           decEl.textContent = dec;
           decEl.className = signalClass(dec) + ' text-xs font-bold px-3 py-1 rounded-full';
+
+          // Whale: independente
+          const whaleSignal = sig.whale_signal || 'HOLD';
+          const whEl = document.getElementById('sig-' + sym + '-WH');
+          if (whEl) {
+            whEl.className = signalClass(whaleSignal) + ' rounded-lg px-3 py-2 flex items-center justify-between';
+            whEl.querySelector('span:last-child').textContent = whaleSignal;
+          }
 
           // Stop Loss / Take Profit
           const sltpEl = document.getElementById('sltp-' + sym);

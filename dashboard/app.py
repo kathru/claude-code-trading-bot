@@ -56,13 +56,19 @@ TAKE_PROFIT_PCT = 5.0        # vende tudo se subir 5% do preço de entrada
 
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
-whale_strategy = WhaleStrategy(whale_multiplier=5.0, top_levels=50, dominance_ratio=1.5)
-strategies = [
+
+# Estratégias técnicas — votação por consenso (2/3)
+tech_strategies = [
     MACrossoverStrategy(short_window=9, long_window=21),
     RSIStrategy(period=14, oversold=30, overbought=70),
     ScalpingStrategy(bb_period=20, bb_std=2.0),
-    whale_strategy,
 ]
+
+# Whale — execução independente (order book, não candles)
+whale_strategy = WhaleStrategy(whale_multiplier=5.0, top_levels=50, dominance_ratio=1.5)
+
+# Lista unificada apenas para feed de sinais
+strategies = tech_strategies + [whale_strategy]
 
 # Controle de sinal anterior por (pair, strategy) para evitar re-execução no mesmo sinal
 last_signals: dict = {}
@@ -288,70 +294,84 @@ async def trading_loop():
                             state["feed"] = state["feed"][:100]
 
                 order_book = client.get_order_book(pair, limit=50)
-
                 pair_signals = {}
-                votes = {"BUY": 0, "SELL": 0, "HOLD": 0}
 
-                for strategy in strategies:
-                    if isinstance(strategy, WhaleStrategy):
-                        signal = strategy.analyze_book(order_book)
-                    else:
-                        df = strategy.candles_to_df(candles)
-                        signal = strategy.analyze(df)
+                # ── Bloco técnico: MA Cross + RSI + Scalping (consenso 2/3) ──
+                tech_votes = {"BUY": 0, "SELL": 0, "HOLD": 0}
+                for strategy in tech_strategies:
+                    df = strategy.candles_to_df(candles)
+                    signal = strategy.analyze(df)
                     pair_signals[strategy.name] = signal
-                    votes[signal] += 1
-
-                    # Feed ao vivo: registra sempre que o sinal mudar
+                    tech_votes[signal] += 1
                     key = f"{pair}:{strategy.name}"
-                    prev = last_signals.get(key)
-                    if signal != prev:
+                    if signal != last_signals.get(key):
                         last_signals[key] = signal
-                        state["feed"].insert(0, {
-                            "time": now_str, "pair": pair,
-                            "strategy": strategy.name,
-                            "signal": signal, "price": price,
-                        })
+                        state["feed"].insert(0, {"time": now_str, "pair": pair,
+                            "strategy": strategy.name, "signal": signal, "price": price})
                         state["feed"] = state["feed"][:100]
 
+                tech_decision = max(tech_votes, key=tech_votes.get)
+                logger.debug(f"[{pair}] tech_votes={tech_votes}")
+
+                if tech_votes["BUY"] >= CONSENSUS_MIN:
+                    qty = TRADE_USD / price
+                    logger.info(f"[{pair}] TÉCNICO BUY ({tech_votes['BUY']}/3) — comprando ${TRADE_USD}")
+                    if engine.buy(symbol, TRADE_USD, price, "técnico"):
+                        _record_trade("BUY", pair, qty, price, TRADE_USD, "técnico")
+                    else:
+                        logger.warning(f"[{pair}] BUY técnico negado (saldo: ${engine.balance_usd:.2f})")
+
+                elif tech_votes["SELL"] >= CONSENSUS_MIN:
+                    held = engine.holdings.get(symbol, 0)
+                    logger.info(f"[{pair}] TÉCNICO SELL ({tech_votes['SELL']}/3)")
+                    if held > 0:
+                        usd = held * price
+                        if engine.sell(symbol, held, price, "técnico"):
+                            _record_trade("SELL", pair, held, price, usd, "técnico")
+
+                # ── Bloco whale: independente do técnico ─────────────────────
+                whale_signal = whale_strategy.analyze_book(order_book)
+                pair_signals["Whale"] = whale_signal
+                key_w = f"{pair}:Whale"
+                if whale_signal != last_signals.get(key_w):
+                    last_signals[key_w] = whale_signal
+                    state["feed"].insert(0, {"time": now_str, "pair": pair,
+                        "strategy": "Whale", "signal": whale_signal, "price": price})
+                    state["feed"] = state["feed"][:100]
+
+                if whale_signal == "BUY":
+                    qty = TRADE_USD / price
+                    logger.info(f"[{pair}] WHALE BUY independente — comprando ${TRADE_USD}")
+                    if engine.buy(symbol, TRADE_USD, price, "whale"):
+                        _record_trade("BUY", pair, qty, price, TRADE_USD, "whale")
+
+                elif whale_signal == "SELL":
+                    held = engine.holdings.get(symbol, 0)
+                    logger.info(f"[{pair}] WHALE SELL independente")
+                    if held > 0:
+                        usd = held * price
+                        if engine.sell(symbol, held, price, "whale"):
+                            _record_trade("SELL", pair, held, price, usd, "whale")
+
                 rsi_val = get_rsi_value(candles)
-                decision = max(votes, key=votes.get)
                 entry_price = engine.entry_prices.get(symbol)
                 change_pct  = ((price - entry_price) / entry_price * 100) if entry_price else None
                 state["signals"][pair] = {
-                    "strategies":  pair_signals,
-                    "votes":       votes,
-                    "decision":    decision,
-                    "rsi":         rsi_val,
-                    "whale_bid":   round(whale_strategy.last_whale_bid_usd),
-                    "whale_ask":   round(whale_strategy.last_whale_ask_usd),
-                    "whale_bids":  whale_strategy.whale_bids,
-                    "whale_asks":  whale_strategy.whale_asks,
-                    "entry_price": round(entry_price, 2) if entry_price else None,
-                    "change_pct":  round(change_pct, 2) if change_pct is not None else None,
-                    "sl_level":    round(entry_price * (1 - STOP_LOSS_PCT/100), 2) if entry_price else None,
-                    "tp_level":    round(entry_price * (1 + TAKE_PROFIT_PCT/100), 2) if entry_price else None,
+                    "strategies":     pair_signals,
+                    "tech_votes":     tech_votes,
+                    "tech_decision":  tech_decision,
+                    "whale_signal":   whale_signal,
+                    "rsi":            rsi_val,
+                    "whale_bid":      round(whale_strategy.last_whale_bid_usd),
+                    "whale_ask":      round(whale_strategy.last_whale_ask_usd),
+                    "whale_bids":     whale_strategy.whale_bids,
+                    "whale_asks":     whale_strategy.whale_asks,
+                    "entry_price":    round(entry_price, 2) if entry_price else None,
+                    "change_pct":     round(change_pct, 2) if change_pct is not None else None,
+                    "sl_level":       round(entry_price * (1 - STOP_LOSS_PCT/100), 2) if entry_price else None,
+                    "tp_level":       round(entry_price * (1 + TAKE_PROFIT_PCT/100), 2) if entry_price else None,
                 }
-                log_cycle(logger, state["cycle"], pair, price, pair_signals, decision)
-
-                # Execução por consenso: mínimo CONSENSUS_MIN votos
-                logger.debug(f"[{pair}] votes={votes} decision={decision}")
-                if votes["BUY"] >= CONSENSUS_MIN:
-                    qty = TRADE_USD / price
-                    logger.info(f"[{pair}] CONSENSO BUY ({votes['BUY']}/4) — tentando comprar ${TRADE_USD}")
-                    if engine.buy(symbol, TRADE_USD, price, "consensus"):
-                        _record_trade("BUY", pair, qty, price, TRADE_USD, "consensus")
-                    else:
-                        logger.warning(f"[{pair}] BUY negado pelo engine (saldo: ${engine.balance_usd:.2f})")
-
-                elif votes["SELL"] >= CONSENSUS_MIN:
-                    held = engine.holdings.get(symbol, 0)
-                    logger.info(f"[{pair}] CONSENSO SELL ({votes['SELL']}/4) — posição: {held}")
-                    if held > 0:
-                        usd = held * price
-                        if engine.sell(symbol, held, price, "consensus"):
-                            _record_trade("SELL", pair, held, price, usd, "consensus")
-                        else:
-                            logger.warning(f"[{pair}] SELL negado pelo engine")
+                log_cycle(logger, state["cycle"], pair, price, pair_signals, tech_decision)
 
             except Exception as e:
                 state["signals"][pair] = {"error": str(e)}
