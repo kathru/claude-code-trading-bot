@@ -327,10 +327,13 @@
         <div class="flex items-center justify-between mb-4">
           <h3 class="font-semibold text-white">Evolução do Portfolio</h3>
           <div class="flex gap-1" id="period-selector">
-            <button onclick="setPeriod('1H')" data-period="1H" class="period-btn active px-2.5 py-1 rounded text-xs font-semibold transition-colors">1H</button>
-            <button onclick="setPeriod('1D')" data-period="1D" class="period-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1D</button>
-            <button onclick="setPeriod('1S')" data-period="1S" class="period-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1S</button>
-            <button onclick="setPeriod('1M')" data-period="1M" class="period-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1M</button>
+            <button onclick="setPeriod('1m')"  data-period="1m"  class="period-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1m</button>
+            <button onclick="setPeriod('5m')"  data-period="5m"  class="period-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">5m</button>
+            <button onclick="setPeriod('15m')" data-period="15m" class="period-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">15m</button>
+            <button onclick="setPeriod('1H')"  data-period="1H"  class="period-btn active px-2.5 py-1 rounded text-xs font-semibold transition-colors">1H</button>
+            <button onclick="setPeriod('1D')"  data-period="1D"  class="period-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1D</button>
+            <button onclick="setPeriod('1S')"  data-period="1S"  class="period-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1S</button>
+            <button onclick="setPeriod('1M')"  data-period="1M"  class="period-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1M</button>
           </div>
         </div>
         <canvas id="portfolioChart" height="120"></canvas>
@@ -741,7 +744,7 @@
     let currentPeriod = '1H';
     let fullHistory = [];
 
-    const periodSeconds = { '1H': 3600, '1D': 86400, '1S': 604800, '1M': 2592000 };
+    const periodSeconds = { '1m': 60, '5m': 300, '15m': 900, '1H': 3600, '1D': 86400, '1S': 604800, '1M': 2592000 };
 
     function setPeriod(p) {
       currentPeriod = p;
