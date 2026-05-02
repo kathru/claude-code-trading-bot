@@ -86,7 +86,7 @@ async def get_candles(pair: str, granularity: str = "FIVE_MINUTE", limit: int = 
 
 
 @app.post("/trade/buy")
-async def manual_buy(pair: str, usd: float = 500.0):
+async def manual_buy(pair: str, usd: float = 100.0):
     symbol = pair.split("-")[0]
     ticker = client.get_ticker(pair)
     price = float(ticker.get("price", 0))

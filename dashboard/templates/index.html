@@ -173,7 +173,7 @@
         </div>
         <div class="mt-3 flex gap-2">
           <button onclick="manualTrade('buy','BTC-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors">
-            Comprar $500
+            Comprar $100
           </button>
           <button onclick="manualTrade('sell','BTC-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors">
             Vender tudo
@@ -241,7 +241,7 @@
         </div>
         <div class="mt-3 flex gap-2">
           <button onclick="manualTrade('buy','ETH-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors">
-            Comprar $500
+            Comprar $100
           </button>
           <button onclick="manualTrade('sell','ETH-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors">
             Vender tudo
@@ -723,7 +723,7 @@
       btn.textContent = '...';
       try {
         const url = side === 'buy'
-          ? `/trade/buy?pair=${pair}&usd=500`
+          ? `/trade/buy?pair=${pair}&usd=100`
           : `/trade/sell?pair=${pair}`;
         const res = await fetch(url, { method: 'POST' });
         const data = await res.json();
@@ -732,7 +732,7 @@
         alert('Erro de conexão');
       } finally {
         btn.disabled = false;
-        btn.textContent = side === 'buy' ? 'Comprar $500' : 'Vender tudo';
+        btn.textContent = side === 'buy' ? 'Comprar $100' : 'Vender tudo';
       }
     }
 
