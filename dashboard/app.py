@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, FileResponse
 from dotenv import load_dotenv
 
 from exchange.coinbase import CoinbaseClient
-from paper_trading.engine import PaperTradingEngine
+from paper_trading.engine import PaperTradingEngine, TAKER_FEE
 from strategies.ma_crossover import MACrossoverStrategy
 from strategies.rsi import RSIStrategy
 from strategies.scalping import ScalpingStrategy
@@ -101,6 +101,7 @@ def _load_trades_from_engine() -> list:
             "pair":     pair,
             "price":    t.get("price", 0),
             "usd":      t.get("usd", 0),
+            "fee":      t.get("fee", 0),
             "strategy": t.get("strategy", ""),
         })
     return result
@@ -109,7 +110,7 @@ def _load_trades_from_engine() -> list:
 state = {
     "prices": {},
     "signals": {},
-    "portfolio": {"usd": engine.balance_usd, "total": engine.balance_usd, "pnl": 0.0, "pnl_pct": 0.0, "initial_balance": engine.initial_balance},
+    "portfolio": {"usd": engine.balance_usd, "total": engine.balance_usd, "pnl": 0.0, "pnl_pct": 0.0, "initial_balance": engine.initial_balance, "total_fees_usd": engine.total_fees_usd},
     "trades": _load_trades_from_engine(),
     "feed": [],
     "history": _load_history(),
@@ -174,6 +175,7 @@ async def manual_buy(pair: str, brl: float = 100.0):
             "pnl_pct": round((pnl / engine.initial_balance) * 100, 2),
             "holdings":        {k: round(v, 8) for k, v in engine.holdings.items()},
             "initial_balance": round(engine.initial_balance, 2),
+            "total_fees_usd":  round(engine.total_fees_usd, 4),
         }
         await broadcast(state)
         return {"ok": True, "qty": qty, "price": price, "usd": usd}
@@ -209,6 +211,7 @@ async def manual_sell(pair: str):
             "pnl_pct": round((pnl / engine.initial_balance) * 100, 2),
             "holdings":        {k: round(v, 8) for k, v in engine.holdings.items()},
             "initial_balance": round(engine.initial_balance, 2),
+            "total_fees_usd":  round(engine.total_fees_usd, 4),
         }
         await broadcast(state)
         return {"ok": True, "qty": held, "price": price, "usd": usd}
@@ -254,12 +257,14 @@ def get_rsi_value(candles, period=14):
 
 
 def _record_trade(side, pair, qty, price, usd, strategy):
+    fee = usd * TAKER_FEE if side == "BUY" else usd / (1 - TAKER_FEE) * TAKER_FEE
     log_trade(logger, side, pair, qty, price, usd, strategy)
     notify_trade(side, pair, qty, price, usd)
     state["trades"].insert(0, {
         "time": datetime.now().strftime("%H:%M:%S"),
         "side": side, "pair": pair,
         "price": price, "usd": usd,
+        "fee":  round(fee, 6),
         "strategy": strategy,
     })
     state["trades"] = state["trades"][:50]
@@ -413,6 +418,7 @@ async def trading_loop():
             "pnl_pct": round((pnl / engine.initial_balance) * 100, 2),
             "holdings":        {k: round(v, 8) for k, v in engine.holdings.items()},
             "initial_balance": round(engine.initial_balance, 2),
+            "total_fees_usd":  round(engine.total_fees_usd, 4),
         }
         state["history"].append({
             "time": now_str,
