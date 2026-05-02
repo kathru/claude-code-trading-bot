@@ -56,7 +56,7 @@ def _save_history(history: list):
         pass
 
 PAIRS = ["BTC-USD", "ETH-USD"]
-TRADE_BRL = 500.0            # valor por operação em R$
+TRADE_BRL = 100.0            # valor por operação em R$
 CONSENSUS_MIN = 2            # mínimo de votos para executar (2 de 4 estratégias)
 CYCLE_INTERVAL = 60          # segundos entre ciclos
 CANDLE_GRANULARITY = "FIFTEEN_MINUTE"
@@ -143,7 +143,7 @@ async def get_candles(pair: str, granularity: str = "FIVE_MINUTE", limit: int = 
 
 
 @app.post("/trade/buy")
-async def manual_buy(pair: str, brl: float = 500.0):
+async def manual_buy(pair: str, brl: float = 100.0):
     symbol = pair.split("-")[0]
     ticker = client.get_ticker(pair)
     price = float(ticker.get("price", 0))
