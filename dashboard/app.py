@@ -134,13 +134,15 @@ engine = PaperTradingEngine(initial_balance_usd=10000.0)
 # ── Filtro macro de tendência (MA50 diário) ─────────────────────
 trend_filter = TrendFilter(period=50)
 
-# ── Estratégias de entrada (votam BUY; saídas via SL/TP/Guard) ──
+# ── Estratégias de entrada — consenso 2/3 ───────────────────────
 tech_strategies = [
     RSIDivergence(rsi_period=14, lookback=30, swing_size=5),    # 6H
     SupportResistance(lookback=40, tolerance_pct=0.5),          # 1H
     BBSqueeze(period=20, std=2.0, squeeze_pct=3.0),             # 1H
-    GoldenCross(short=50, long=200),                            # 1D
 ]
+
+# Golden Cross — usado apenas como confirmação extra (não vota)
+golden_cross = GoldenCross(short=50, long=200)                  # 1D
 
 # ── Guard de risco (pode forçar redução de posição) ─────────────
 vol_guard = VolatilityGuard(threshold_pct=8.0, consecutive_days=3)  # 1D
@@ -444,7 +446,6 @@ async def trading_loop():
                     "RSI Divergence": candles_6h,
                     "S/R Flip":       candles_1h,
                     "BB Squeeze":     candles_1h,
-                    "Golden Cross":   candles_1d,
                 }
                 for strategy in tech_strategies:
                     raw = candle_map.get(strategy.name, candles_1h)
@@ -461,13 +462,25 @@ async def trading_loop():
 
                 tech_decision = max(tech_votes, key=tech_votes.get)
 
-                # BUY: consenso + uptrend + alocação máxima respeitada
+                # Golden Cross — confirmação extra (não vota, mas registra no feed)
+                gc_df     = golden_cross.candles_to_df(candles_1d)
+                gc_signal = golden_cross.analyze(gc_df)
+                pair_signals["Golden Cross"] = gc_signal
+                key_gc = f"{pair}:Golden Cross"
+                if gc_signal != last_signals.get(key_gc):
+                    last_signals[key_gc] = gc_signal
+                    state["feed"].insert(0, {"time": now_str, "pair": pair,
+                        "strategy": "Golden Cross", "signal": gc_signal, "price": price})
+                    state["feed"] = state["feed"][:100]
+
+                # BUY: consenso 2/3 + uptrend MA50 + Golden Cross confirma + alocação ok
                 portfolio_total = engine.portfolio_value()
                 held_value = engine.holdings.get(symbol, 0) * price
                 alloc_pct  = held_value / portfolio_total if portfolio_total > 0 else 0
 
                 if (tech_votes["BUY"] >= TECH_BUY_CONSENSUS
                         and trend == "BUY"
+                        and gc_signal == "BUY"
                         and alloc_pct < MAX_ALLOC_PCT):
                     conviction = tech_votes["BUY"] / len(tech_strategies)
                     # Limita pelo espaço de alocação disponível

@@ -145,8 +145,8 @@
         </div>
         <!-- Técnico -->
         <div class="mt-2">
-          <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Técnico · só BUY</p>
-          <div class="grid grid-cols-3 gap-1.5">
+          <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Técnico · consenso 2/3</p>
+          <div class="grid grid-cols-4 gap-1.5">
             <div id="sig-BTC-MA" class="signal-hold rounded-lg px-2 py-1.5 text-center">
               <p class="text-xs opacity-70 mb-0.5">RSI Div</p>
               <p class="text-xs font-bold">HOLD</p>
@@ -157,6 +157,10 @@
             </div>
             <div id="sig-BTC-SC" class="signal-hold rounded-lg px-2 py-1.5 text-center">
               <p class="text-xs opacity-70 mb-0.5">BB Squeeze</p>
+              <p class="text-xs font-bold">HOLD</p>
+            </div>
+            <div id="sig-BTC-GC" class="signal-hold rounded-lg px-2 py-1.5 text-center opacity-60">
+              <p class="text-xs opacity-70 mb-0.5">Golden ✕</p>
               <p class="text-xs font-bold">HOLD</p>
             </div>
           </div>
@@ -221,8 +225,8 @@
         </div>
         <!-- Técnico -->
         <div class="mt-2">
-          <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Técnico · só BUY</p>
-          <div class="grid grid-cols-3 gap-1.5">
+          <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Técnico · consenso 2/3</p>
+          <div class="grid grid-cols-4 gap-1.5">
             <div id="sig-ETH-MA" class="signal-hold rounded-lg px-2 py-1.5 text-center">
               <p class="text-xs opacity-70 mb-0.5">RSI Div</p>
               <p class="text-xs font-bold">HOLD</p>
@@ -233,6 +237,10 @@
             </div>
             <div id="sig-ETH-SC" class="signal-hold rounded-lg px-2 py-1.5 text-center">
               <p class="text-xs opacity-70 mb-0.5">BB Squeeze</p>
+              <p class="text-xs font-bold">HOLD</p>
+            </div>
+            <div id="sig-ETH-GC" class="signal-hold rounded-lg px-2 py-1.5 text-center opacity-60">
+              <p class="text-xs opacity-70 mb-0.5">Golden ✕</p>
               <p class="text-xs font-bold">HOLD</p>
             </div>
           </div>
@@ -500,8 +508,8 @@
             trendEl.className = signalClass(t) + ' text-xs font-bold px-3 py-0.5 rounded-full';
           }
 
-          // Técnico: MA, RSI, Scalping
-          const techKeys = { 'MA Crossover': 'MA', 'RSI': 'RSI', 'Scalping': 'SC' };
+          // Técnico: RSI Div, S/R Flip, BB Squeeze + Golden Cross (confirmação)
+          const techKeys = { 'RSI Divergence': 'MA', 'S/R Flip': 'RSI', 'BB Squeeze': 'SC', 'Golden Cross': 'GC' };
           Object.entries(techKeys).forEach(([name, key]) => {
             const el = document.getElementById('sig-' + sym + '-' + key);
             if (el) {
