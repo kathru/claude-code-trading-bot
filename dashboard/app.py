@@ -416,10 +416,8 @@ async def trading_loop():
                     _save_slots(strategy_slots)  # persiste imediatamente
                     logger.info(f"[{pair}] VOLATILIDADE EXTREMA — slots fechados")
 
-                if not price_changed:
-                    continue
-
                 # ── Cada estratégia age de forma independente ─────────────────
+                # (SL/TP sempre verificado; análise de sinal só se preço mudou)
                 candles_30m = _get_candles(pair, CANDLE_30M, limit=100)
                 candle_map = {
                     "RSI Divergence": candles_6h,
@@ -431,9 +429,14 @@ async def trading_loop():
                 for strat in all_strategies:
                     key  = f"{strat.name}:{pair}"
                     slot = strategy_slots.setdefault(key, _empty_slot())
-                    raw  = candle_map.get(strat.name, candles_1h)
-                    df   = strat.candles_to_df(raw)
-                    signal = strat.analyze(df)
+
+                    # Analisa novo sinal só quando preço mudou; senão usa último sinal
+                    if price_changed:
+                        raw    = candle_map.get(strat.name, candles_1h)
+                        df     = strat.candles_to_df(raw)
+                        signal = strat.analyze(df)
+                    else:
+                        signal = last_signals.get(f"{pair}:{strat.name}", "HOLD")
                     pair_signals[strat.name] = signal
 
                     # Feed ao vivo
@@ -472,12 +475,12 @@ async def trading_loop():
                                 _record_trade("SELL", pair, slot["qty"], price, net_usd, f"{strat.name}:{reason}")
                                 slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
 
-                    # ── Compra: sinal BUY + slot vazio + uptrend ─────────────
-                    elif signal == "BUY" and trend == "BUY" and slot["qty"] == 0:
-                        alloc_usd = engine.portfolio_value() * STRAT_ALLOC_PCT  # sempre atualizado
+                    # ── Compra: sinal BUY + slot vazio (independente do trend) ─
+                    elif signal == "BUY" and slot["qty"] == 0:
+                        alloc_usd = engine.portfolio_value() * STRAT_ALLOC_PCT
                         min_usd   = MIN_TRADE_BRL / usd_brl
                         if alloc_usd < min_usd or engine.balance_usd < alloc_usd * 1.01:
-                            logger.debug(f"[{pair}][{strat.name}] BUY negado — saldo insuf.")
+                            logger.info(f"[{pair}][{strat.name}] BUY negado — saldo ${engine.balance_usd:.2f} insuf. para ${alloc_usd:.2f}")
                         else:
                             qty = alloc_usd / price
                             if engine.buy(symbol, alloc_usd, price, strat.name):
@@ -485,7 +488,7 @@ async def trading_loop():
                                 slot["entry"] = price
                                 slot["peak"]  = price
                                 _record_trade("BUY", pair, qty, price, alloc_usd, strat.name)
-                                logger.info(f"[{pair}][{strat.name}] BUY ${alloc_usd:.2f} @ ${price:,.2f}")
+                                logger.info(f"[{pair}][{strat.name}] ✅ BUY ${alloc_usd:.2f} @ ${price:,.2f} (trend={trend})")
 
                 # Atualiza P&L não realizado dos slots
                 for strat in all_strategies:
