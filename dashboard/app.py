@@ -493,7 +493,31 @@ async def trading_loop():
                                 _record_trade("BUY", pair, qty, price, alloc_usd, strat.name)
                                 logger.info(f"[{pair}][{strat.name}] ✅ BUY R${alloc_brl:.2f} (US${alloc_usd:.2f}) @ US${price:,.2f}")
 
-                # Atualiza P&L não realizado dos slots
+                # ── Slot manual: SL/TP/Trailing igual às estratégias ─────────
+                manual_slot = strategy_slots.get(f"manual:{pair}")
+                if manual_slot and manual_slot.get("qty", 0) > 0:
+                    manual_slot["peak"] = max(manual_slot["peak"], price)
+                    gain_pct     = (price - manual_slot["entry"]) / manual_slot["entry"] * 100
+                    tp_hit       = price >= manual_slot["entry"] * (1 + TAKE_PROFIT_PCT / 100)
+                    sl_hit       = price <= manual_slot["entry"] * (1 - INITIAL_SL_PCT / 100)
+                    trailing_act = gain_pct >= TRAILING_ACTIVATE_PCT
+                    trailing_hit = trailing_act and price <= manual_slot["peak"] * (1 - TRAILING_STOP_PCT / 100)
+                    reason = None
+                    if tp_hit:         reason = f"TP+{TAKE_PROFIT_PCT:.0f}%"
+                    elif sl_hit:       reason = f"SL-{INITIAL_SL_PCT:.0f}%"
+                    elif trailing_hit: reason = f"TRAILING-{TRAILING_STOP_PCT:.0f}%"
+                    if reason:
+                        close_qty = manual_slot["qty"]
+                        net_usd   = close_qty * price * (1 - 0.006)
+                        if engine.sell(symbol, close_qty, price, f"manual:{reason}"):
+                            manual_slot["realized"] += net_usd - manual_slot["entry"] * close_qty
+                            manual_slot["qty"] = 0.0; manual_slot["entry"] = 0.0; manual_slot["peak"] = 0.0
+                            _record_trade("SELL", pair, close_qty, price, net_usd, f"manual:{reason}")
+                            logger.info(f"[{pair}][manual] {reason} acionado @ ${price:,.2f}")
+                    else:
+                        manual_slot["unrealized"] = (price - manual_slot["entry"]) * manual_slot["qty"]
+
+                # Atualiza P&L não realizado dos slots de estratégia
                 for strat in all_strategies:
                     key  = f"{strat.name}:{pair}"
                     slot = strategy_slots.get(key, _empty_slot())
