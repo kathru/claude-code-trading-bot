@@ -121,7 +121,7 @@
     </div>
 
     <!-- Price Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="grid grid-cols-2 gap-4">
 
       <!-- BTC -->
       <div id="card-BTC" class="card p-5">
@@ -148,15 +148,15 @@
           <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Técnico · só BUY</p>
           <div class="grid grid-cols-3 gap-1.5">
             <div id="sig-BTC-MA" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-              <p class="text-xs opacity-70 mb-0.5">MA Cross</p>
+              <p class="text-xs opacity-70 mb-0.5">RSI Div</p>
               <p class="text-xs font-bold">HOLD</p>
             </div>
             <div id="sig-BTC-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-              <p class="text-xs opacity-70 mb-0.5">RSI <span id="rsi-BTC" class="font-mono">—</span></p>
+              <p class="text-xs opacity-70 mb-0.5">S/R Flip</p>
               <p class="text-xs font-bold">HOLD</p>
             </div>
             <div id="sig-BTC-SC" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-              <p class="text-xs opacity-70 mb-0.5">Scalping</p>
+              <p class="text-xs opacity-70 mb-0.5">BB Squeeze</p>
               <p class="text-xs font-bold">HOLD</p>
             </div>
           </div>
@@ -165,8 +165,6 @@
             <span id="decision-BTC" class="signal-hold text-xs font-bold px-3 py-1 rounded-full">HOLD</span>
           </div>
         </div>
-        <!-- Whale independente -->
-        <div class="mt-3 pt-3 border-t border-dashed border-gray-700">
         <!-- whale desativada: reativar em app.py e HTML -->
         <div id="holdings-BTC" class="mt-2 text-xs text-gray-500 hidden">
           Posição: <span id="qty-BTC" class="text-orange-400 font-mono font-bold">0</span> BTC
@@ -226,15 +224,15 @@
           <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Técnico · só BUY</p>
           <div class="grid grid-cols-3 gap-1.5">
             <div id="sig-ETH-MA" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-              <p class="text-xs opacity-70 mb-0.5">MA Cross</p>
+              <p class="text-xs opacity-70 mb-0.5">RSI Div</p>
               <p class="text-xs font-bold">HOLD</p>
             </div>
             <div id="sig-ETH-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-              <p class="text-xs opacity-70 mb-0.5">RSI <span id="rsi-ETH" class="font-mono">—</span></p>
+              <p class="text-xs opacity-70 mb-0.5">S/R Flip</p>
               <p class="text-xs font-bold">HOLD</p>
             </div>
             <div id="sig-ETH-SC" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-              <p class="text-xs opacity-70 mb-0.5">Scalping</p>
+              <p class="text-xs opacity-70 mb-0.5">BB Squeeze</p>
               <p class="text-xs font-bold">HOLD</p>
             </div>
           </div>
@@ -243,8 +241,6 @@
             <span id="decision-ETH" class="signal-hold text-xs font-bold px-3 py-1 rounded-full">HOLD</span>
           </div>
         </div>
-        <!-- Whale independente -->
-        <div class="mt-3 pt-3 border-t border-dashed border-gray-700">
         <!-- whale desativada: reativar em app.py e HTML -->
         <div id="holdings-ETH" class="mt-2 text-xs text-gray-500 hidden">
           Posição: <span id="qty-ETH" class="text-blue-400 font-mono font-bold">0</span> ETH
@@ -293,20 +289,23 @@
           <span class="text-gray-700">|</span>
           <!-- Timeframe -->
           <div class="flex gap-1">
-            <button onclick="setCandleTF('ONE_MINUTE',  1)"   data-tf="ONE_MINUTE"   class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1m</button>
-            <button onclick="setCandleTF('FIVE_MINUTE', 5)"   data-tf="FIVE_MINUTE"  class="candle-tf-btn active px-2.5 py-1 rounded text-xs font-semibold transition-colors">5m</button>
+            <button onclick="setCandleTF('ONE_MINUTE',  1)"    data-tf="ONE_MINUTE"    class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1m</button>
+            <button onclick="setCandleTF('FIVE_MINUTE', 5)"    data-tf="FIVE_MINUTE"   class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">5m</button>
             <button onclick="setCandleTF('FIFTEEN_MINUTE',15)" data-tf="FIFTEEN_MINUTE" class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">15m</button>
-            <button onclick="setCandleTF('ONE_HOUR',   60)"  data-tf="ONE_HOUR"     class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1h</button>
-            <button onclick="setCandleTF('ONE_DAY',   1440)" data-tf="ONE_DAY"      class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1d</button>
+            <button onclick="setCandleTF('ONE_HOUR',   60)"    data-tf="ONE_HOUR"      class="candle-tf-btn active px-2.5 py-1 rounded text-xs font-semibold transition-colors">1h</button>
+            <button onclick="setCandleTF('SIX_HOUR',   360)"   data-tf="SIX_HOUR"     class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">6h</button>
+            <button onclick="setCandleTF('ONE_DAY',   1440)"   data-tf="ONE_DAY"       class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1d</button>
           </div>
           <!-- Preço atual -->
           <span id="candle-price" class="font-mono text-white text-sm font-bold hidden sm:block">—</span>
         </div>
       </div>
-      <div id="candle-chart" style="height:360px;position:relative;"></div>
-      <div class="mt-3 flex gap-4 text-xs text-gray-500">
-        <span><span class="text-indigo-400 font-semibold">—</span> MA 9</span>
-        <span><span class="text-yellow-400 font-semibold">—</span> MA 21</span>
+      <div id="candle-chart" style="height:360px;position:relative;overflow:hidden;"></div>
+      <div class="mt-2 flex flex-wrap gap-3 text-xs text-gray-500">
+        <span><span class="text-indigo-400 font-semibold">—</span> MA50 <span class="text-gray-600">(Golden Cross)</span></span>
+        <span><span class="text-orange-400 font-semibold">—</span> MA200</span>
+        <span><span class="text-indigo-400 opacity-40 font-semibold">- -</span> BB <span class="text-gray-600">(BB Squeeze)</span></span>
+        <span><span class="text-purple-400 font-semibold">—</span> RSI <span class="text-gray-600">(Divergência)</span></span>
         <span id="candle-info" class="ml-auto font-mono"></span>
       </div>
     </div>
@@ -664,58 +663,12 @@
 
     // ── Candlestick chart ───────────────────────────────────────────
     var candlePair = 'BTC-USD';
-    var candleGranularity = 'FIVE_MINUTE';
-    var candleChart = null;
+    var candleGranularity = 'ONE_HOUR';
+    var candleChart = null, rsiChart = null;
     var candleSeries = null;
-    var ma9Series = null;
-    var ma21Series = null;
-    var volSeries = null;
-
-    function initCandleChart() {
-      const container = document.getElementById('candle-chart');
-      container.innerHTML = '';
-      candleChart = LightweightCharts.createChart(container, {
-        width: container.clientWidth,
-        height: 360,
-        layout: { background: { color: '#161b22' }, textColor: '#9ca3af' },
-        grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
-        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-        rightPriceScale: { borderColor: '#30363d' },
-        timeScale: { borderColor: '#30363d', timeVisible: true, secondsVisible: false },
-      });
-
-      candleSeries = candleChart.addCandlestickSeries({
-        upColor: '#4ade80', downColor: '#f87171',
-        borderUpColor: '#4ade80', borderDownColor: '#f87171',
-        wickUpColor: '#4ade80', wickDownColor: '#f87171',
-      });
-
-      ma9Series = candleChart.addLineSeries({
-        color: '#818cf8', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false,
-      });
-
-      ma21Series = candleChart.addLineSeries({
-        color: '#fbbf24', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false,
-      });
-
-      // Tooltip no crosshair
-      candleChart.subscribeCrosshairMove(param => {
-        if (!param.time || !param.seriesData) return;
-        const d = param.seriesData.get(candleSeries);
-        if (!d) return;
-        const info = document.getElementById('candle-info');
-        const color = d.close >= d.open ? '#4ade80' : '#f87171';
-        info.innerHTML =
-          `O <span style="color:${color}">${d.open.toFixed(2)}</span> ` +
-          `H <span style="color:#4ade80">${d.high.toFixed(2)}</span> ` +
-          `L <span style="color:#f87171">${d.low.toFixed(2)}</span> ` +
-          `C <span style="color:${color}">${d.close.toFixed(2)}</span>`;
-      });
-
-      new ResizeObserver(() => {
-        candleChart.applyOptions({ width: container.clientWidth });
-      }).observe(container);
-    }
+    var ma50Series = null, ma200Series = null;
+    var bbUpperSeries = null, bbLowerSeries = null, bbMidSeries = null;
+    var rsiSeries = null;
 
     function calcMA(data, period) {
       return data.map((d, i) => {
@@ -725,23 +678,133 @@
       }).filter(Boolean);
     }
 
+    function calcBB(data, period = 20, std = 2.0) {
+      const upper = [], lower = [], mid = [];
+      for (let i = period - 1; i < data.length; i++) {
+        const slice = data.slice(i - period + 1, i + 1);
+        const ma = slice.reduce((s, x) => s + x.close, 0) / period;
+        const variance = slice.reduce((s, x) => s + (x.close - ma) ** 2, 0) / period;
+        const sd = Math.sqrt(variance);
+        mid.push({ time: data[i].time, value: parseFloat(ma.toFixed(2)) });
+        upper.push({ time: data[i].time, value: parseFloat((ma + std * sd).toFixed(2)) });
+        lower.push({ time: data[i].time, value: parseFloat((ma - std * sd).toFixed(2)) });
+      }
+      return { upper, lower, mid };
+    }
+
+    function calcRSI(data, period = 14) {
+      const result = [];
+      for (let i = period; i < data.length; i++) {
+        const slice = data.slice(i - period, i + 1);
+        let gains = 0, losses = 0;
+        for (let j = 1; j < slice.length; j++) {
+          const d = slice[j].close - slice[j-1].close;
+          if (d > 0) gains += d; else losses -= d;
+        }
+        const avgGain = gains / period;
+        const avgLoss = losses / period;
+        const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+        result.push({ time: data[i].time, value: parseFloat((100 - 100 / (1 + rs)).toFixed(2)) });
+      }
+      return result;
+    }
+
+    function initCandleChart() {
+      const container = document.getElementById('candle-chart');
+      container.innerHTML = '';
+
+      const chartOpts = (h) => ({
+        width: container.clientWidth, height: h,
+        layout: { background: { color: '#161b22' }, textColor: '#9ca3af' },
+        grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+        rightPriceScale: { borderColor: '#30363d', scaleMargins: { top: 0.05, bottom: 0.05 } },
+        timeScale: { borderColor: '#30363d', timeVisible: true, secondsVisible: false },
+      });
+
+      // ── Gráfico principal (candles + MA50 + MA200 + BB) ──
+      const mainDiv = document.createElement('div');
+      container.appendChild(mainDiv);
+      candleChart = LightweightCharts.createChart(mainDiv, chartOpts(260));
+
+      candleSeries = candleChart.addCandlestickSeries({
+        upColor: '#4ade80', downColor: '#f87171',
+        borderUpColor: '#4ade80', borderDownColor: '#f87171',
+        wickUpColor: '#4ade80', wickDownColor: '#f87171',
+      });
+      // MA50 — Golden Cross curta
+      ma50Series = candleChart.addLineSeries({ color: '#6366f1', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
+      // MA200 — Golden Cross longa
+      ma200Series = candleChart.addLineSeries({ color: '#f97316', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
+      // Bollinger Bands — BB Squeeze
+      bbUpperSeries = candleChart.addLineSeries({ color: 'rgba(99,102,241,0.4)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, lineStyle: 2 });
+      bbLowerSeries = candleChart.addLineSeries({ color: 'rgba(99,102,241,0.4)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, lineStyle: 2 });
+      bbMidSeries   = candleChart.addLineSeries({ color: 'rgba(99,102,241,0.2)', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, lineStyle: 2 });
+
+      // ── Painel RSI (RSI Divergence) ──
+      const rsiDiv = document.createElement('div');
+      rsiDiv.style.marginTop = '4px';
+      container.appendChild(rsiDiv);
+      rsiChart = LightweightCharts.createChart(rsiDiv, {
+        ...chartOpts(90),
+        rightPriceScale: { borderColor: '#30363d', scaleMargins: { top: 0.1, bottom: 0.1 } },
+      });
+      rsiSeries = rsiChart.addLineSeries({ color: '#a78bfa', lineWidth: 1.5, priceLineVisible: false });
+      // Linhas de referência RSI 70 e 30
+      rsiChart.addLineSeries({ color: 'rgba(248,113,113,0.4)', lineWidth: 1, lineStyle: 2, priceLineVisible: false })
+        .setData([]);  // preenchido em loadCandles
+
+      // Crosshair sincronizado
+      candleChart.subscribeCrosshairMove(param => {
+        if (!param.time || !param.seriesData) return;
+        const d = param.seriesData.get(candleSeries);
+        if (!d) return;
+        const color = d.close >= d.open ? '#4ade80' : '#f87171';
+        document.getElementById('candle-info').innerHTML =
+          `O <span style="color:${color}">${d.open.toFixed(2)}</span> ` +
+          `H <span style="color:#4ade80">${d.high.toFixed(2)}</span> ` +
+          `L <span style="color:#f87171">${d.low.toFixed(2)}</span> ` +
+          `C <span style="color:${color}">${d.close.toFixed(2)}</span>`;
+      });
+
+      new ResizeObserver(() => {
+        const w = container.clientWidth;
+        candleChart.applyOptions({ width: w });
+        rsiChart.applyOptions({ width: w });
+      }).observe(container);
+    }
+
     async function loadCandles() {
       try {
-        const res = await fetch(`/candles/${candlePair}?granularity=${candleGranularity}&limit=150`);
+        const limit = candleGranularity === 'ONE_DAY' ? 250 : 150;
+        const res = await fetch(`/candles/${candlePair}?granularity=${candleGranularity}&limit=${limit}`);
         const data = await res.json();
         if (!data.length) return;
 
         candleSeries.setData(data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close })));
-        ma9Series.setData(calcMA(data, 9));
-        ma21Series.setData(calcMA(data, 21));
 
-        // Atualiza preço atual
+        // MA50 + MA200 (Golden Cross)
+        ma50Series.setData(calcMA(data, 50));
+        ma200Series.setData(calcMA(data, 200));
+
+        // Bollinger Bands (BB Squeeze)
+        const bb = calcBB(data, 20, 2.0);
+        bbUpperSeries.setData(bb.upper);
+        bbLowerSeries.setData(bb.lower);
+        bbMidSeries.setData(bb.mid);
+
+        // RSI (RSI Divergence)
+        const rsiData = calcRSI(data, 14);
+        rsiSeries.setData(rsiData);
+
+        // Preço atual
         const last = data[data.length - 1];
         const priceEl = document.getElementById('candle-price');
-        priceEl.textContent = '$' + fmt(last.close);
+        priceEl.textContent = 'R$ ' + fmtBRL(last.close * usdBrl);
         priceEl.style.color = last.close >= last.open ? '#4ade80' : '#f87171';
 
         candleChart.timeScale().fitContent();
+        rsiChart.timeScale().fitContent();
       } catch(e) { console.error('candles:', e); }
     }
 
