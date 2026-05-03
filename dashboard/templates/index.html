@@ -75,7 +75,7 @@
     </div>
     <div class="flex items-center gap-6">
       <div class="text-right hidden sm:block cursor-pointer" onclick="refreshClaudeUsage()" title="Clique para atualizar · Configure ANTHROPIC_API_KEY no code.env para dados reais">
-        <p class="text-xs text-gray-500">Claude Pro · Tokens hoje</p>
+        <p class="text-xs text-gray-500">Claude API</p>
         <div class="flex items-center gap-1.5">
           <span id="claude-tokens-used" class="text-sm text-purple-400 font-mono font-bold">—</span>
           <span class="text-gray-600 text-xs">/</span>
@@ -964,36 +964,35 @@
 
     startCountdown();
 
-    // Claude token usage
+    // Claude key status
     async function refreshClaudeUsage() {
+      const usedEl   = document.getElementById('claude-tokens-used');
+      const statusEl = document.getElementById('claude-tokens-status');
       try {
         const r = await fetch('/api/claude-usage');
         const d = await r.json();
-        const usedEl   = document.getElementById('claude-tokens-used');
-        const statusEl = document.getElementById('claude-tokens-status');
         if (!d.configured) {
           usedEl.textContent   = 'N/A';
+          usedEl.style.color   = '#6b7280';
           statusEl.textContent = 'sem chave';
-          statusEl.title       = 'Adicione ANTHROPIC_API_KEY no code.env';
           return;
         }
-        if (d.error) {
-          usedEl.textContent   = 'erro';
-          statusEl.textContent = d.error.slice(0, 20);
-          return;
+        if (d.key_valid) {
+          usedEl.textContent   = '✓ ativa';
+          usedEl.style.color   = '#4ade80';
+          statusEl.innerHTML   = `<a href="${d.console_url}" target="_blank" style="color:#818cf8;text-decoration:underline">ver no Console ↗</a>`;
+        } else {
+          usedEl.textContent   = '✗ inválida';
+          usedEl.style.color   = '#f87171';
+          statusEl.textContent = 'verifique a chave';
         }
-        const total = d.total_tokens || 0;
-        usedEl.textContent = total >= 1000
-          ? (total / 1000).toFixed(1) + 'k'
-          : total.toString();
-        statusEl.textContent = `↑${((d.input_tokens||0)/1000).toFixed(1)}k ↓${((d.output_tokens||0)/1000).toFixed(1)}k`;
-        usedEl.style.color = total > 500000 ? '#f97316' : '#a78bfa';
       } catch(e) {
-        document.getElementById('claude-tokens-used').textContent = '—';
+        usedEl.textContent   = '—';
+        statusEl.textContent = '';
       }
     }
     refreshClaudeUsage();
-    setInterval(refreshClaudeUsage, 300000);   // atualiza a cada 5 min
+    setInterval(refreshClaudeUsage, 300000);
 
     // WebSocket
     function connect() {

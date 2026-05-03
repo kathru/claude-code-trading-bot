@@ -241,32 +241,31 @@ async def index():
 
 @app.get("/api/claude-usage")
 async def claude_usage():
-    """Retorna uso de tokens do Claude via Anthropic API."""
+    """Verifica status da chave Anthropic e retorna link para o Console de uso."""
     if not ANTHROPIC_API_KEY:
-        return {"configured": False, "message": "Configure ANTHROPIC_API_KEY no code.env"}
+        return {"configured": False}
+    # Valida a chave com chamada leve (sem custo de tokens)
     try:
-        import datetime
-        today = datetime.date.today().isoformat()
-        r = requests.get(
-            "https://api.anthropic.com/v1/usage",
-            headers={"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01"},
-            params={"start_date": today, "end_date": today},
+        r = requests.post(
+            "https://api.anthropic.com/v1/messages/count_tokens",
+            headers={
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={"model": "claude-opus-4-5", "messages": [{"role": "user", "content": "hi"}]},
             timeout=8,
         )
-        if r.status_code == 200:
-            data = r.json()
-            input_tokens  = sum(d.get("input_tokens", 0) for d in data.get("data", []))
-            output_tokens = sum(d.get("output_tokens", 0) for d in data.get("data", []))
-            return {
-                "configured":     True,
-                "input_tokens":   input_tokens,
-                "output_tokens":  output_tokens,
-                "total_tokens":   input_tokens + output_tokens,
-                "date":           today,
-            }
-        return {"configured": True, "error": f"API retornou {r.status_code}"}
+        valid = r.status_code in (200, 400)  # 400 = bad request mas chave válida
+        data  = r.json() if r.status_code == 200 else {}
+        return {
+            "configured":   True,
+            "key_valid":    valid,
+            "input_tokens": data.get("input_tokens"),
+            "console_url":  "https://console.anthropic.com/settings/usage",
+        }
     except Exception as e:
-        return {"configured": True, "error": str(e)}
+        return {"configured": True, "key_valid": False, "error": str(e)}
 
 
 @app.get("/candles/{pair}")
