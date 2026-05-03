@@ -346,6 +346,15 @@
     <!-- Trades + Feed -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
+      <!-- Painel de estratégias independentes -->
+      <div class="card p-5 col-span-2">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-white">Estratégias Independentes · 25% cada</h3>
+          <span class="text-xs text-gray-500">P&L alvo: <span class="text-green-400 font-bold">+65%</span></span>
+        </div>
+        <div id="strategy-panel" class="grid grid-cols-4 gap-3"></div>
+      </div>
+
       <div class="card p-5">
         <div class="flex items-center justify-between mb-4">
           <h3 class="font-semibold text-white">Histórico de Trades</h3>
@@ -620,6 +629,38 @@
       document.getElementById('allocation-legend').innerHTML = labels.map((l, i) =>
         `<div class="flex justify-between"><span style="color:${colors[i]}">● ${l}</span><span>R$ ${fmtBRL(values[i])} (${(values[i]/tot*100).toFixed(1)}%)</span></div>`
       ).join('');
+
+      // Painel de estratégias independentes
+      const slots = s.slots || {};
+      const stratNames = ['RSI Divergence','S/R Flip','BB Squeeze','Golden Cross'];
+      const stratIcons = {'RSI Divergence':'📈','S/R Flip':'🔄','BB Squeeze':'🎯','Golden Cross':'⭐'};
+      const panel = document.getElementById('strategy-panel');
+      if (panel) {
+        panel.innerHTML = stratNames.map(name => {
+          const btcSlot = slots[`${name}:BTC-USD`] || {};
+          const ethSlot = slots[`${name}:ETH-USD`] || {};
+          const realBTC = btcSlot.realized || 0;
+          const realETH = ethSlot.realized || 0;
+          const unrlBTC = btcSlot.unrealized || 0;
+          const unrlETH = ethSlot.unrealized || 0;
+          const totalPnl = (realBTC + realETH + unrlBTC + unrlETH) * usdBrl;
+          const hasBTC   = (btcSlot.qty || 0) > 0;
+          const hasETH   = (ethSlot.qty || 0) > 0;
+          const pnlColor = totalPnl >= 0 ? '#4ade80' : '#f87171';
+          return `<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
+            <div class="flex items-center gap-1.5 mb-2">
+              <span>${stratIcons[name]||'📊'}</span>
+              <span class="text-xs font-semibold text-white">${name}</span>
+            </div>
+            <div class="text-xs text-gray-500 mb-1.5">
+              ${hasBTC ? `<span class="text-orange-400">● BTC</span> ` : '<span class="text-gray-700">○ BTC</span> '}
+              ${hasETH ? `<span class="text-blue-400">● ETH</span>` : '<span class="text-gray-700">○ ETH</span>'}
+            </div>
+            <p class="text-sm font-bold font-mono" style="color:${pnlColor}">${totalPnl >= 0?'+':''}R$ ${fmtBRL(Math.abs(totalPnl))}</p>
+            <p class="text-[10px] text-gray-600 mt-0.5">P&L realiz + não realiz</p>
+          </div>`;
+        }).join('');
+      }
 
       // Trades
       const trades = s.trades || [];
