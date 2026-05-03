@@ -694,7 +694,7 @@
               <span class="text-gray-500 text-xs">${f.strategy}</span>
             </div>
             <div class="flex items-center gap-3">
-              <span class="font-mono text-xs text-gray-400">$${fmt(f.price)}</span>
+              <span class="font-mono text-xs text-gray-400">R$ ${fmtBRL(f.price * usdBrl)}</span>
               <span class="text-xs font-bold ${sigColor[f.signal] || 'text-gray-500'}">${f.signal}</span>
               <span class="text-gray-600 text-xs">${f.time}</span>
             </div>
