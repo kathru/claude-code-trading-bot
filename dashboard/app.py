@@ -106,8 +106,9 @@ CANDLE_6H         = "SIX_HOUR"      # RSI Divergence
 CANDLE_1D         = "ONE_DAY"       # Golden Cross, Trend, VolGuard
 
 # ── Alocação por estratégia ─────────────────────────────────────
-STRAT_ALLOC_PCT   = 0.25     # cada estratégia usa até 25% do portfólio
-MIN_TRADE_BRL     = 30.0     # mínimo para cobrir fees
+TRADE_MAX_BRL     = 250.0    # limite máximo por operação em R$
+STRAT_ALLOC_PCT   = 0.25     # cada estratégia usa 25% do limite → R$62,50
+MIN_TRADE_BRL     = 10.0     # mínimo para cobrir fees
 
 # ── Gestão de risco por posição ─────────────────────────────────
 INITIAL_SL_PCT       = 3.0   # SL inicial: -3% da entrada
@@ -261,7 +262,7 @@ async def get_candles(pair: str, granularity: str = "FIVE_MINUTE", limit: int = 
 
 
 @app.post("/trade/buy")
-async def manual_buy(pair: str, brl: float = 250.0):
+async def manual_buy(pair: str, brl: float = 62.5):
     symbol = pair.split("-")[0]
     ticker = client.get_ticker(pair)
     price  = float(ticker.get("price", 0))
@@ -475,12 +476,14 @@ async def trading_loop():
                                 _record_trade("SELL", pair, slot["qty"], price, net_usd, f"{strat.name}:{reason}")
                                 slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
 
-                    # ── Compra: sinal BUY + slot vazio (independente do trend) ─
+                    # ── Compra: sinal BUY + slot vazio ────────────────────────
+                    # Cada estratégia usa 25% de R$250 = R$62,50 por trade
                     elif signal == "BUY" and slot["qty"] == 0:
-                        alloc_usd = engine.portfolio_value() * STRAT_ALLOC_PCT
+                        alloc_brl = TRADE_MAX_BRL * STRAT_ALLOC_PCT       # R$62,50
+                        alloc_usd = alloc_brl / usd_brl                    # ~US$12,55
                         min_usd   = MIN_TRADE_BRL / usd_brl
-                        if alloc_usd < min_usd or engine.balance_usd < alloc_usd * 1.01:
-                            logger.info(f"[{pair}][{strat.name}] BUY negado — saldo ${engine.balance_usd:.2f} insuf. para ${alloc_usd:.2f}")
+                        if engine.balance_usd < alloc_usd * 1.006:        # inclui fee
+                            logger.info(f"[{pair}][{strat.name}] BUY negado — saldo US${engine.balance_usd:.2f} insuf. para US${alloc_usd:.2f}")
                         else:
                             qty = alloc_usd / price
                             if engine.buy(symbol, alloc_usd, price, strat.name):
@@ -488,7 +491,7 @@ async def trading_loop():
                                 slot["entry"] = price
                                 slot["peak"]  = price
                                 _record_trade("BUY", pair, qty, price, alloc_usd, strat.name)
-                                logger.info(f"[{pair}][{strat.name}] ✅ BUY ${alloc_usd:.2f} @ ${price:,.2f} (trend={trend})")
+                                logger.info(f"[{pair}][{strat.name}] ✅ BUY R${alloc_brl:.2f} (US${alloc_usd:.2f}) @ US${price:,.2f}")
 
                 # Atualiza P&L não realizado dos slots
                 for strat in all_strategies:
