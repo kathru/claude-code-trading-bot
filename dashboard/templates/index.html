@@ -138,9 +138,14 @@
             <p id="chg-BTC" class="text-sm text-gray-400">—</p>
           </div>
         </div>
+        <!-- Tendência -->
+        <div class="mt-3 flex items-center justify-between">
+          <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência (MA50)</span>
+          <span id="trend-BTC" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
+        </div>
         <!-- Técnico -->
-        <div class="mt-3">
-          <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Técnico · consenso 2/3</p>
+        <div class="mt-2">
+          <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Técnico · só BUY</p>
           <div class="grid grid-cols-3 gap-1.5">
             <div id="sig-BTC-MA" class="signal-hold rounded-lg px-2 py-1.5 text-center">
               <p class="text-xs opacity-70 mb-0.5">MA Cross</p>
@@ -234,9 +239,14 @@
             <p id="chg-ETH" class="text-sm text-gray-400">—</p>
           </div>
         </div>
+        <!-- Tendência -->
+        <div class="mt-3 flex items-center justify-between">
+          <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência (MA50)</span>
+          <span id="trend-ETH" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
+        </div>
         <!-- Técnico -->
-        <div class="mt-3">
-          <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Técnico · consenso 2/3</p>
+        <div class="mt-2">
+          <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Técnico · só BUY</p>
           <div class="grid grid-cols-3 gap-1.5">
             <div id="sig-ETH-MA" class="signal-hold rounded-lg px-2 py-1.5 text-center">
               <p class="text-xs opacity-70 mb-0.5">MA Cross</p>
@@ -528,6 +538,14 @@
 
         if (sig && sig.strategies) {
           const strats = sig.strategies;
+
+          // Tendência
+          const trendEl = document.getElementById('trend-' + sym);
+          if (trendEl && sig.trend) {
+            const t = sig.trend;
+            trendEl.textContent = t === 'BUY' ? '↑ ALTA' : t === 'SELL' ? '↓ BAIXA' : '— NEUTRO';
+            trendEl.className = signalClass(t) + ' text-xs font-bold px-3 py-0.5 rounded-full';
+          }
 
           // Técnico: MA, RSI, Scalping
           const techKeys = { 'MA Crossover': 'MA', 'RSI': 'RSI', 'Scalping': 'SC' };

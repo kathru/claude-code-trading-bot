@@ -19,6 +19,7 @@ from strategies.ma_crossover import MACrossoverStrategy
 from strategies.rsi import RSIStrategy
 from strategies.scalping import ScalpingStrategy
 from strategies.whale import WhaleStrategy
+from strategies.trend_filter import TrendFilter
 from logger import setup_logger, log_cycle, log_trade, log_portfolio
 from notifier import notify_trade
 
@@ -90,16 +91,16 @@ def _save_history(history: list):
         pass
 
 PAIRS = ["BTC-USD", "ETH-USD"]
-TRADE_MAX_BRL   = 250.0      # máximo por operação em R$
-TRADE_MIN_BRL   = 50.0       # mínimo R$50 — abaixo disso a taxa não compensa
-CONSENSUS_MIN   = 3          # exige unanimidade (3/3) para sinal técnico
-CYCLE_INTERVAL  = 300        # ciclo de 5 minutos — reduz ruído
-CANDLE_GRANULARITY = "FIFTEEN_MINUTE"
-STOP_LOSS_PCT   = 4.0        # SL: -4%
-TAKE_PROFIT_PCT = 8.0        # TP: +8%  → ratio 1:2 sobre o SL
-WHALE_INTERVAL  = 600        # whale a cada 10 minutos
-WHALE_MIN_CONVICTION = 0.70  # convicção mínima para whale executar (70%)
-MIN_HOLD_SECONDS = 7200      # hold mínimo de 2 horas antes de vender automaticamente
+TRADE_MAX_BRL        = 250.0   # máximo por operação em R$
+TRADE_MIN_BRL        = 50.0    # mínimo R$50 — fee deve valer a pena
+CYCLE_INTERVAL       = 300     # ciclo de 5 minutos
+CANDLE_GRANULARITY   = "ONE_HOUR"   # 1h → sinais confiáveis, menos ruído
+STOP_LOSS_PCT        = 4.0     # SL: -4%
+TAKE_PROFIT_PCT      = 8.0     # TP: +8%  → ratio 1:2 sobre SL, ~6.8% líquido
+WHALE_INTERVAL       = 600     # whale a cada 10 minutos
+WHALE_MIN_CONVICTION = 0.70    # convicção mínima para whale executar (70%)
+TECH_BUY_CONSENSUS  = 2        # quantas técnicas precisam votar BUY (de 3)
+MIN_HOLD_SECONDS    = 3600     # hold mínimo de 1h antes de SELL pelo whale
 
 
 def calc_trade_brl(conviction: float) -> float:
@@ -114,11 +115,14 @@ def calc_trade_brl(conviction: float) -> float:
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
 
-# Estratégias técnicas — unanimidade (3/3) para executar
+# Filtro de tendência (MA50 em 1H) — só permite entradas no sentido da tendência
+trend_filter = TrendFilter(period=50)
+
+# Estratégias técnicas — votam apenas BUY; saída automática só via SL/TP
 tech_strategies = [
-    MACrossoverStrategy(short_window=9, long_window=34),   # cruzamento mais significativo
-    RSIStrategy(period=14, oversold=20, overbought=80),    # sinais mais extremos
-    ScalpingStrategy(bb_period=20, bb_std=2.5),            # BB mais afastadas = menos ruído
+    MACrossoverStrategy(short_window=9, long_window=34),
+    RSIStrategy(period=14, oversold=25, overbought=75),
+    ScalpingStrategy(bb_period=20, bb_std=2.5),
 ]
 
 # Whale — execução independente (order book, não candles)
@@ -387,7 +391,12 @@ async def trading_loop():
                 order_book = client.get_order_book(pair, limit=50)
                 pair_signals = {}
 
-                # ── Bloco técnico: MA Cross + RSI + Scalping (consenso 2/3) ──
+                # ── Filtro de tendência (MA50 em 1H) ─────────────────────────
+                df_all = trend_filter.candles_to_df(candles)
+                trend = trend_filter.analyze(df_all)
+                pair_signals["Trend"] = trend
+
+                # ── Bloco técnico: só vota BUY — saída via SL/TP/Whale ───────
                 tech_votes = {"BUY": 0, "SELL": 0, "HOLD": 0}
                 for strategy in tech_strategies:
                     df = strategy.candles_to_df(candles)
@@ -402,32 +411,22 @@ async def trading_loop():
                         state["feed"] = state["feed"][:100]
 
                 tech_decision = max(tech_votes, key=tech_votes.get)
-                logger.debug(f"[{pair}] tech_votes={tech_votes}")
 
-                if tech_votes["BUY"] >= CONSENSUS_MIN:
-                    # Convicção: proporção de votos BUY (2/3 = 67%, 3/3 = 100%)
+                # BUY: consenso técnico + uptrend confirmado + sem posição aberta
+                already_held = engine.holdings.get(symbol, 0) > 0
+                if (tech_votes["BUY"] >= TECH_BUY_CONSENSUS
+                        and trend == "BUY"
+                        and not already_held):
                     conviction = tech_votes["BUY"] / len(tech_strategies)
                     trade_brl  = calc_trade_brl(conviction)
                     trade_usd  = trade_brl / state["usd_brl"]
                     qty = trade_usd / price
-                    logger.info(f"[{pair}] TÉCNICO BUY {tech_votes['BUY']}/3 → convicção {conviction:.0%} → R${trade_brl}")
+                    logger.info(f"[{pair}] COMPRA {tech_votes['BUY']}/3 + uptrend → R${trade_brl:.0f}")
                     if engine.buy(symbol, trade_usd, price, "técnico"):
                         _record_trade("BUY", pair, qty, price, trade_usd, "técnico")
                     else:
-                        logger.warning(f"[{pair}] BUY técnico negado (saldo: ${engine.balance_usd:.2f})")
-
-                elif tech_votes["SELL"] >= CONSENSUS_MIN:
-                    held = engine.holdings.get(symbol, 0)
-                    hold_secs = time.time() - entry_times.get(symbol, time.time())
-                    if held > 0 and hold_secs >= MIN_HOLD_SECONDS:
-                        conviction = tech_votes["SELL"] / len(tech_strategies)
-                        sell_qty = held * conviction
-                        usd = sell_qty * price
-                        logger.info(f"[{pair}] TÉCNICO SELL {tech_votes['SELL']}/3 → hold {hold_secs/3600:.1f}h → {sell_qty:.6f}")
-                        if engine.sell(symbol, sell_qty, price, "técnico"):
-                            _record_trade("SELL", pair, sell_qty, price, usd, "técnico")
-                    elif held > 0:
-                        logger.debug(f"[{pair}] SELL bloqueado — hold mínimo não atingido ({hold_secs/60:.0f}min < {MIN_HOLD_SECONDS/60:.0f}min)")
+                        logger.warning(f"[{pair}] BUY negado — saldo ${engine.balance_usd:.2f}")
+                # SELL técnico ignorado — posição fechada apenas por SL/TP/Whale
 
                 # ── Bloco whale: independente, a cada 5 minutos ──────────────
                 now_ts = time.time()
@@ -483,6 +482,7 @@ async def trading_loop():
                     "strategies":     pair_signals,
                     "tech_votes":     tech_votes,
                     "tech_decision":  tech_decision,
+                    "trend":          trend,
                     "whale_signal":   whale_signal,
                     "rsi":            rsi_val,
                     "whale_bid":      round(whale_strategy.last_whale_bid_usd),
