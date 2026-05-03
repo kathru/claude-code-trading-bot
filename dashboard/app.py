@@ -33,12 +33,42 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 HISTORY_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "portfolio_history.json")
 
 
+# ── Cache de cotação USD/BRL ──────────────────────────────────────
+USD_BRL_TTL = 1800           # atualiza a cada 30 minutos
+_usd_brl_cache: dict = {"rate": 5.70, "ts": 0.0}
+
 def _fetch_usd_brl() -> float:
+    now = time.time()
+    if now - _usd_brl_cache["ts"] < USD_BRL_TTL:
+        return _usd_brl_cache["rate"]
     try:
         r = requests.get("https://api.frankfurter.app/latest?from=USD&to=BRL", timeout=5)
-        return float(r.json()["rates"]["BRL"])
+        rate = float(r.json()["rates"]["BRL"])
+        _usd_brl_cache["rate"] = rate
+        _usd_brl_cache["ts"]   = now
+        return rate
     except Exception:
-        return state.get("usd_brl", 5.70)   # fallback
+        return _usd_brl_cache["rate"]
+
+
+# ── Cache de candles por par ──────────────────────────────────────
+CANDLE_TTL = 840             # 14 min — candle de 15min só muda a cada 15min
+_candle_cache: dict = {}     # {pair: {"data": [...], "ts": float}}
+
+def _get_candles(pair: str, granularity: str, limit: int = 100) -> list:
+    key = f"{pair}:{granularity}"
+    now = time.time()
+    cached = _candle_cache.get(key)
+    if cached and (now - cached["ts"]) < CANDLE_TTL:
+        return cached["data"]
+    data = client.get_candles(pair, granularity=granularity, limit=limit)
+    _candle_cache[key] = {"data": data, "ts": now}
+    return data
+
+
+# ── Cache de preço anterior para threshold de mudança ────────────
+_last_prices: dict = {}      # {pair: float}
+PRICE_CHANGE_THRESHOLD = 0.05  # % mínimo para re-analisar estratégias
 
 
 def _load_history() -> list:
@@ -101,6 +131,21 @@ last_whale_run: float = 0.0   # timestamp da última execução da análise whal
 
 logger = setup_logger("dashboard")
 connected_clients: List[WebSocket] = []
+
+
+def _update_portfolio_state():
+    total = engine.portfolio_value()
+    pnl   = total - engine.initial_balance
+    state["portfolio"] = {
+        "usd":             round(engine.balance_usd, 2),
+        "total":           round(total, 2),
+        "pnl":             round(pnl, 2),
+        "pnl_pct":         round((pnl / engine.initial_balance) * 100, 2),
+        "holdings":        {k: round(v, 8) for k, v in engine.holdings.items()},
+        "initial_balance": round(engine.initial_balance, 2),
+        "total_fees_usd":  round(engine.total_fees_usd, 4),
+    }
+    return total, pnl
 
 
 def _load_trades_from_engine() -> list:
@@ -180,17 +225,7 @@ async def manual_buy(pair: str, brl: float = 250.0):
             "side": "BUY", "pair": pair, "price": price, "usd": usd,
         })
         state["trades"] = state["trades"][:50]
-        total = engine.portfolio_value()
-        pnl = total - engine.initial_balance
-        state["portfolio"] = {
-            "usd": round(engine.balance_usd, 2),
-            "total": round(total, 2),
-            "pnl": round(pnl, 2),
-            "pnl_pct": round((pnl / engine.initial_balance) * 100, 2),
-            "holdings":        {k: round(v, 8) for k, v in engine.holdings.items()},
-            "initial_balance": round(engine.initial_balance, 2),
-            "total_fees_usd":  round(engine.total_fees_usd, 4),
-        }
+        _update_portfolio_state()
         await broadcast(state)
         return {"ok": True, "qty": qty, "price": price, "usd": usd}
     return {"ok": False, "error": "Saldo insuficiente"}
@@ -216,17 +251,7 @@ async def manual_sell(pair: str):
             "side": "SELL", "pair": pair, "price": price, "usd": usd,
         })
         state["trades"] = state["trades"][:50]
-        total = engine.portfolio_value()
-        pnl = total - engine.initial_balance
-        state["portfolio"] = {
-            "usd": round(engine.balance_usd, 2),
-            "total": round(total, 2),
-            "pnl": round(pnl, 2),
-            "pnl_pct": round((pnl / engine.initial_balance) * 100, 2),
-            "holdings":        {k: round(v, 8) for k, v in engine.holdings.items()},
-            "initial_balance": round(engine.initial_balance, 2),
-            "total_fees_usd":  round(engine.total_fees_usd, 4),
-        }
+        _update_portfolio_state()
         await broadcast(state)
         return {"ok": True, "qty": held, "price": price, "usd": usd}
     return {"ok": False, "error": "Falha na venda"}
@@ -286,25 +311,28 @@ def _record_trade(side, pair, qty, price, usd, strategy):
 
 async def trading_loop():
     global last_whale_run
-    logger.info("Dashboard trading loop iniciado — granularidade: %s, ciclo: %ds", CANDLE_GRANULARITY, CYCLE_INTERVAL)
+    logger.info("Loop iniciado — %s, ciclo %ds", CANDLE_GRANULARITY, CYCLE_INTERVAL)
     while True:
         state["cycle"] += 1
         now_str = datetime.now().strftime("%H:%M:%S")
         state["last_update"] = now_str
 
-        # Atualiza cotação USD/BRL a cada ciclo
+        # Cotação USD/BRL — usa cache (30min TTL, sem chamada extra)
         usd_brl = await asyncio.get_event_loop().run_in_executor(None, _fetch_usd_brl)
         state["usd_brl"] = round(usd_brl, 4)
-        logger.debug(f"USD/BRL: {usd_brl:.4f}")
 
         for pair in PAIRS:
             symbol = pair.split("-")[0]
             try:
-                candles = client.get_candles(pair, granularity=CANDLE_GRANULARITY, limit=100)
                 ticker = client.get_ticker(pair)
-                price = float(ticker.get("price", 0))
+                price  = float(ticker.get("price", 0))
                 if not price:
                     continue
+
+                # Skip de análise se preço não mudou o suficiente
+                prev_price = _last_prices.get(pair, 0)
+                price_changed = prev_price == 0 or abs(price - prev_price) / prev_price * 100 >= PRICE_CHANGE_THRESHOLD
+                _last_prices[pair] = price
 
                 engine.update_price(symbol, price)
                 state["prices"][pair] = {
@@ -335,6 +363,18 @@ async def trading_loop():
                                 "strategy": reason, "signal": "SELL", "price": price,
                             })
                             state["feed"] = state["feed"][:100]
+
+                # Candles via cache (evita chamada se dados ainda são válidos)
+                candles = _get_candles(pair, CANDLE_GRANULARITY)
+
+                # Se preço não mudou o suficiente, mantém sinais anteriores e pula análise
+                if not price_changed:
+                    state["prices"][pair] = {
+                        "price": price,
+                        "price_pct_chg": float(ticker.get("price_percentage_change_24h", 0)),
+                        "volume_24h":    float(ticker.get("volume_24h", 0)),
+                    }
+                    continue
 
                 order_book = client.get_order_book(pair, limit=50)
                 pair_signals = {}
@@ -453,26 +493,12 @@ async def trading_loop():
         # Atualiza timestamp whale após processar todos os pares
         if (time.time() - last_whale_run) >= WHALE_INTERVAL:
             last_whale_run = time.time()
-            logger.info(f"Whale: análise concluída — próxima em {WHALE_INTERVAL//60}min")
 
-        total = engine.portfolio_value()
-        pnl = total - engine.initial_balance
+        total, pnl = _update_portfolio_state()
         log_portfolio(logger, engine.balance_usd, total, pnl,
                       (pnl / engine.initial_balance) * 100, engine.holdings)
-        state["portfolio"] = {
-            "usd": round(engine.balance_usd, 2),
-            "total": round(total, 2),
-            "pnl": round(pnl, 2),
-            "pnl_pct": round((pnl / engine.initial_balance) * 100, 2),
-            "holdings":        {k: round(v, 8) for k, v in engine.holdings.items()},
-            "initial_balance": round(engine.initial_balance, 2),
-            "total_fees_usd":  round(engine.total_fees_usd, 4),
-        }
-        state["history"].append({
-            "time": now_str,
-            "ts": int(time.time()),
-            "total": round(total, 2),
-        })
+
+        state["history"].append({"time": now_str, "ts": int(time.time()), "total": round(total, 2)})
         state["history"] = state["history"][-90000:]
         _save_history(state["history"])
 
