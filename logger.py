@@ -35,13 +35,8 @@ def setup_logger(name="trading_bot"):
 
 
 def log_cycle(logger, cycle: int, pair: str, price: float, signals: dict, decision: str):
-    logger.info(
-        f"CYCLE={cycle} | {pair} | price=${price:,.2f} | "
-        f"MA={signals.get('MA Crossover','?')} "
-        f"RSI={signals.get('RSI','?')} "
-        f"SC={signals.get('Scalping','?')} | "
-        f"DECISION={decision}"
-    )
+    parts = " | ".join(f"{k}={v}" for k, v in signals.items() if k not in ("Trend", "Vol Guard"))
+    logger.info(f"CYCLE={cycle} | {pair} | price=${price:,.2f} | {parts} | DECISION={decision}")
 
 
 def log_trade(logger, side: str, pair: str, qty: float, price: float, usd: float, strategy: str):

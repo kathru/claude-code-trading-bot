@@ -15,11 +15,17 @@ from dotenv import load_dotenv
 
 from exchange.coinbase import CoinbaseClient
 from paper_trading.engine import PaperTradingEngine, TAKER_FEE
-from strategies.ma_crossover import MACrossoverStrategy
-from strategies.rsi import RSIStrategy
-from strategies.scalping import ScalpingStrategy
-from strategies.whale import WhaleStrategy
+from strategies.rsi_divergence import RSIDivergence
+from strategies.support_resistance import SupportResistance
+from strategies.bb_squeeze import BBSqueeze
+from strategies.golden_cross import GoldenCross
+from strategies.volatility_guard import VolatilityGuard
 from strategies.trend_filter import TrendFilter
+# Importações preservadas (desativadas mas mantidas para uso futuro)
+# from strategies.ma_crossover import MACrossoverStrategy
+# from strategies.rsi import RSIStrategy
+# from strategies.scalping import ScalpingStrategy
+# from strategies.whale import WhaleStrategy
 from logger import setup_logger, log_cycle, log_trade, log_portfolio
 from notifier import notify_trade
 
@@ -53,7 +59,7 @@ def _fetch_usd_brl() -> float:
 
 
 # ── Cache de candles por par ──────────────────────────────────────
-CANDLE_TTL = 840             # 14 min — candle de 15min só muda a cada 15min
+CANDLE_TTL = 840             # 14 min — candle de 1h só muda a cada hora
 _candle_cache: dict = {}     # {pair: {"data": [...], "ts": float}}
 
 def _get_candles(pair: str, granularity: str, limit: int = 100) -> list:
@@ -91,16 +97,26 @@ def _save_history(history: list):
         pass
 
 PAIRS = ["BTC-USD", "ETH-USD"]
-TRADE_MAX_BRL        = 250.0   # máximo por operação em R$
-TRADE_MIN_BRL        = 50.0    # mínimo R$50 — fee deve valer a pena
-CYCLE_INTERVAL       = 300     # ciclo de 5 minutos
-CANDLE_GRANULARITY   = "ONE_HOUR"   # 1h → sinais confiáveis, menos ruído
-STOP_LOSS_PCT        = 4.0     # SL: -4%
-TAKE_PROFIT_PCT      = 8.0     # TP: +8%  → ratio 1:2 sobre SL, ~6.8% líquido
-WHALE_INTERVAL       = 600     # whale a cada 10 minutos
-WHALE_MIN_CONVICTION = 0.70    # convicção mínima para whale executar (70%)
-TECH_BUY_CONSENSUS  = 2        # quantas técnicas precisam votar BUY (de 3)
-MIN_HOLD_SECONDS    = 3600     # hold mínimo de 1h antes de SELL pelo whale
+
+# ── Tamanho de trade ────────────────────────────────────────────
+TRADE_MAX_BRL     = 250.0    # máximo por operação em R$
+TRADE_MIN_BRL     = 50.0     # mínimo (fee deve valer a pena)
+MAX_ALLOC_PCT     = 0.25     # máximo 25% do portfólio por par (regra 10-30%)
+
+# ── Ciclo e candles ─────────────────────────────────────────────
+CYCLE_INTERVAL    = 300      # ciclo de 5 minutos
+CANDLE_1H         = "ONE_HOUR"
+CANDLE_6H         = "SIX_HOUR"    # para RSI Divergence
+CANDLE_1D         = "ONE_DAY"     # para Golden Cross e Volatility Guard
+
+# ── Proteção de posição ─────────────────────────────────────────
+STOP_LOSS_PCT     = 4.0      # SL: -4%
+TAKE_PROFIT_PCT   = 8.0      # TP: +8%
+DOUBLE_SELL_PCT   = 0.50     # Double Rule: vende 50% se dobrar
+VOL_REDUCE_PCT    = 0.40     # Volatility Guard: reduz 40% se 3d >8%
+
+# ── Consenso ────────────────────────────────────────────────────
+TECH_BUY_CONSENSUS = 2       # mínimo de estratégias técnicas para BUY
 
 
 def calc_trade_brl(conviction: float) -> float:
@@ -115,15 +131,19 @@ def calc_trade_brl(conviction: float) -> float:
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
 
-# Filtro de tendência (MA50 em 1H) — só permite entradas no sentido da tendência
+# ── Filtro macro de tendência (MA50 diário) ─────────────────────
 trend_filter = TrendFilter(period=50)
 
-# Estratégias técnicas — votam apenas BUY; saída automática só via SL/TP
+# ── Estratégias de entrada (votam BUY; saídas via SL/TP/Guard) ──
 tech_strategies = [
-    MACrossoverStrategy(short_window=9, long_window=34),
-    RSIStrategy(period=14, oversold=25, overbought=75),
-    ScalpingStrategy(bb_period=20, bb_std=2.5),
+    RSIDivergence(rsi_period=14, lookback=30, swing_size=5),    # 6H
+    SupportResistance(lookback=40, tolerance_pct=0.5),          # 1H
+    BBSqueeze(period=20, std=2.0, squeeze_pct=3.0),             # 1H
+    GoldenCross(short=50, long=200),                            # 1D
 ]
+
+# ── Guard de risco (pode forçar redução de posição) ─────────────
+vol_guard = VolatilityGuard(threshold_pct=8.0, consecutive_days=3)  # 1D
 
 # Whale — desativada temporariamente (manter código para uso futuro)
 # whale_strategy = WhaleStrategy(whale_multiplier=5.0, top_levels=50, dominance_ratio=1.5)
@@ -322,7 +342,7 @@ def _record_trade(side, pair, qty, price, usd, strategy):
 
 async def trading_loop():
     global last_whale_run
-    logger.info("Loop iniciado — %s, ciclo %ds", CANDLE_GRANULARITY, CYCLE_INTERVAL)
+    logger.info("Loop iniciado — 1H/6H/1D, ciclo %ds", CYCLE_INTERVAL)
     while True:
         state["cycle"] += 1
         now_str = datetime.now().strftime("%H:%M:%S")
@@ -375,10 +395,11 @@ async def trading_loop():
                             })
                             state["feed"] = state["feed"][:100]
 
-                # Candles via cache (evita chamada se dados ainda são válidos)
-                candles = _get_candles(pair, CANDLE_GRANULARITY)
+                # Candles multi-timeframe via cache
+                candles_1h = _get_candles(pair, CANDLE_1H, limit=100)
+                candles_6h = _get_candles(pair, CANDLE_6H, limit=100)
+                candles_1d = _get_candles(pair, CANDLE_1D, limit=250)
 
-                # Se preço não mudou o suficiente, mantém sinais anteriores e pula análise
                 if not price_changed:
                     state["prices"][pair] = {
                         "price": price,
@@ -387,18 +408,47 @@ async def trading_loop():
                     }
                     continue
 
-                order_book = client.get_order_book(pair, limit=50)
                 pair_signals = {}
 
-                # ── Filtro de tendência (MA50 em 1H) ─────────────────────────
-                df_all = trend_filter.candles_to_df(candles)
-                trend = trend_filter.analyze(df_all)
+                # ── Filtro macro: tendência MA50 diário ───────────────────────
+                df_1d = trend_filter.candles_to_df(candles_1d)
+                trend = trend_filter.analyze(df_1d)
                 pair_signals["Trend"] = trend
 
-                # ── Bloco técnico: só vota BUY — saída via SL/TP/Whale ───────
+                # ── Volatility Guard (diário) — proteção de risco ─────────────
+                vol_signal = vol_guard.analyze(df_1d)
+                pair_signals["Vol Guard"] = vol_signal
+
+                if vol_signal == "SELL":
+                    held = engine.holdings.get(symbol, 0)
+                    if held > 0:
+                        reduce_qty = held * VOL_REDUCE_PCT
+                        usd = reduce_qty * price
+                        logger.info(f"[{pair}] VOLATILIDADE EXTREMA — reduzindo {VOL_REDUCE_PCT:.0%}")
+                        if engine.sell(symbol, reduce_qty, price, "vol_guard"):
+                            _record_trade("SELL", pair, reduce_qty, price, usd, "vol_guard")
+
+                # ── Double Rule — vende 50% se posição dobrou ─────────────────
+                entry_p = engine.entry_prices.get(symbol)
+                held    = engine.holdings.get(symbol, 0)
+                if entry_p and held > 0 and price >= entry_p * 2.0:
+                    sell_qty = held * DOUBLE_SELL_PCT
+                    usd = sell_qty * price
+                    logger.info(f"[{pair}] DOUBLE RULE — posição dobrou! Vendendo {DOUBLE_SELL_PCT:.0%}")
+                    if engine.sell(symbol, sell_qty, price, "double_rule"):
+                        _record_trade("SELL", pair, sell_qty, price, usd, "double_rule")
+
+                # ── Estratégias técnicas de entrada ───────────────────────────
                 tech_votes = {"BUY": 0, "SELL": 0, "HOLD": 0}
+                candle_map = {
+                    "RSI Divergence": candles_6h,
+                    "S/R Flip":       candles_1h,
+                    "BB Squeeze":     candles_1h,
+                    "Golden Cross":   candles_1d,
+                }
                 for strategy in tech_strategies:
-                    df = strategy.candles_to_df(candles)
+                    raw = candle_map.get(strategy.name, candles_1h)
+                    df  = strategy.candles_to_df(raw)
                     signal = strategy.analyze(df)
                     pair_signals[strategy.name] = signal
                     tech_votes[signal] += 1
@@ -411,35 +461,40 @@ async def trading_loop():
 
                 tech_decision = max(tech_votes, key=tech_votes.get)
 
-                # BUY: consenso técnico + uptrend confirmado + sem posição aberta
-                already_held = engine.holdings.get(symbol, 0) > 0
+                # BUY: consenso + uptrend + alocação máxima respeitada
+                portfolio_total = engine.portfolio_value()
+                held_value = engine.holdings.get(symbol, 0) * price
+                alloc_pct  = held_value / portfolio_total if portfolio_total > 0 else 0
+
                 if (tech_votes["BUY"] >= TECH_BUY_CONSENSUS
                         and trend == "BUY"
-                        and not already_held):
+                        and alloc_pct < MAX_ALLOC_PCT):
                     conviction = tech_votes["BUY"] / len(tech_strategies)
-                    trade_brl  = calc_trade_brl(conviction)
-                    trade_usd  = trade_brl / state["usd_brl"]
+                    # Limita pelo espaço de alocação disponível
+                    max_trade_brl = (MAX_ALLOC_PCT - alloc_pct) * portfolio_total * state["usd_brl"]
+                    trade_brl = min(calc_trade_brl(conviction), max_trade_brl)
+                    trade_usd = trade_brl / state["usd_brl"]
                     qty = trade_usd / price
-                    logger.info(f"[{pair}] COMPRA {tech_votes['BUY']}/3 + uptrend → R${trade_brl:.0f}")
+                    logger.info(f"[{pair}] COMPRA {tech_votes['BUY']}/{len(tech_strategies)} → R${trade_brl:.0f} (alloc {alloc_pct:.0%}→{alloc_pct+trade_brl/portfolio_total/state['usd_brl']:.0%})")
                     if engine.buy(symbol, trade_usd, price, "técnico"):
                         _record_trade("BUY", pair, qty, price, trade_usd, "técnico")
                     else:
                         logger.warning(f"[{pair}] BUY negado — saldo ${engine.balance_usd:.2f}")
-                # SELL técnico ignorado — posição fechada apenas por SL/TP/Whale
 
                 # ── Bloco whale: DESATIVADO (código preservado para reativação) ──
                 # Para reativar: descomentar bloco whale em app.py e HTML
                 # whale_signal = whale_strategy.analyze_book(order_book) ...
 
-                rsi_val = get_rsi_value(candles)
+                rsi_val    = get_rsi_value(candles_1h)
                 entry_price = engine.entry_prices.get(symbol)
                 change_pct  = ((price - entry_price) / entry_price * 100) if entry_price else None
                 state["signals"][pair] = {
-                    "strategies":  pair_signals,
-                    "tech_votes":  tech_votes,
+                    "strategies":   pair_signals,
+                    "tech_votes":   tech_votes,
                     "tech_decision": tech_decision,
-                    "trend":       trend,
-                    "rsi":         rsi_val,
+                    "trend":        trend,
+                    "vol_guard":    vol_signal,
+                    "rsi":          rsi_val,
                     "entry_price": round(entry_price, 2) if entry_price else None,
                     "change_pct":  round(change_pct, 2) if change_pct is not None else None,
                     "sl_level":    round(entry_price * (1 - STOP_LOSS_PCT/100), 2) if entry_price else None,
