@@ -30,6 +30,7 @@ from logger import setup_logger, log_cycle, log_trade, log_portfolio
 from notifier import notify_trade
 
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), "code.env"))
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 app = FastAPI()
 HTML_FILE    = os.path.join(os.path.dirname(__file__), "templates", "index.html")
@@ -236,6 +237,36 @@ state = {
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return FileResponse(HTML_FILE)
+
+
+@app.get("/api/claude-usage")
+async def claude_usage():
+    """Retorna uso de tokens do Claude via Anthropic API."""
+    if not ANTHROPIC_API_KEY:
+        return {"configured": False, "message": "Configure ANTHROPIC_API_KEY no code.env"}
+    try:
+        import datetime
+        today = datetime.date.today().isoformat()
+        r = requests.get(
+            "https://api.anthropic.com/v1/usage",
+            headers={"x-api-key": ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01"},
+            params={"start_date": today, "end_date": today},
+            timeout=8,
+        )
+        if r.status_code == 200:
+            data = r.json()
+            input_tokens  = sum(d.get("input_tokens", 0) for d in data.get("data", []))
+            output_tokens = sum(d.get("output_tokens", 0) for d in data.get("data", []))
+            return {
+                "configured":     True,
+                "input_tokens":   input_tokens,
+                "output_tokens":  output_tokens,
+                "total_tokens":   input_tokens + output_tokens,
+                "date":           today,
+            }
+        return {"configured": True, "error": f"API retornou {r.status_code}"}
+    except Exception as e:
+        return {"configured": True, "error": str(e)}
 
 
 @app.get("/candles/{pair}")
