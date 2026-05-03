@@ -147,35 +147,32 @@
             <p id="chg-BTC" class="text-sm text-gray-400">—</p>
           </div>
         </div>
-        <!-- Tendência -->
-        <div class="mt-3 flex items-center justify-between">
+        <!-- Tendência macro + sinais independentes -->
+        <div class="mt-3 flex items-center justify-between mb-2">
           <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência (MA50)</span>
           <span id="trend-BTC" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
         </div>
-        <!-- Técnico -->
-        <div class="mt-2">
-          <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Técnico · consenso 2/3</p>
-          <div class="grid grid-cols-4 gap-1.5">
-            <div id="sig-BTC-MA" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-              <p class="text-xs opacity-70 mb-0.5">RSI Div</p>
-              <p class="text-xs font-bold">HOLD</p>
-            </div>
-            <div id="sig-BTC-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-              <p class="text-xs opacity-70 mb-0.5">S/R Flip</p>
-              <p class="text-xs font-bold">HOLD</p>
-            </div>
-            <div id="sig-BTC-SC" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-              <p class="text-xs opacity-70 mb-0.5">BB Squeeze</p>
-              <p class="text-xs font-bold">HOLD</p>
-            </div>
-            <div id="sig-BTC-GC" class="signal-hold rounded-lg px-2 py-1.5 text-center opacity-60">
-              <p class="text-xs opacity-70 mb-0.5">Golden ✕</p>
-              <p class="text-xs font-bold">HOLD</p>
-            </div>
+        <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Sinais independentes</p>
+        <div class="grid grid-cols-4 gap-1.5" id="strat-signals-BTC">
+          <div id="sig-BTC-MA" class="signal-hold rounded-lg px-2 py-2 text-center">
+            <p class="text-xs opacity-60 mb-0.5">RSI Div</p>
+            <p class="text-xs font-bold">HOLD</p>
+            <p id="pos-BTC-MA" class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
           </div>
-          <div class="mt-2 flex items-center justify-between">
-            <span class="text-xs text-gray-500">Decisão técnica</span>
-            <span id="decision-BTC" class="signal-hold text-xs font-bold px-3 py-1 rounded-full">HOLD</span>
+          <div id="sig-BTC-RSI" class="signal-hold rounded-lg px-2 py-2 text-center">
+            <p class="text-xs opacity-60 mb-0.5">S/R Flip</p>
+            <p class="text-xs font-bold">HOLD</p>
+            <p id="pos-BTC-RSI" class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
+          </div>
+          <div id="sig-BTC-SC" class="signal-hold rounded-lg px-2 py-2 text-center">
+            <p class="text-xs opacity-60 mb-0.5">BB Squeeze</p>
+            <p class="text-xs font-bold">HOLD</p>
+            <p id="pos-BTC-SC" class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
+          </div>
+          <div id="sig-BTC-GC" class="signal-hold rounded-lg px-2 py-2 text-center">
+            <p class="text-xs opacity-60 mb-0.5">Golden ✕</p>
+            <p class="text-xs font-bold">HOLD</p>
+            <p id="pos-BTC-GC" class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
           </div>
         </div>
         <!-- whale desativada: reativar em app.py e HTML -->
@@ -227,35 +224,32 @@
             <p id="chg-ETH" class="text-sm text-gray-400">—</p>
           </div>
         </div>
-        <!-- Tendência -->
-        <div class="mt-3 flex items-center justify-between">
+        <!-- Tendência macro + sinais independentes -->
+        <div class="mt-3 flex items-center justify-between mb-2">
           <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência (MA50)</span>
           <span id="trend-ETH" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
         </div>
-        <!-- Técnico -->
-        <div class="mt-2">
-          <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Técnico · consenso 2/3</p>
-          <div class="grid grid-cols-4 gap-1.5">
-            <div id="sig-ETH-MA" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-              <p class="text-xs opacity-70 mb-0.5">RSI Div</p>
-              <p class="text-xs font-bold">HOLD</p>
-            </div>
-            <div id="sig-ETH-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-              <p class="text-xs opacity-70 mb-0.5">S/R Flip</p>
-              <p class="text-xs font-bold">HOLD</p>
-            </div>
-            <div id="sig-ETH-SC" class="signal-hold rounded-lg px-2 py-1.5 text-center">
-              <p class="text-xs opacity-70 mb-0.5">BB Squeeze</p>
-              <p class="text-xs font-bold">HOLD</p>
-            </div>
-            <div id="sig-ETH-GC" class="signal-hold rounded-lg px-2 py-1.5 text-center opacity-60">
-              <p class="text-xs opacity-70 mb-0.5">Golden ✕</p>
-              <p class="text-xs font-bold">HOLD</p>
-            </div>
+        <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Sinais independentes</p>
+        <div class="grid grid-cols-4 gap-1.5" id="strat-signals-ETH">
+          <div id="sig-ETH-MA" class="signal-hold rounded-lg px-2 py-2 text-center">
+            <p class="text-xs opacity-60 mb-0.5">RSI Div</p>
+            <p class="text-xs font-bold">HOLD</p>
+            <p id="pos-ETH-MA" class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
           </div>
-          <div class="mt-2 flex items-center justify-between">
-            <span class="text-xs text-gray-500">Decisão técnica</span>
-            <span id="decision-ETH" class="signal-hold text-xs font-bold px-3 py-1 rounded-full">HOLD</span>
+          <div id="sig-ETH-RSI" class="signal-hold rounded-lg px-2 py-2 text-center">
+            <p class="text-xs opacity-60 mb-0.5">S/R Flip</p>
+            <p class="text-xs font-bold">HOLD</p>
+            <p id="pos-ETH-RSI" class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
+          </div>
+          <div id="sig-ETH-SC" class="signal-hold rounded-lg px-2 py-2 text-center">
+            <p class="text-xs opacity-60 mb-0.5">BB Squeeze</p>
+            <p class="text-xs font-bold">HOLD</p>
+            <p id="pos-ETH-SC" class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
+          </div>
+          <div id="sig-ETH-GC" class="signal-hold rounded-lg px-2 py-2 text-center">
+            <p class="text-xs opacity-60 mb-0.5">Golden ✕</p>
+            <p class="text-xs font-bold">HOLD</p>
+            <p id="pos-ETH-GC" class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
           </div>
         </div>
         <!-- whale desativada: reativar em app.py e HTML -->
@@ -517,31 +511,30 @@
             trendEl.className = signalClass(t) + ' text-xs font-bold px-3 py-0.5 rounded-full';
           }
 
-          // Técnico: RSI Div, S/R Flip, BB Squeeze + Golden Cross (confirmação)
-          const techKeys = { 'RSI Divergence': 'MA', 'S/R Flip': 'RSI', 'BB Squeeze': 'SC', 'Golden Cross': 'GC' };
-          Object.entries(techKeys).forEach(([name, key]) => {
-            const el = document.getElementById('sig-' + sym + '-' + key);
-            if (el) {
-              const signal = strats[name] || 'HOLD';
-              el.className = signalClass(signal) + ' rounded-lg px-2 py-1.5 text-center';
-              el.querySelector('p:last-child').textContent = signal;
+          // Sinais independentes + indicador de posição por estratégia
+          const stratMap = { 'RSI Divergence': 'MA', 'S/R Flip': 'RSI', 'BB Squeeze': 'SC', 'Golden Cross': 'GC' };
+          const slots = s.slots || {};
+          Object.entries(stratMap).forEach(([name, key]) => {
+            const el    = document.getElementById('sig-' + sym + '-' + key);
+            const posEl = document.getElementById('pos-' + sym + '-' + key);
+            if (!el) return;
+            const signal  = strats[name] || 'HOLD';
+            const slot    = slots[`${name}:${pair}`] || {};
+            const hasPos  = (slot.qty || 0) > 0;
+            const ps      = el.querySelectorAll('p');
+            el.className  = signalClass(signal) + ' rounded-lg px-2 py-2 text-center';
+            if (ps[1]) ps[1].textContent = signal;
+            if (posEl) {
+              if (hasPos && price.price && slot.entry) {
+                const chg = (price.price - slot.entry) / slot.entry * 100;
+                posEl.textContent = `● ${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%`;
+                posEl.style.color = chg >= 0 ? '#4ade80' : '#f87171';
+              } else {
+                posEl.textContent = 'sem posição';
+                posEl.style.color = '#4b5563';
+              }
             }
           });
-          if (document.getElementById('rsi-' + sym) && sig.rsi)
-            document.getElementById('rsi-' + sym).textContent = sig.rsi;
-
-          const dec = sig.tech_decision || 'HOLD';
-          const decEl = document.getElementById('decision-' + sym);
-          decEl.textContent = dec;
-          decEl.className = signalClass(dec) + ' text-xs font-bold px-3 py-1 rounded-full';
-
-          // Whale: independente
-          const whaleSignal = sig.whale_signal || 'HOLD';
-          const whEl = document.getElementById('sig-' + sym + '-WH');
-          if (whEl) {
-            whEl.className = signalClass(whaleSignal) + ' rounded-lg px-3 py-2 flex items-center justify-between';
-            whEl.querySelector('span:last-child').textContent = whaleSignal;
-          }
 
           // Stop Loss / Take Profit
           const sltpEl = document.getElementById('sltp-' + sym);
