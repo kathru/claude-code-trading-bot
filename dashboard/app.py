@@ -239,31 +239,70 @@ async def index():
     return FileResponse(HTML_FILE)
 
 
+_claude_usage_cache: dict = {"data": None, "ts": 0.0}
+
 @app.get("/api/claude-usage")
 async def claude_usage():
-    """Verifica status da chave Anthropic e retorna link para o Console de uso."""
+    """Busca dados de uso da Anthropic via API admin (requer chave com permissão de workspace)."""
     if not ANTHROPIC_API_KEY:
         return {"configured": False}
-    # Valida a chave com chamada leve (sem custo de tokens)
+
+    now = time.time()
+    # Cache de 10 minutos
+    if _claude_usage_cache["data"] and now - _claude_usage_cache["ts"] < 600:
+        return _claude_usage_cache["data"]
+
     try:
-        r = requests.post(
-            "https://api.anthropic.com/v1/messages/count_tokens",
-            headers={
-                "x-api-key": ANTHROPIC_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={"model": "claude-opus-4-5", "messages": [{"role": "user", "content": "hi"}]},
+        hdrs = {
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+        import datetime
+        today    = datetime.date.today().isoformat()
+        month_start = datetime.date.today().replace(day=1).isoformat()
+
+        # Tenta endpoint de usage (Admin API)
+        r = requests.get(
+            "https://api.anthropic.com/v1/usage",
+            headers=hdrs,
+            params={"start_date": month_start, "end_date": today, "granularity": "day"},
             timeout=8,
         )
-        valid = r.status_code in (200, 400)  # 400 = bad request mas chave válida
-        data  = r.json() if r.status_code == 200 else {}
-        return {
-            "configured":   True,
-            "key_valid":    valid,
-            "input_tokens": data.get("input_tokens"),
-            "console_url":  "https://console.anthropic.com/settings/usage",
-        }
+
+        if r.status_code == 200:
+            raw = r.json().get("data", [])
+            total_input  = sum(d.get("input_tokens", 0) for d in raw)
+            total_output = sum(d.get("output_tokens", 0) for d in raw)
+            result = {
+                "configured":     True,
+                "key_valid":      True,
+                "input_tokens":   total_input,
+                "output_tokens":  total_output,
+                "total_tokens":   total_input + total_output,
+                "period":         f"{month_start} → {today}",
+                "console_url":    "https://console.anthropic.com/settings/usage",
+            }
+        else:
+            # Valida chave com count_tokens (gratuito)
+            r2 = requests.post(
+                "https://api.anthropic.com/v1/messages/count_tokens",
+                headers=hdrs,
+                json={"model": "claude-opus-4-7",
+                      "messages": [{"role": "user", "content": "ping"}]},
+                timeout=8,
+            )
+            result = {
+                "configured":  True,
+                "key_valid":   r2.status_code == 200,
+                "api_status":  r.status_code,   # código do endpoint de usage
+                "console_url": "https://console.anthropic.com/settings/usage",
+            }
+
+        _claude_usage_cache["data"] = result
+        _claude_usage_cache["ts"]   = now
+        return result
+
     except Exception as e:
         return {"configured": True, "key_valid": False, "error": str(e)}
 

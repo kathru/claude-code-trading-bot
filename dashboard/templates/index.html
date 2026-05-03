@@ -964,31 +964,46 @@
 
     startCountdown();
 
-    // Claude key status
+    // Claude usage
     async function refreshClaudeUsage() {
       const usedEl   = document.getElementById('claude-tokens-used');
       const statusEl = document.getElementById('claude-tokens-status');
       try {
         const r = await fetch('/api/claude-usage');
         const d = await r.json();
+
         if (!d.configured) {
           usedEl.textContent   = 'N/A';
           usedEl.style.color   = '#6b7280';
           statusEl.textContent = 'sem chave';
           return;
         }
-        if (d.key_valid) {
-          usedEl.textContent   = '✓ ativa';
-          usedEl.style.color   = '#4ade80';
-          statusEl.innerHTML   = `<a href="${d.console_url}" target="_blank" style="color:#818cf8;text-decoration:underline">ver no Console ↗</a>`;
-        } else {
+        if (!d.key_valid) {
           usedEl.textContent   = '✗ inválida';
           usedEl.style.color   = '#f87171';
           statusEl.textContent = 'verifique a chave';
+          return;
+        }
+
+        // Dados reais de uso disponíveis
+        if (d.total_tokens !== undefined) {
+          const total = d.total_tokens;
+          const fmt   = n => n >= 1000000 ? (n/1000000).toFixed(1)+'M'
+                           : n >= 1000    ? (n/1000).toFixed(1)+'k'
+                           : n.toString();
+          usedEl.textContent  = fmt(total);
+          usedEl.style.color  = total > 1000000 ? '#f97316' : '#a78bfa';
+          statusEl.innerHTML  = `↑${fmt(d.input_tokens)} ↓${fmt(d.output_tokens)} · `
+            + `<a href="${d.console_url}" target="_blank" style="color:#6366f1">console ↗</a>`;
+        } else {
+          // Chave válida mas endpoint de uso não disponível — mostra link direto
+          usedEl.textContent  = '✓ ativa';
+          usedEl.style.color  = '#4ade80';
+          statusEl.innerHTML  = `<a href="${d.console_url}" target="_blank"
+            style="color:#818cf8;text-decoration:underline">ver uso ↗</a>`;
         }
       } catch(e) {
-        usedEl.textContent   = '—';
-        statusEl.textContent = '';
+        document.getElementById('claude-tokens-used').textContent = '—';
       }
     }
     refreshClaudeUsage();
