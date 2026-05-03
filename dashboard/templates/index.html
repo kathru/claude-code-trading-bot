@@ -861,11 +861,11 @@
     }
 
     // Countdown timer
-    var cycleCountdown = 60;
+    var cycleCountdown = 300;
     var countdownInterval = null;
 
     function resetCountdown() {
-      cycleCountdown = 60;
+      cycleCountdown = 300;
     }
 
     function startCountdown() {
@@ -873,7 +873,7 @@
       countdownInterval = setInterval(() => {
         if (cycleCountdown > 0) cycleCountdown--;
         document.getElementById('cycle-timer').textContent = cycleCountdown + 's';
-        if (cycleCountdown <= 0) cycleCountdown = 60;
+        if (cycleCountdown <= 0) cycleCountdown = 300;
       }, 1000);
     }
 
