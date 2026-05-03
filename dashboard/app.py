@@ -490,12 +490,18 @@ async def trading_loop():
                     else:
                         slot["unrealized"] = 0.0
 
-                rsi_val = get_rsi_value(candles_1h)
+                rsi_val     = get_rsi_value(candles_1h)
+                entry_price = engine.entry_prices.get(symbol)
+                change_pct  = ((price - entry_price) / entry_price * 100) if entry_price else None
                 state["signals"][pair] = {
                     "strategies":  pair_signals,
                     "trend":       trend,
                     "vol_guard":   vol_signal,
                     "rsi":         rsi_val,
+                    "entry_price": round(entry_price, 2) if entry_price else None,
+                    "change_pct":  round(change_pct, 2) if change_pct is not None else None,
+                    "sl_level":    round(entry_price * (1 - INITIAL_SL_PCT / 100), 2) if entry_price else None,
+                    "tp_level":    round(entry_price * (1 + TAKE_PROFIT_PCT / 100), 2) if entry_price else None,
                 }
                 _save_slots(strategy_slots)
                 state["slots"] = strategy_slots
