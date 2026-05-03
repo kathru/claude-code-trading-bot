@@ -371,7 +371,7 @@
             <span class="text-gray-400">próximo ciclo <span id="cycle-timer" class="font-mono text-indigo-400 font-semibold">15s</span></span>
           </span>
         </div>
-        <div id="feed-list" class="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+        <div id="feed-list" class="space-y-1.5 max-h-80 overflow-y-auto pr-1">
           <p class="text-gray-500 text-sm text-center py-8">Aguardando sinais...</p>
         </div>
       </div>
@@ -684,19 +684,20 @@
       if (feed.length === 0) {
         feedList.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Aguardando sinais...</p>';
       } else {
-        const sigColor = { BUY: 'text-green-400', SELL: 'text-red-400', HOLD: 'text-gray-500' };
-        const sigDot   = { BUY: 'bg-green-400', SELL: 'bg-red-400', HOLD: 'bg-gray-600' };
+        const sigBg    = { BUY: 'bg-green-500/20 text-green-400', SELL: 'bg-red-500/20 text-red-400', HOLD: 'bg-gray-700/40 text-gray-500' };
+        const sigBdr   = { BUY: 'border-l-green-500', SELL: 'border-l-red-500', HOLD: 'border-l-gray-700' };
         feedList.innerHTML = feed.map(f => `
-          <div class="flex items-center justify-between py-1.5 border-b border-gray-800/60">
-            <div class="flex items-center gap-2">
-              <span class="w-1.5 h-1.5 rounded-full ${sigDot[f.signal] || 'bg-gray-600'}"></span>
-              <span class="text-gray-300 text-xs font-medium">${f.pair}</span>
-              <span class="text-gray-500 text-xs">${f.strategy}</span>
+          <div class="border-l-2 ${sigBdr[f.signal]||'border-l-gray-700'} bg-gray-800/40 rounded-r-lg px-3 py-2 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="${sigBg[f.signal]||'bg-gray-700/40 text-gray-500'} text-xs font-bold px-1.5 py-0.5 rounded shrink-0">${f.signal}</span>
+              <div class="min-w-0">
+                <p class="text-white text-xs font-semibold leading-none">${f.pair}</p>
+                <p class="text-gray-500 text-[10px] mt-0.5 truncate">${f.strategy}</p>
+              </div>
             </div>
-            <div class="flex items-center gap-3">
-              <span class="font-mono text-xs text-gray-400">R$ ${fmtBRL(f.price * usdBrl)}</span>
-              <span class="text-xs font-bold ${sigColor[f.signal] || 'text-gray-500'}">${f.signal}</span>
-              <span class="text-gray-600 text-xs">${f.time}</span>
+            <div class="text-right shrink-0">
+              <p class="text-gray-200 text-xs font-mono font-semibold">R$ ${fmtBRL(f.price * usdBrl)}</p>
+              <p class="text-gray-600 text-[10px] mt-0.5">${f.time}</p>
             </div>
           </div>
         `).join('');
