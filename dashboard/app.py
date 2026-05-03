@@ -125,15 +125,14 @@ tech_strategies = [
     ScalpingStrategy(bb_period=20, bb_std=2.5),
 ]
 
-# Whale — execução independente (order book, não candles)
-whale_strategy = WhaleStrategy(whale_multiplier=5.0, top_levels=50, dominance_ratio=1.5)
+# Whale — desativada temporariamente (manter código para uso futuro)
+# whale_strategy = WhaleStrategy(whale_multiplier=5.0, top_levels=50, dominance_ratio=1.5)
 
-# Lista unificada apenas para feed de sinais
-strategies = tech_strategies + [whale_strategy]
+strategies = tech_strategies   # whale removida do ciclo ativo
 
 # Controle de sinal anterior por (pair, strategy) para evitar re-execução no mesmo sinal
 last_signals: dict = {}
-last_whale_run: float = 0.0
+# last_whale_run: float = 0.0   # reservado para quando whale for reativada
 entry_times: dict = {}        # {symbol: timestamp de entrada} para hold mínimo
 
 logger = setup_logger("dashboard")
@@ -428,71 +427,23 @@ async def trading_loop():
                         logger.warning(f"[{pair}] BUY negado — saldo ${engine.balance_usd:.2f}")
                 # SELL técnico ignorado — posição fechada apenas por SL/TP/Whale
 
-                # ── Bloco whale: independente, a cada 5 minutos ──────────────
-                now_ts = time.time()
-                whale_due = (now_ts - last_whale_run) >= WHALE_INTERVAL
-                if whale_due:
-                    whale_signal = whale_strategy.analyze_book(order_book)
-                else:
-                    whale_signal = last_signals.get(f"{pair}:Whale", "HOLD")
-
-                pair_signals["Whale"] = whale_signal
-                key_w = f"{pair}:Whale"
-
-                if whale_due:
-                    if whale_signal != last_signals.get(key_w):
-                        last_signals[key_w] = whale_signal
-                        state["feed"].insert(0, {"time": now_str, "pair": pair,
-                            "strategy": "Whale", "signal": whale_signal, "price": price})
-                        state["feed"] = state["feed"][:100]
-
-                    # Convicção whale: dominância de um lado sobre o outro
-                    bid_vol = whale_strategy.last_whale_bid_usd
-                    ask_vol = whale_strategy.last_whale_ask_usd
-                    total_vol = bid_vol + ask_vol
-
-                    if whale_signal == "BUY" and total_vol > 0:
-                        dominance = bid_vol / total_vol
-                        conviction = (dominance - 0.5) / 0.5
-                        if conviction >= WHALE_MIN_CONVICTION:
-                            trade_brl = calc_trade_brl(conviction)
-                            trade_usd = trade_brl / state["usd_brl"]
-                            qty = trade_usd / price
-                            logger.info(f"[{pair}] WHALE BUY → dominância {dominance:.0%} → R${trade_brl}")
-                            if engine.buy(symbol, trade_usd, price, "whale"):
-                                _record_trade("BUY", pair, qty, price, trade_usd, "whale")
-
-                    elif whale_signal == "SELL" and total_vol > 0:
-                        dominance = ask_vol / total_vol
-                        conviction = (dominance - 0.5) / 0.5
-                        if conviction >= WHALE_MIN_CONVICTION:
-                            held = engine.holdings.get(symbol, 0)
-                            hold_secs = time.time() - entry_times.get(symbol, time.time())
-                            if held > 0 and hold_secs >= MIN_HOLD_SECONDS:
-                                sell_qty = held * conviction
-                                usd = sell_qty * price
-                                logger.info(f"[{pair}] WHALE SELL → dominância {dominance:.0%} → {sell_qty:.6f}")
-                                if engine.sell(symbol, sell_qty, price, "whale"):
-                                    _record_trade("SELL", pair, sell_qty, price, usd, "whale")
+                # ── Bloco whale: DESATIVADO (código preservado para reativação) ──
+                # Para reativar: descomentar bloco whale em app.py e HTML
+                # whale_signal = whale_strategy.analyze_book(order_book) ...
 
                 rsi_val = get_rsi_value(candles)
                 entry_price = engine.entry_prices.get(symbol)
                 change_pct  = ((price - entry_price) / entry_price * 100) if entry_price else None
                 state["signals"][pair] = {
-                    "strategies":     pair_signals,
-                    "tech_votes":     tech_votes,
-                    "tech_decision":  tech_decision,
-                    "trend":          trend,
-                    "whale_signal":   whale_signal,
-                    "rsi":            rsi_val,
-                    "whale_bid":      round(whale_strategy.last_whale_bid_usd),
-                    "whale_ask":      round(whale_strategy.last_whale_ask_usd),
-                    "whale_bids":     whale_strategy.whale_bids,
-                    "whale_asks":     whale_strategy.whale_asks,
-                    "entry_price":    round(entry_price, 2) if entry_price else None,
-                    "change_pct":     round(change_pct, 2) if change_pct is not None else None,
-                    "sl_level":       round(entry_price * (1 - STOP_LOSS_PCT/100), 2) if entry_price else None,
-                    "tp_level":       round(entry_price * (1 + TAKE_PROFIT_PCT/100), 2) if entry_price else None,
+                    "strategies":  pair_signals,
+                    "tech_votes":  tech_votes,
+                    "tech_decision": tech_decision,
+                    "trend":       trend,
+                    "rsi":         rsi_val,
+                    "entry_price": round(entry_price, 2) if entry_price else None,
+                    "change_pct":  round(change_pct, 2) if change_pct is not None else None,
+                    "sl_level":    round(entry_price * (1 - STOP_LOSS_PCT/100), 2) if entry_price else None,
+                    "tp_level":    round(entry_price * (1 + TAKE_PROFIT_PCT/100), 2) if entry_price else None,
                 }
                 log_cycle(logger, state["cycle"], pair, price, pair_signals, tech_decision)
 
@@ -500,9 +451,9 @@ async def trading_loop():
                 state["signals"][pair] = {"error": str(e)}
                 logger.error(f"[{pair}] Erro: {e}")
 
-        # Atualiza timestamp whale após processar todos os pares
-        if (time.time() - last_whale_run) >= WHALE_INTERVAL:
-            last_whale_run = time.time()
+        # Whale desativada — placeholder para reativação futura
+        # if (time.time() - last_whale_run) >= WHALE_INTERVAL:
+        #     last_whale_run = time.time()
 
         total, pnl = _update_portfolio_state()
         log_portfolio(logger, engine.balance_usd, total, pnl,
