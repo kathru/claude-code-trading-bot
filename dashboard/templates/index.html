@@ -611,7 +611,7 @@
       const prices = s.prices || {};
       const labels = ['BRL'];
       const values = [(p.usd || 10000) * usdBrl];
-      const colors = ['#6366f1'];
+      const colors = ['#4ade80'];
       if (holdings.BTC && prices['BTC-USD']) { labels.push('BTC'); values.push(holdings.BTC * prices['BTC-USD'].price * usdBrl); colors.push('#f97316'); }
       if (holdings.ETH && prices['ETH-USD']) { labels.push('ETH'); values.push(holdings.ETH * prices['ETH-USD'].price * usdBrl); colors.push('#3b82f6'); }
       allocationChart.data.labels = labels;
