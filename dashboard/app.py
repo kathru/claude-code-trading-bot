@@ -100,19 +100,21 @@ PAIRS = ["BTC-USD", "ETH-USD"]
 
 # ── Ciclo e candles ─────────────────────────────────────────────
 CYCLE_INTERVAL    = 300      # ciclo de 5 minutos
+CANDLE_30M        = "THIRTY_MINUTE"  # BB Squeeze — mais sinais
 CANDLE_1H         = "ONE_HOUR"
-CANDLE_6H         = "SIX_HOUR"
-CANDLE_1D         = "ONE_DAY"
+CANDLE_6H         = "SIX_HOUR"      # RSI Divergence
+CANDLE_1D         = "ONE_DAY"       # Golden Cross, Trend, VolGuard
 
 # ── Alocação por estratégia ─────────────────────────────────────
 STRAT_ALLOC_PCT   = 0.25     # cada estratégia usa até 25% do portfólio
 MIN_TRADE_BRL     = 30.0     # mínimo para cobrir fees
 
 # ── Gestão de risco por posição ─────────────────────────────────
-INITIAL_SL_PCT    = 3.0      # SL inicial: -3% da entrada
-TAKE_PROFIT_PCT   = 20.0     # TP: +20% (crypto tem movimentos amplos)
-TRAILING_STOP_PCT = 5.0      # trailing stop: vende se cair 5% do pico
-VOL_REDUCE_PCT    = 0.40     # Volatility Guard: reduz 40% se 3d >8%
+INITIAL_SL_PCT       = 3.0   # SL inicial: -3% da entrada
+TAKE_PROFIT_PCT      = 20.0  # TP: +20% (crypto tem movimentos amplos)
+TRAILING_STOP_PCT    = 5.0   # trailing stop: -5% do pico
+TRAILING_ACTIVATE_PCT = 2.0  # trailing só ativa após +2% de ganho
+VOL_REDUCE_PCT       = 0.40  # Volatility Guard: fecha slots em vol extrema
 
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
@@ -135,7 +137,7 @@ STRAT_CANDLES = {
 
 # Guard de risco global
 vol_guard    = VolatilityGuard(threshold_pct=8.0, consecutive_days=3)
-trend_filter = TrendFilter(period=50)
+trend_filter = TrendFilter(period=20)   # MA20 diária — mais responsiva
 
 # ── Estado por slot (estratégia × par) ─────────────────────────
 # Slot: {qty, entry_price, peak_price, realized_pnl_usd}
@@ -146,16 +148,18 @@ SLOTS_FILE = os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "data", "strategy_slots.json")
 
 def _load_slots() -> dict:
-    try:
-        if os.path.exists(SLOTS_FILE):
-            with open(SLOTS_FILE) as f:
-                return json.load(f)
-    except Exception:
-        pass
     slots = {}
     for s in all_strategies:
         for p in PAIRS:
             slots[f"{s.name}:{p}"] = _empty_slot()
+    try:
+        if os.path.exists(SLOTS_FILE):
+            saved = json.load(open(SLOTS_FILE))
+            for k, v in saved.items():
+                if k in slots:   # só restaura chaves válidas
+                    slots[k].update(v)
+    except Exception:
+        pass
     return slots
 
 def _save_slots(slots: dict):
@@ -258,51 +262,49 @@ async def get_candles(pair: str, granularity: str = "FIVE_MINUTE", limit: int = 
 async def manual_buy(pair: str, brl: float = 250.0):
     symbol = pair.split("-")[0]
     ticker = client.get_ticker(pair)
-    price = float(ticker.get("price", 0))
+    price  = float(ticker.get("price", 0))
     if not price:
         return {"ok": False, "error": "Preço indisponível"}
     usd = brl / state["usd_brl"]
     qty = usd / price
-    ok = engine.buy(symbol, usd, price, "manual")
-    if ok:
-        engine.update_price(symbol, price)
-        log_trade(logger, "BUY", pair, qty, price, usd, "manual")
-        notify_trade("BUY", pair, qty, price, usd)
-        state["trades"].insert(0, {
-            "time": datetime.now().strftime("%H:%M:%S"),
-            "side": "BUY", "pair": pair, "price": price, "usd": usd,
-        })
-        state["trades"] = state["trades"][:50]
-        _update_portfolio_state()
-        await broadcast(state)
-        return {"ok": True, "qty": qty, "price": price, "usd": usd}
-    return {"ok": False, "error": "Saldo insuficiente"}
+    if not engine.buy(symbol, usd, price, "manual"):
+        return {"ok": False, "error": "Saldo insuficiente"}
+    engine.update_price(symbol, price)
+    # Registra no slot "manual" para ter TP/SL
+    slot_key = f"manual:{pair}"
+    strategy_slots[slot_key] = {"qty": qty, "entry": price, "peak": price,
+                                 "realized": 0.0, "unrealized": 0.0}
+    _save_slots(strategy_slots)
+    _record_trade("BUY", pair, qty, price, usd, "manual")
+    _update_portfolio_state()
+    await broadcast(state)
+    return {"ok": True, "qty": qty, "price": price, "usd": usd}
 
 
 @app.post("/trade/sell")
 async def manual_sell(pair: str):
     symbol = pair.split("-")[0]
-    held = engine.holdings.get(symbol, 0)
+    held   = engine.holdings.get(symbol, 0)
     if held <= 0:
         return {"ok": False, "error": f"Sem {symbol} para vender"}
     ticker = client.get_ticker(pair)
-    price = float(ticker.get("price", 0))
+    price  = float(ticker.get("price", 0))
     if not price:
         return {"ok": False, "error": "Preço indisponível"}
-    usd = held * price
-    ok = engine.sell(symbol, held, price, "manual")
-    if ok:
-        log_trade(logger, "SELL", pair, held, price, usd, "manual")
-        notify_trade("SELL", pair, held, price, usd)
-        state["trades"].insert(0, {
-            "time": datetime.now().strftime("%H:%M:%S"),
-            "side": "SELL", "pair": pair, "price": price, "usd": usd,
-        })
-        state["trades"] = state["trades"][:50]
-        _update_portfolio_state()
-        await broadcast(state)
-        return {"ok": True, "qty": held, "price": price, "usd": usd}
-    return {"ok": False, "error": "Falha na venda"}
+    usd = held * price * (1 - 0.006)
+    if not engine.sell(symbol, held, price, "manual"):
+        return {"ok": False, "error": "Falha na venda"}
+    # Zera todos os slots deste par (posição liquidada manualmente)
+    for key in list(strategy_slots.keys()):
+        if key.endswith(f":{pair}"):
+            strategy_slots[key]["qty"]  = 0.0
+            strategy_slots[key]["entry"] = 0.0
+            strategy_slots[key]["peak"]  = 0.0
+    _save_slots(strategy_slots)
+    _record_trade("SELL", pair, held, price, usd, "manual")
+    _update_portfolio_state()
+    await broadcast(state)
+    return {"ok": True, "qty": held, "price": price, "usd": usd}
 
 
 @app.websocket("/ws")
@@ -356,10 +358,6 @@ def _record_trade(side, pair, qty, price, usd, strategy):
         "strategy": strategy,
     })
     state["trades"] = state["trades"][:50]
-    if side == "BUY":
-        entry_times[symbol] = time.time()
-    elif side == "SELL" and symbol in entry_times:
-        del entry_times[symbol]
 
 
 async def trading_loop():
@@ -407,21 +405,24 @@ async def trading_loop():
                         key  = f"{strat.name}:{pair}"
                         slot = strategy_slots.get(key, _empty_slot())
                         if slot["qty"] > 0:
-                            usd = slot["qty"] * price * (1 - 0.006)
-                            if engine.sell(symbol, slot["qty"], price, f"vol_guard:{strat.name}"):
-                                slot["realized"] += usd - slot["entry"] * slot["qty"]
+                            close_qty = slot["qty"]   # salva antes de zerar
+                            usd = close_qty * price * (1 - 0.006)
+                            if engine.sell(symbol, close_qty, price, f"vol_guard:{strat.name}"):
+                                slot["realized"] += usd - slot["entry"] * close_qty
                                 slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
-                                _record_trade("SELL", pair, slot["qty"], price, usd, f"vol_guard:{strat.name}")
+                                _record_trade("SELL", pair, close_qty, price, usd, f"vol_guard:{strat.name}")
+                    _save_slots(strategy_slots)  # persiste imediatamente
                     logger.info(f"[{pair}] VOLATILIDADE EXTREMA — slots fechados")
 
                 if not price_changed:
                     continue
 
                 # ── Cada estratégia age de forma independente ─────────────────
+                candles_30m = _get_candles(pair, CANDLE_30M, limit=100)
                 candle_map = {
                     "RSI Divergence": candles_6h,
                     "S/R Flip":       candles_1h,
-                    "BB Squeeze":     candles_1h,
+                    "BB Squeeze":     candles_30m,  # 30min — mais sinais de squeeze
                     "Golden Cross":   candles_1d,
                 }
 
@@ -445,15 +446,18 @@ async def trading_loop():
                     if slot["qty"] > 0:
                         # Atualiza pico (trailing stop)
                         slot["peak"] = max(slot["peak"], price)
+                        gain_pct     = (price - slot["entry"]) / slot["entry"] * 100
 
                         tp_hit       = price >= slot["entry"] * (1 + TAKE_PROFIT_PCT / 100)
                         sl_hit       = price <= slot["entry"] * (1 - INITIAL_SL_PCT / 100)
-                        trailing_hit = price <= slot["peak"]  * (1 - TRAILING_STOP_PCT / 100)
+                        # Trailing só ativa após TRAILING_ACTIVATE_PCT de ganho
+                        trailing_active = gain_pct >= TRAILING_ACTIVATE_PCT
+                        trailing_hit    = trailing_active and price <= slot["peak"] * (1 - TRAILING_STOP_PCT / 100)
 
                         reason = None
-                        if tp_hit:       reason = f"TP+{TAKE_PROFIT_PCT:.0f}%"
-                        elif sl_hit:     reason = f"SL-{INITIAL_SL_PCT:.0f}%"
-                        elif trailing_hit: reason = f"TRAILING-{TRAILING_STOP_PCT:.0f}%"
+                        if tp_hit:           reason = f"TP+{TAKE_PROFIT_PCT:.0f}%"
+                        elif sl_hit:         reason = f"SL-{INITIAL_SL_PCT:.0f}%"
+                        elif trailing_hit:   reason = f"TRAILING-{TRAILING_STOP_PCT:.0f}%"
 
                         if reason:
                             gross   = slot["qty"] * price
@@ -468,7 +472,7 @@ async def trading_loop():
 
                     # ── Compra: sinal BUY + slot vazio + uptrend ─────────────
                     elif signal == "BUY" and trend == "BUY" and slot["qty"] == 0:
-                        alloc_usd = portfolio_total * STRAT_ALLOC_PCT
+                        alloc_usd = engine.portfolio_value() * STRAT_ALLOC_PCT  # sempre atualizado
                         min_usd   = MIN_TRADE_BRL / usd_brl
                         if alloc_usd < min_usd or engine.balance_usd < alloc_usd * 1.01:
                             logger.debug(f"[{pair}][{strat.name}] BUY negado — saldo insuf.")
