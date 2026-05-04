@@ -422,6 +422,7 @@ async def trading_loop():
                         trend = "HOLD"
                 except Exception:
                     trend = trend_filter.analyze(df_1h_trend)  # fallback
+                df_1d      = vol_guard.candles_to_df(candles_1d)
                 vol_signal = vol_guard.analyze(df_1d)
                 pair_signals = {"Trend": trend, "Vol Guard": vol_signal}
 
