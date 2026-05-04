@@ -403,9 +403,25 @@ async def trading_loop():
                 candles_6h = _get_candles(pair, CANDLE_6H, limit=100)
                 candles_1d = _get_candles(pair, CANDLE_1D, limit=250)
 
-                # Macro: tendência (EMA50 em 1H) + volatilidade (diário)
+                # Macro: tendência EMA9·21·50 em 1H (idêntico ao EMA Pullback) + vol diária
                 df_1h_trend = trend_filter.candles_to_df(candles_1h)
-                trend       = trend_filter.analyze(df_1h_trend)
+                try:
+                    import pandas as _pd
+                    _c = df_1h_trend["close"]
+                    _e9  = _c.ewm(span=9,  adjust=False).mean()
+                    _e21 = _c.ewm(span=21, adjust=False).mean()
+                    _e50 = _c.ewm(span=50, adjust=False).mean()
+                    if len(_c) >= 50:
+                        if float(_e9.iloc[-1]) > float(_e21.iloc[-1]) > float(_e50.iloc[-1]):
+                            trend = "BUY"    # EMAs alinhadas em alta
+                        elif float(_e9.iloc[-1]) < float(_e21.iloc[-1]):
+                            trend = "SELL"   # EMA9 abaixo de EMA21 — perda de tendência
+                        else:
+                            trend = "HOLD"
+                    else:
+                        trend = "HOLD"
+                except Exception:
+                    trend = trend_filter.analyze(df_1h_trend)  # fallback
                 vol_signal = vol_guard.analyze(df_1d)
                 pair_signals = {"Trend": trend, "Vol Guard": vol_signal}
 

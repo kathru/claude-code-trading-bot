@@ -169,7 +169,7 @@
         </div>
         <!-- Tendência macro + sinais independentes -->
         <div class="mt-3 flex items-center justify-between mb-2">
-          <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência (EMA50)</span>
+          <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
           <span id="trend-BTC" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
         </div>
         <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Sinais independentes</p>
@@ -246,7 +246,7 @@
         </div>
         <!-- Tendência macro + sinais independentes -->
         <div class="mt-3 flex items-center justify-between mb-2">
-          <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência (EMA50)</span>
+          <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
           <span id="trend-ETH" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
         </div>
         <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Sinais independentes</p>
@@ -533,7 +533,7 @@
           const trendEl = document.getElementById('trend-' + sym);
           if (trendEl && sig.trend) {
             const t = sig.trend;
-            trendEl.textContent = t === 'BUY' ? '↑ ALTA' : t === 'SELL' ? '↓ BAIXA' : '— NEUTRO';
+            trendEl.textContent = t === 'BUY' ? '↑ EMA ALINHADA' : t === 'SELL' ? '↓ EMA CRUZADA' : '— NEUTRO';
             trendEl.className = signalClass(t) + ' text-xs font-bold px-3 py-0.5 rounded-full';
           }
 
