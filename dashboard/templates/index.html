@@ -391,7 +391,7 @@
               ao vivo
             </span>
             <span class="text-gray-600">·</span>
-            <span class="text-gray-400">próximo ciclo <span id="cycle-timer" class="font-mono text-indigo-400 font-semibold">15s</span></span>
+            <span class="text-gray-400">próximo ciclo <span id="cycle-timer" class="font-mono text-indigo-400 font-semibold">90s</span></span>
           </span>
         </div>
         <div id="feed-list" class="space-y-1.5 max-h-80 overflow-y-auto pr-1">
@@ -962,12 +962,12 @@
       }
     }
 
-    // Countdown timer
-    var cycleCountdown = 300;
+    // Countdown timer — ciclo de 90s
+    var cycleCountdown = 90;
     var countdownInterval = null;
 
     function resetCountdown() {
-      cycleCountdown = 300;
+      cycleCountdown = 90;
     }
 
     function fmtCountdown(secs) {
@@ -981,7 +981,7 @@
       if (countdownInterval) clearInterval(countdownInterval);
       countdownInterval = setInterval(() => {
         if (cycleCountdown > 0) cycleCountdown--;
-        if (cycleCountdown <= 0) cycleCountdown = 300;
+        if (cycleCountdown <= 0) cycleCountdown = 90;
         document.getElementById('cycle-timer').textContent = cycleCountdown + 's';
         const hdr = document.getElementById('header-cycle-timer');
         if (hdr) hdr.textContent = fmtCountdown(cycleCountdown);
