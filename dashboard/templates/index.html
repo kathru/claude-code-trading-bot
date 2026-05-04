@@ -1070,8 +1070,9 @@
 
     // Sincroniza quando o WebSocket entrega um novo state
     function resetCountdown(s) {
-      if (s && s.cycle_start_ts) { _cycleStartTs = s.cycle_start_ts; _synced = true; }
-      if (s && s.cycle_interval)   _cycleInterval = s.cycle_interval;
+      _synced = true;   // qualquer mensagem WS já indica conexão ativa
+      if (s && s.cycle_start_ts) _cycleStartTs = s.cycle_start_ts;  // 0 = aguardando 1º ciclo
+      if (s && s.cycle_interval) _cycleInterval = s.cycle_interval;
       if (s && s.cycle) {
         const n = s.cycle;
         const ccEl = document.getElementById('header-cycle-count');
@@ -1106,9 +1107,11 @@
           return;
         }
 
-        const elapsed   = Math.floor(Date.now() / 1000) - _cycleStartTs;
+        const elapsed   = _cycleStartTs > 0
+          ? Math.floor(Date.now() / 1000) - _cycleStartTs
+          : 0;   // ainda não recebeu timestamp real — mostra intervalo completo
         const remaining = Math.max(0, _cycleInterval - elapsed);
-        const executing = remaining === 0;
+        const executing = remaining === 0 && _cycleStartTs > 0;
 
         if (executing) {
           // Bot está rodando o ciclo — feedback visual pulsante
