@@ -220,11 +220,11 @@
           </div>
         </div>
         <div class="mt-3 flex gap-2">
-          <button onclick="manualTrade('buy','BTC-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors">
-            Comprar R$150,00
+          <button onclick="openTradeModal('buy','BTC-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors">
+            Comprar
           </button>
-          <button onclick="manualTrade('sell','BTC-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors">
-            Vender tudo
+          <button onclick="openTradeModal('sell','BTC-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors">
+            Vender
           </button>
         </div>
       </div>
@@ -297,11 +297,11 @@
           </div>
         </div>
         <div class="mt-3 flex gap-2">
-          <button onclick="manualTrade('buy','ETH-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors">
-            Comprar R$150,00
+          <button onclick="openTradeModal('buy','ETH-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors">
+            Comprar
           </button>
-          <button onclick="manualTrade('sell','ETH-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors">
-            Vender tudo
+          <button onclick="openTradeModal('sell','ETH-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors">
+            Vender
           </button>
         </div>
       </div>
@@ -469,10 +469,6 @@
       }
       if (s.trade_max_brl) {
         window._tradeMaxBRL = s.trade_max_brl;
-        const perTrade = s.trade_max_brl * 0.25;   // 25% por estratégia
-        document.querySelectorAll('[onclick*="buy"]').forEach(b => {
-          b.textContent = `Comprar R$${perTrade.toFixed(2).replace('.',',')}`;
-        });
       }
 
       // Header
@@ -482,6 +478,13 @@
       const p = s.portfolio || {};
       const total    = p.total || 10000;
       const pnl      = p.pnl  || 0;
+      // Expõe holdings e saldo para o modal de trade
+      if (p.holdings) {
+        _holdings.BTC = p.holdings.BTC || 0;
+        _holdings.ETH = p.holdings.ETH || 0;
+      }
+      window._balanceUSD = p.usd || 0;
+      window._usdBrl     = usdBrl;
       const pct      = p.pnl_pct || 0;
       const totalBRL = total * usdBrl;
       const pnlBRL   = pnl   * usdBrl;
@@ -1025,26 +1028,6 @@
       portfolioChart.update('none');
     }
 
-    // Manual trade
-    async function manualTrade(side, pair) {
-      const btn = event.target;
-      btn.disabled = true;
-      btn.textContent = '...';
-      try {
-        const url = side === 'buy'
-          ? `/trade/buy?pair=${pair}&brl=150`
-          : `/trade/sell?pair=${pair}`;
-        const res = await fetch(url, { method: 'POST' });
-        const data = await res.json();
-        if (!data.ok) alert('Erro: ' + data.error);
-      } catch(e) {
-        alert('Erro de conexão');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = side === 'buy' ? 'Comprar R$150,00' : 'Vender tudo';
-      }
-    }
-
     // Countdown timer — sincronizado com o servidor (independente de refresh)
     var _cycleStartTs  = 0;      // timestamp Unix recebido do servidor
     var _cycleInterval = 90;     // duração do ciclo recebida do servidor
@@ -1083,6 +1066,87 @@
     }
 
     startCountdown();
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ─── Trade Modal ─────────────────────────────────────────────────────────
+    var _modalSide = '';
+    var _modalPair = '';
+    var _holdings  = { BTC: 0, ETH: 0 };
+
+    function openTradeModal(side, pair) {
+      const symbol  = pair.split('-')[0];
+      _modalSide    = side;
+      _modalPair    = pair;
+
+      const modal   = document.getElementById('trade-modal');
+      const titleEl = document.getElementById('modal-title');
+      const subEl   = document.getElementById('modal-subtitle');
+      const labelEl = document.getElementById('modal-label');
+      const input   = document.getElementById('modal-input');
+      const confirmBtn = document.getElementById('modal-confirm');
+
+      if (side === 'buy') {
+        titleEl.textContent = `Comprar ${symbol}`;
+        const defaultBrl = window._tradeMaxBRL ? (window._tradeMaxBRL * 0.25) : 150;
+        const balUSD = window._balanceUSD || 0;
+        const balBRL = balUSD * (window._usdBrl || 1);
+        subEl.textContent   = `Saldo disponível: R$ ${fmtBRL(balBRL)}`;
+        labelEl.textContent = 'Valor a investir (R$)';
+        input.step          = '0.01';
+        input.placeholder   = '150,00';
+        input.value         = defaultBrl.toFixed(2);
+        confirmBtn.className = 'flex-1 py-2.5 rounded-lg text-sm font-bold bg-green-500/25 text-green-400 border border-green-500/40 hover:bg-green-500/35 transition-colors';
+      } else {
+        titleEl.textContent = `Vender ${symbol}`;
+        const held = _holdings[symbol] || 0;
+        subEl.textContent   = `Em carteira: ${held.toFixed(8)} ${symbol}`;
+        labelEl.textContent = `Quantidade a vender (${symbol})`;
+        input.step          = 'any';
+        input.placeholder   = '0.00000000';
+        input.value         = held > 0 ? held.toFixed(8) : '';
+        confirmBtn.className = 'flex-1 py-2.5 rounded-lg text-sm font-bold bg-red-500/25 text-red-400 border border-red-500/40 hover:bg-red-500/35 transition-colors';
+      }
+
+      modal.style.display = 'flex';
+      setTimeout(() => { input.select(); }, 60);
+    }
+
+    function closeTradeModal() {
+      document.getElementById('trade-modal').style.display = 'none';
+    }
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') closeTradeModal();
+    });
+
+    async function confirmTrade() {
+      const input      = document.getElementById('modal-input');
+      const confirmBtn = document.getElementById('modal-confirm');
+      const val        = parseFloat(input.value);
+      if (!val || val <= 0) { input.focus(); return; }
+
+      confirmBtn.disabled    = true;
+      confirmBtn.textContent = '...';
+
+      try {
+        const url = _modalSide === 'buy'
+          ? `/trade/buy?pair=${_modalPair}&brl=${val}`
+          : `/trade/sell?pair=${_modalPair}&qty=${val}`;
+        const res  = await fetch(url, { method: 'POST' });
+        const data = await res.json();
+        if (!data.ok) {
+          alert('Erro: ' + data.error);
+        } else {
+          closeTradeModal();
+        }
+      } catch(e) {
+        alert('Erro de conexão');
+      } finally {
+        confirmBtn.disabled    = false;
+        confirmBtn.textContent = 'Confirmar';
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     // Claude usage
     async function refreshClaudeUsage() {
@@ -1138,5 +1202,42 @@
     }
     connect();
   </script>
+
+  <!-- ─── Trade Modal ─────────────────────────────────────────────────── -->
+  <div id="trade-modal" class="fixed inset-0 z-[9999] hidden items-center justify-center" style="display:none">
+    <!-- backdrop -->
+    <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" onclick="closeTradeModal()"></div>
+    <!-- dialog -->
+    <div class="relative card p-6 w-full max-w-sm mx-4 z-10 shadow-2xl" style="position:relative">
+      <!-- header -->
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="modal-title" class="text-lg font-bold text-white">Comprar BTC</h3>
+        <button onclick="closeTradeModal()" class="text-gray-500 hover:text-gray-300 transition-colors text-xl leading-none">&times;</button>
+      </div>
+      <!-- subtitle -->
+      <p id="modal-subtitle" class="text-xs text-gray-500 mb-4 -mt-2">—</p>
+      <!-- input -->
+      <div class="mb-5">
+        <label id="modal-label" class="text-xs text-gray-400 block mb-1.5 font-medium">Valor (R$)</label>
+        <input id="modal-input" type="number" step="0.01" min="0"
+          class="w-full bg-gray-800/80 border border-gray-600 rounded-lg px-3 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 transition-colors"
+          placeholder="0.00"
+          onkeydown="if(event.key==='Enter') confirmTrade()">
+      </div>
+      <!-- buttons -->
+      <div class="flex gap-3">
+        <button onclick="closeTradeModal()"
+          class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-gray-700/80 text-gray-300 border border-gray-600 hover:bg-gray-600/80 transition-colors">
+          Cancelar
+        </button>
+        <button id="modal-confirm" onclick="confirmTrade()"
+          class="flex-1 py-2.5 rounded-lg text-sm font-bold bg-green-500/25 text-green-400 border border-green-500/40 hover:bg-green-500/35 transition-colors">
+          Confirmar
+        </button>
+      </div>
+    </div>
+  </div>
+  <!-- ──────────────────────────────────────────────────────────────────── -->
+
 </body>
 </html>

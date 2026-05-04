@@ -294,29 +294,31 @@ async def manual_buy(pair: str, brl: float = 62.5):
 
 
 @app.post("/trade/sell")
-async def manual_sell(pair: str):
+async def manual_sell(pair: str, qty: float = 0):
     symbol = pair.split("-")[0]
     held   = engine.holdings.get(symbol, 0)
     if held <= 0:
         return {"ok": False, "error": f"Sem {symbol} para vender"}
+    sell_qty = min(qty, held) if qty > 0 else held   # 0 = vender tudo
     ticker = client.get_ticker(pair)
     price  = float(ticker.get("price", 0))
     if not price:
         return {"ok": False, "error": "Preço indisponível"}
-    usd = held * price * (1 - 0.006)
-    if not engine.sell(symbol, held, price, "manual"):
+    usd = sell_qty * price * (1 - 0.006)
+    if not engine.sell(symbol, sell_qty, price, "manual"):
         return {"ok": False, "error": "Falha na venda"}
-    # Zera todos os slots deste par (posição liquidada manualmente)
-    for key in list(strategy_slots.keys()):
-        if key.endswith(f":{pair}"):
-            strategy_slots[key]["qty"]  = 0.0
-            strategy_slots[key]["entry"] = 0.0
-            strategy_slots[key]["peak"]  = 0.0
+    # Venda total: zera todos os slots deste par
+    if sell_qty >= held:
+        for key in list(strategy_slots.keys()):
+            if key.endswith(f":{pair}"):
+                strategy_slots[key]["qty"]   = 0.0
+                strategy_slots[key]["entry"] = 0.0
+                strategy_slots[key]["peak"]  = 0.0
     _save_slots(strategy_slots)
-    _record_trade("SELL", pair, held, price, usd, "manual")
+    _record_trade("SELL", pair, sell_qty, price, usd, "manual")
     _update_portfolio_state()
     await broadcast(state)
-    return {"ok": True, "qty": held, "price": price, "usd": usd}
+    return {"ok": True, "qty": sell_qty, "price": price, "usd": usd}
 
 
 @app.websocket("/ws")
