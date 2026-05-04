@@ -675,7 +675,7 @@
               ${hasBTC ? `<span class="text-orange-400">● BTC</span> ` : '<span class="text-gray-700">○ BTC</span> '}
               ${hasETH ? `<span class="text-blue-400">● ETH</span>` : '<span class="text-gray-700">○ ETH</span>'}
             </div>
-            <p class="text-sm font-bold font-mono" style="color:${pnlColor}">${totalPnl >= 0?'+':''}R$ ${fmtBRL(Math.abs(totalPnl))}</p>
+            <p class="text-sm font-bold font-mono" style="color:${pnlColor}">${totalPnl >= 0 ? '+' : '-'}R$ ${fmtBRL(Math.abs(totalPnl))}</p>
             <p class="text-[10px] text-gray-600 mt-0.5">P&L realiz + não realiz</p>
           </div>`;
         }).join('');
