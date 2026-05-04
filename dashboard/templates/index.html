@@ -638,6 +638,7 @@
       // Allocation Chart
       const holdings = p.holdings || {};
       const prices = s.prices || {};
+      window._prices = prices;   // expõe para o modal de trade
       const labels = ['BRL'];
       const values = [(p.usd || 10000) * usdBrl];
       const colors = ['#4ade80'];
@@ -1098,12 +1099,15 @@
         confirmBtn.className = 'flex-1 py-2.5 rounded-lg text-sm font-bold bg-green-500/25 text-green-400 border border-green-500/40 hover:bg-green-500/35 transition-colors';
       } else {
         titleEl.textContent = `Vender ${symbol}`;
-        const held = _holdings[symbol] || 0;
-        subEl.textContent   = `Em carteira: ${held.toFixed(8)} ${symbol}`;
-        labelEl.textContent = `Quantidade a vender (${symbol})`;
-        input.step          = 'any';
-        input.placeholder   = '0.00000000';
-        input.value         = held > 0 ? held.toFixed(8) : '';
+        const held      = _holdings[symbol] || 0;
+        const priceUSD  = (window._prices && window._prices[pair]) ? window._prices[pair].price : 0;
+        const usdBrlNow = window._usdBrl || 1;
+        const posValBRL = held * priceUSD * usdBrlNow;
+        subEl.textContent   = `Em carteira: ${held.toFixed(8)} ${symbol}${priceUSD ? ` ≈ R$ ${fmtBRL(posValBRL)}` : ''}`;
+        labelEl.textContent = 'Valor a vender (R$)';
+        input.step          = '0.01';
+        input.placeholder   = '0,00';
+        input.value         = posValBRL > 0 ? posValBRL.toFixed(2) : '';
         confirmBtn.className = 'flex-1 py-2.5 rounded-lg text-sm font-bold bg-red-500/25 text-red-400 border border-red-500/40 hover:bg-red-500/35 transition-colors';
       }
 
@@ -1131,7 +1135,7 @@
       try {
         const url = _modalSide === 'buy'
           ? `/trade/buy?pair=${_modalPair}&brl=${val}`
-          : `/trade/sell?pair=${_modalPair}&qty=${val}`;
+          : `/trade/sell?pair=${_modalPair}&brl=${val}`;
         const res  = await fetch(url, { method: 'POST' });
         const data = await res.json();
         if (!data.ok) {
