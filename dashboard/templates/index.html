@@ -95,12 +95,12 @@
         <p id="last-update" class="text-sm text-gray-300 font-mono">--:--:--</p>
       </div>
       <div class="text-right hidden sm:block">
-        <p class="text-xs text-gray-500">Próxima atualização</p>
-        <p id="header-cycle-timer" class="text-sm text-indigo-400 font-mono font-bold">--:--:--</p>
+        <p class="text-xs text-gray-500">Próximo ciclo <span id="header-cycle-count" class="text-gray-600">#—</span></p>
+        <p id="header-cycle-timer" class="text-sm text-indigo-400 font-mono font-bold">--</p>
       </div>
       <!-- Timer compacto visível só no mobile -->
       <div class="text-right sm:hidden">
-        <p id="header-cycle-timer-mobile" class="text-xs text-indigo-400 font-mono font-bold">--:--:--</p>
+        <p id="header-cycle-timer-mobile" class="text-xs text-indigo-400 font-mono font-bold">--</p>
       </div>
       <div class="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/30">
         <span class="w-2 h-2 rounded-full bg-green-500 pulse-dot"></span>
@@ -385,14 +385,17 @@
 
       <div class="card p-5">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="font-semibold text-white">Feed de Sinais</h3>
+          <div>
+            <h3 class="font-semibold text-white">Feed de Sinais</h3>
+            <p id="feed-cycle-label" class="text-[10px] text-gray-600 mt-0.5">ciclo #—</p>
+          </div>
           <span class="flex items-center gap-2 text-xs">
             <span class="flex items-center gap-1.5 text-green-400">
               <span class="w-1.5 h-1.5 rounded-full bg-green-400 pulse-dot"></span>
               ao vivo
             </span>
             <span class="text-gray-600">·</span>
-            <span class="text-gray-400">próximo ciclo <span id="cycle-timer" class="font-mono text-indigo-400 font-semibold">90s</span></span>
+            <span class="text-gray-400">próximo ciclo <span id="cycle-timer" class="font-mono text-indigo-400 font-semibold">--</span><span id="cycle-executing" style="display:none" class="font-mono text-orange-400 font-semibold"></span></span>
           </span>
         </div>
         <div id="feed-list" class="space-y-1.5 max-h-80 overflow-y-auto pr-1">
@@ -726,7 +729,7 @@
             </div>
             <div class="text-right shrink-0">
               <p class="text-gray-200 text-xs font-mono font-semibold">R$ ${fmtBRL(f.price * usdBrl)}</p>
-              <p class="text-gray-600 text-[10px] mt-0.5">${f.time}</p>
+              <p class="text-gray-600 text-[10px] mt-0.5">${f.time}${f.cycle ? ' · #' + f.cycle : ''}</p>
             </div>
           </div>
         `).join('');
@@ -1059,41 +1062,70 @@
       portfolioChart.update('none');
     }
 
-    // Countdown timer — sincronizado com o servidor (independente de refresh)
-    var _cycleStartTs  = 0;      // timestamp Unix recebido do servidor
-    var _cycleInterval = 90;     // duração do ciclo recebida do servidor
+    // ── Countdown timer — sincronizado com o servidor ────────────────────────
+    var _cycleStartTs  = 0;      // Unix timestamp do início do ciclo (vem do servidor)
+    var _cycleInterval = 90;     // duração em segundos (vem do servidor)
+    var _synced        = false;  // true após receber o primeiro state via WS
     var countdownInterval = null;
 
-    // Chamado quando o WebSocket recebe state — sincroniza com o servidor
+    // Sincroniza quando o WebSocket entrega um novo state
     function resetCountdown(s) {
-      if (s && s.cycle_start_ts)  _cycleStartTs  = s.cycle_start_ts;
-      if (s && s.cycle_interval)  _cycleInterval = s.cycle_interval;
+      if (s && s.cycle_start_ts) { _cycleStartTs = s.cycle_start_ts; _synced = true; }
+      if (s && s.cycle_interval)   _cycleInterval = s.cycle_interval;
+      if (s && s.cycle) {
+        const n = s.cycle;
+        const ccEl = document.getElementById('header-cycle-count');
+        if (ccEl) ccEl.textContent = '#' + n;
+        const fcEl = document.getElementById('feed-cycle-label');
+        if (fcEl) fcEl.textContent = 'ciclo #' + n;
+      }
     }
 
-    function fmtCountdown(secs) {
-      const h = Math.floor(secs / 3600);
-      const m = Math.floor((secs % 3600) / 60);
+    // Formato compacto: M:SS para >= 60s, Xs para < 60s
+    function fmtTimer(secs) {
+      if (secs <= 0) return '0s';
+      if (secs < 60) return secs + 's';
+      const m = Math.floor(secs / 60);
       const s = secs % 60;
-      return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      return `${m}:${String(s).padStart(2,'0')}`;
     }
 
     function startCountdown() {
       if (countdownInterval) clearInterval(countdownInterval);
       countdownInterval = setInterval(() => {
-        // Calcula tempo restante com base no timestamp real do servidor
-        let remaining;
-        if (_cycleStartTs > 0) {
-          const elapsed = Math.floor(Date.now() / 1000) - _cycleStartTs;
-          remaining = Math.max(0, _cycleInterval - elapsed);
-        } else {
-          remaining = _cycleInterval;
+        const timerEl = document.getElementById('cycle-timer');
+        const execEl  = document.getElementById('cycle-executing');
+        const hdrEl   = document.getElementById('header-cycle-timer');
+        const hdrMEl  = document.getElementById('header-cycle-timer-mobile');
+
+        // Antes de sincronizar com o servidor, mostra "--"
+        if (!_synced) {
+          if (timerEl) timerEl.textContent = '--';
+          if (hdrEl)   hdrEl.textContent   = '--';
+          if (hdrMEl)  hdrMEl.textContent  = '--';
+          return;
         }
-        document.getElementById('cycle-timer').textContent = remaining + 's';
-        const hdr = document.getElementById('header-cycle-timer');
-        if (hdr) hdr.textContent = fmtCountdown(remaining);
-        const hdrM = document.getElementById('header-cycle-timer-mobile');
-        if (hdrM) hdrM.textContent = fmtCountdown(remaining);
-      }, 1000);
+
+        const elapsed   = Math.floor(Date.now() / 1000) - _cycleStartTs;
+        const remaining = Math.max(0, _cycleInterval - elapsed);
+        const executing = remaining === 0;
+
+        if (executing) {
+          // Bot está rodando o ciclo — feedback visual pulsante
+          const pulse = Math.floor(Date.now() / 600) % 2 === 0;
+          const txt = pulse ? 'executando…' : '· · ·';
+          if (timerEl) timerEl.style.display  = 'none';
+          if (execEl)  { execEl.style.display = 'inline'; execEl.textContent = txt; }
+          if (hdrEl)   { hdrEl.textContent    = txt; hdrEl.style.color   = '#f97316'; }
+          if (hdrMEl)  { hdrMEl.textContent   = txt; hdrMEl.style.color  = '#f97316'; }
+        } else {
+          const fmt = fmtTimer(remaining);
+          if (timerEl) { timerEl.style.display = 'inline'; timerEl.textContent = fmt; }
+          if (execEl)  execEl.style.display = 'none';
+          if (hdrEl)   { hdrEl.textContent   = fmt; hdrEl.style.color   = ''; }
+          if (hdrMEl)  { hdrMEl.textContent  = fmt; hdrMEl.style.color  = ''; }
+        }
+      }, 500);   // tick a 500ms para o piscar de "executando" funcionar
     }
 
     startCountdown();

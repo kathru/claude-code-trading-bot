@@ -474,8 +474,14 @@ async def trading_loop():
                     sig_key = f"{pair}:{strat.name}"
                     if signal != last_signals.get(sig_key):
                         last_signals[sig_key] = signal
-                        state["feed"].insert(0, {"time": now_str, "pair": pair,
-                            "strategy": strat.name, "signal": signal, "price": price})
+                        state["feed"].insert(0, {
+                            "time":     now_str,
+                            "cycle":    state["cycle"],
+                            "pair":     pair,
+                            "strategy": strat.name,
+                            "signal":   signal,
+                            "price":    price,
+                        })
                         state["feed"] = state["feed"][:100]
 
                     # ── Gestão da posição deste slot ──────────────────────────
