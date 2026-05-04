@@ -1063,15 +1063,23 @@
     }
 
     // ── Countdown timer — sincronizado com o servidor ────────────────────────
-    var _cycleStartTs  = 0;      // Unix timestamp do início do ciclo (vem do servidor)
-    var _cycleInterval = 90;     // duração em segundos (vem do servidor)
-    var _synced        = false;  // true após receber o primeiro state via WS
+    var _cycleStartTs   = 0;      // Unix timestamp do início do ciclo (vem do servidor)
+    var _cycleInterval  = 90;     // duração em segundos (vem do servidor)
+    var _synced         = false;  // true após receber o primeiro state via WS
+    var _lastWsReceived = 0;      // fallback: quando recebemos o último state
     var countdownInterval = null;
 
     // Sincroniza quando o WebSocket entrega um novo state
     function resetCountdown(s) {
-      _synced = true;   // qualquer mensagem WS já indica conexão ativa
-      if (s && s.cycle_start_ts) _cycleStartTs = s.cycle_start_ts;  // 0 = aguardando 1º ciclo
+      _synced = true;
+      _lastWsReceived = Math.floor(Date.now() / 1000);
+      // cycle_start_ts > 0: usa timestamp real do servidor
+      // cycle_start_ts = 0: usa o instante de recepção do WS como proxy
+      if (s && s.cycle_start_ts) {
+        _cycleStartTs = s.cycle_start_ts;
+      } else {
+        _cycleStartTs = _lastWsReceived;
+      }
       if (s && s.cycle_interval) _cycleInterval = s.cycle_interval;
       if (s && s.cycle) {
         const n = s.cycle;
@@ -1107,11 +1115,9 @@
           return;
         }
 
-        const elapsed   = _cycleStartTs > 0
-          ? Math.floor(Date.now() / 1000) - _cycleStartTs
-          : 0;   // ainda não recebeu timestamp real — mostra intervalo completo
+        const elapsed   = Math.floor(Date.now() / 1000) - _cycleStartTs;
         const remaining = Math.max(0, _cycleInterval - elapsed);
-        const executing = remaining === 0 && _cycleStartTs > 0;
+        const executing = remaining === 0;
 
         if (executing) {
           // Bot está rodando o ciclo — feedback visual pulsante
