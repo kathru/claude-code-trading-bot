@@ -38,7 +38,7 @@
     ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
     .period-btn { background: transparent; color: #6b7280; border: 1px solid #30363d; }
     .period-btn:hover { color: #d1d5db; border-color: #6b7280; }
-    .period-btn.active { background: #6366f1; color: #fff; border-color: #6366f1; }
+    .period-btn.active { background: #21262d; color: #e5e7eb; border-color: #6b7280; }
     /* Whale tooltip */
     .whale-box { position: relative; cursor: help; }
     .whale-tooltip {
@@ -311,7 +311,7 @@
     <div class="card p-5">
       <div class="mb-4">
         <div class="flex items-center justify-between mb-2">
-          <h3 class="font-semibold text-white">Candles</h3>
+          <h3 class="font-semibold text-white">Gráficos de monitoramento</h3>
           <span id="candle-price" class="font-mono text-white text-sm font-bold">—</span>
         </div>
         <div class="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-none">
@@ -355,10 +355,9 @@
             <button onclick="setPeriod('1m')"  data-period="1m"  class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold transition-colors">1m</button>
             <button onclick="setPeriod('5m')"  data-period="5m"  class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold transition-colors">5m</button>
             <button onclick="setPeriod('15m')" data-period="15m" class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold transition-colors">15m</button>
-            <button onclick="setPeriod('1H')"  data-period="1H"  class="period-btn active shrink-0 px-2.5 py-1 rounded text-xs font-semibold transition-colors">1H</button>
-            <button onclick="setPeriod('1D')"  data-period="1D"  class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold transition-colors">1D</button>
-            <button onclick="setPeriod('1S')"  data-period="1S"  class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold transition-colors">1S</button>
-            <button onclick="setPeriod('1M')"  data-period="1M"  class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold transition-colors">1M</button>
+            <button onclick="setPeriod('1h')"  data-period="1h"  class="period-btn active shrink-0 px-2.5 py-1 rounded text-xs font-semibold transition-colors">1h</button>
+            <button onclick="setPeriod('6h')"  data-period="6h"  class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold transition-colors">6h</button>
+            <button onclick="setPeriod('1d')"  data-period="1d"  class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold transition-colors">1d</button>
           </div>
         </div>
         <canvas id="portfolioChart" height="120"></canvas>
@@ -838,8 +837,19 @@
       });
 
       // ── Gráfico principal: candles + EMA9/21/50 + Donchian ──
+      const mainWrap = document.createElement('div');
+      mainWrap.style.cssText = 'position:relative';
+      const mainLabel = document.createElement('div');
+      mainLabel.innerHTML = '<span style="color:#e5e7eb;font-weight:600">Preço</span>'
+        + ' <span style="color:#06b6d4">EMA9</span>'
+        + ' · <span style="color:#818cf8">EMA21</span>'
+        + ' · <span style="color:#c084fc">EMA50</span>'
+        + ' · <span style="color:rgba(249,115,22,0.9)">Donchian(20)</span>';
+      mainLabel.style.cssText = 'position:absolute;top:6px;left:8px;z-index:10;font-size:10px;pointer-events:none;line-height:1';
       const mainDiv = document.createElement('div');
-      container.appendChild(mainDiv);
+      mainWrap.appendChild(mainLabel);
+      mainWrap.appendChild(mainDiv);
+      container.appendChild(mainWrap);
       candleChart = LightweightCharts.createChart(mainDiv, baseOpts(200));
 
       candleSeries = candleChart.addCandlestickSeries({
@@ -854,9 +864,19 @@
       dcLowerSeries = candleChart.addLineSeries({ color: 'rgba(249,115,22,0.65)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
 
       // ── Painel MACD (MACD Momentum) ──
+      const macdWrap = document.createElement('div');
+      macdWrap.style.cssText = 'position:relative;margin-top:4px';
+      const macdLabel = document.createElement('div');
+      macdLabel.innerHTML = '<span style="color:#e5e7eb;font-weight:600">MACD</span>'
+        + ' <span style="color:#9ca3af">(12/26/9)</span>'
+        + ' · <span style="color:#3b82f6">MACD</span>'
+        + ' · <span style="color:#f97316">Sinal</span>'
+        + ' · <span style="color:#9ca3af">Histograma</span>';
+      macdLabel.style.cssText = 'position:absolute;top:6px;left:8px;z-index:10;font-size:10px;pointer-events:none;line-height:1';
       const macdDiv = document.createElement('div');
-      macdDiv.style.marginTop = '4px';
-      container.appendChild(macdDiv);
+      macdWrap.appendChild(macdLabel);
+      macdWrap.appendChild(macdDiv);
+      container.appendChild(macdWrap);
       macdChart = LightweightCharts.createChart(macdDiv, {
         ...baseOpts(78),
         rightPriceScale: { borderColor: '#30363d', scaleMargins: { top: 0.15, bottom: 0.15 } },
@@ -867,9 +887,20 @@
       macdZeroSeries = macdChart.addLineSeries({ color: 'rgba(75,85,99,0.5)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
 
       // ── Painel Stochastic (Stoch Bounce) ──
+      const stochWrap = document.createElement('div');
+      stochWrap.style.cssText = 'position:relative;margin-top:4px';
+      const stochLabel = document.createElement('div');
+      stochLabel.innerHTML = '<span style="color:#e5e7eb;font-weight:600">Stochastic</span>'
+        + ' <span style="color:#9ca3af">(14/3)</span>'
+        + ' · <span style="color:#4ade80">%K</span>'
+        + ' · <span style="color:#f97316">%D</span>'
+        + ' · <span style="color:rgba(248,113,113,0.8)">OB 80</span>'
+        + ' · <span style="color:rgba(74,222,128,0.7)">OS 25</span>';
+      stochLabel.style.cssText = 'position:absolute;top:6px;left:8px;z-index:10;font-size:10px;pointer-events:none;line-height:1';
       const stochDiv = document.createElement('div');
-      stochDiv.style.marginTop = '4px';
-      container.appendChild(stochDiv);
+      stochWrap.appendChild(stochLabel);
+      stochWrap.appendChild(stochDiv);
+      container.appendChild(stochWrap);
       stochChart = LightweightCharts.createChart(stochDiv, {
         ...baseOpts(78),
         rightPriceScale: { borderColor: '#30363d', scaleMargins: { top: 0.1, bottom: 0.1 } },
@@ -996,10 +1027,10 @@
     window.addEventListener('load', tryInitCandle);
 
     // Period filter
-    var currentPeriod = '1H';
+    var currentPeriod = '1h';
     var fullHistory = [];
 
-    const periodSeconds = { '1m': 60, '5m': 300, '15m': 900, '1H': 3600, '1D': 86400, '1S': 604800, '1M': 2592000 };
+    const periodSeconds = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '6h': 21600, '1d': 86400 };
 
     function setPeriod(p) {
       currentPeriod = p;
