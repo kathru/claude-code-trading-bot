@@ -141,7 +141,7 @@ STRAT_CANDLES = {
 
 # Guard de risco global — só dispara em crashes reais
 vol_guard    = VolatilityGuard(threshold_pct=12.0, consecutive_days=3)
-trend_filter = TrendFilter(period=20)
+trend_filter = TrendFilter(period=50)   # EMA50 1H — alinhado com EMA Pullback e MACD Momentum
 
 # ── Cooldown anti-whipsaw após SL ────────────────────────────────
 sl_cooldowns: dict = {}   # {f"{strat}:{pair}": cycles_remaining}
@@ -403,9 +403,9 @@ async def trading_loop():
                 candles_6h = _get_candles(pair, CANDLE_6H, limit=100)
                 candles_1d = _get_candles(pair, CANDLE_1D, limit=250)
 
-                # Macro: tendência e volatilidade
-                df_1d      = trend_filter.candles_to_df(candles_1d)
-                trend      = trend_filter.analyze(df_1d)
+                # Macro: tendência (EMA50 em 1H) + volatilidade (diário)
+                df_1h_trend = trend_filter.candles_to_df(candles_1h)
+                trend       = trend_filter.analyze(df_1h_trend)
                 vol_signal = vol_guard.analyze(df_1d)
                 pair_signals = {"Trend": trend, "Vol Guard": vol_signal}
 
