@@ -15,17 +15,18 @@ from dotenv import load_dotenv
 
 from exchange.coinbase import CoinbaseClient
 from paper_trading.engine import PaperTradingEngine, TAKER_FEE
-from strategies.rsi_divergence import RSIDivergence
-from strategies.support_resistance import SupportResistance
-from strategies.bb_squeeze import BBSqueeze
-from strategies.golden_cross import GoldenCross
+# ── Suite agressiva v2 (alvo +65%): trend-following + momentum ─────
+from strategies.donchian_breakout import DonchianBreakout
+from strategies.ema_pullback     import EMAPullback
+from strategies.macd_momentum    import MACDMomentum
+from strategies.stoch_bounce     import StochBounce
 from strategies.volatility_guard import VolatilityGuard
-from strategies.trend_filter import TrendFilter
-# Importações preservadas (desativadas mas mantidas para uso futuro)
-# from strategies.ma_crossover import MACrossoverStrategy
-# from strategies.rsi import RSIStrategy
-# from strategies.scalping import ScalpingStrategy
-# from strategies.whale import WhaleStrategy
+from strategies.trend_filter     import TrendFilter
+# Estratégias antigas preservadas para referência:
+# from strategies.rsi_divergence import RSIDivergence
+# from strategies.support_resistance import SupportResistance
+# from strategies.bb_squeeze import BBSqueeze
+# from strategies.golden_cross import GoldenCross
 from logger import setup_logger, log_cycle, log_trade, log_portfolio
 from notifier import notify_trade
 
@@ -59,7 +60,8 @@ def _fetch_usd_brl() -> float:
 
 
 # ── Cache de candles por par ──────────────────────────────────────
-CANDLE_TTL = 840             # 14 min — candle de 1h só muda a cada hora
+# Refresh mais frequente para acompanhar cycle de 90s e capturar breakouts
+CANDLE_TTL = 240             # 4 min — suficiente para 30min/1H candles
 _candle_cache: dict = {}     # {pair: {"data": [...], "ts": float}}
 
 def _get_candles(pair: str, granularity: str, limit: int = 100) -> list:
@@ -99,46 +101,50 @@ def _save_history(history: list):
 PAIRS = ["BTC-USD", "ETH-USD"]
 
 # ── Ciclo e candles ─────────────────────────────────────────────
-CYCLE_INTERVAL    = 300      # ciclo de 5 minutos
-CANDLE_30M        = "THIRTY_MINUTE"  # BB Squeeze — mais sinais
-CANDLE_1H         = "ONE_HOUR"
-CANDLE_6H         = "SIX_HOUR"      # RSI Divergence
-CANDLE_1D         = "ONE_DAY"       # Golden Cross, Trend, VolGuard
+CYCLE_INTERVAL    = 90       # ciclo de 90s — 3.3× mais reativo (era 300s)
+CANDLE_30M        = "THIRTY_MINUTE"  # Donchian, Stoch
+CANDLE_1H         = "ONE_HOUR"       # EMA Pullback, MACD
+CANDLE_6H         = "SIX_HOUR"
+CANDLE_1D         = "ONE_DAY"        # Trend, VolGuard
 
-# ── Alocação por estratégia ─────────────────────────────────────
-TRADE_MAX_BRL     = 250.0    # limite máximo por operação em R$
-STRAT_ALLOC_PCT   = 0.25     # cada estratégia usa 25% do limite → R$62,50
-MIN_TRADE_BRL     = 10.0     # mínimo para cobrir fees
+# ── Alocação agressiva por estratégia ───────────────────────────
+TRADE_MAX_BRL     = 600.0    # limite máximo por operação em R$ (era 250 → 2.4× mais)
+STRAT_ALLOC_PCT   = 0.25     # cada estratégia usa 25% → R$150/trade
+MIN_TRADE_BRL     = 10.0
 
-# ── Gestão de risco por posição ─────────────────────────────────
-INITIAL_SL_PCT       = 3.0   # SL inicial: -3% da entrada
-TAKE_PROFIT_PCT      = 20.0  # TP: +20% (crypto tem movimentos amplos)
-TRAILING_STOP_PCT    = 5.0   # trailing stop: -5% do pico
-TRAILING_ACTIVATE_PCT = 2.0  # trailing só ativa após +2% de ganho
-VOL_REDUCE_PCT       = 0.40  # Volatility Guard: fecha slots em vol extrema
+# ── Gestão de risco — modo agressivo (R/R = 6:1) ────────────────
+INITIAL_SL_PCT       = 5.0   # SL: -5% (era -3%) — evita whipsaws de wick
+TAKE_PROFIT_PCT      = 30.0  # TP: +30% (era +20%) — deixa winners correrem
+TRAILING_STOP_PCT    = 8.0   # trailing: -8% do pico (era -5%) — mais espaço
+TRAILING_ACTIVATE_PCT = 6.0  # trailing só ativa após +6% (era +2%)
+SL_COOLDOWN_CYCLES   = 2     # após SL, espera 2 ciclos antes de re-entrar
+VOL_REDUCE_PCT       = 0.40
 
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
 
-# ── 4 estratégias independentes ─────────────────────────────────
+# ── 4 estratégias agressivas independentes ──────────────────────
 all_strategies = [
-    RSIDivergence(rsi_period=14, lookback=30, swing_size=5),
-    SupportResistance(lookback=40, tolerance_pct=0.5),
-    BBSqueeze(period=20, std=2.0, squeeze_pct=3.0),
-    GoldenCross(short=50, long=200),
+    DonchianBreakout(period=20, rsi_min=55.0, vol_mult=1.2),
+    EMAPullback(fast=9, mid=21, slow=50, touch_tolerance_pct=0.5),
+    MACDMomentum(fast=12, slow=26, signal=9, ema_filter=50),
+    StochBounce(k_period=14, d_period=3, oversold=25, overbought=80, ma_filter=200),
 ]
 
 # Mapa de candles por estratégia
 STRAT_CANDLES = {
-    "RSI Divergence": CANDLE_6H,
-    "S/R Flip":       CANDLE_1H,
-    "BB Squeeze":     CANDLE_1H,
-    "Golden Cross":   CANDLE_1D,
+    "Donchian Breakout": CANDLE_30M,
+    "EMA Pullback":      CANDLE_1H,
+    "MACD Momentum":     CANDLE_1H,
+    "Stoch Bounce":      CANDLE_30M,
 }
 
-# Guard de risco global
-vol_guard    = VolatilityGuard(threshold_pct=8.0, consecutive_days=3)
-trend_filter = TrendFilter(period=20)   # MA20 diária — mais responsiva
+# Guard de risco global — só dispara em crashes reais
+vol_guard    = VolatilityGuard(threshold_pct=12.0, consecutive_days=3)
+trend_filter = TrendFilter(period=20)
+
+# ── Cooldown anti-whipsaw após SL ────────────────────────────────
+sl_cooldowns: dict = {}   # {f"{strat}:{pair}": cycles_remaining}
 
 # ── Estado por slot (estratégia × par) ─────────────────────────
 # Slot: {qty, entry_price, peak_price, realized_pnl_usd}
@@ -231,6 +237,7 @@ state = {
     "status":    "running",
     "last_update": "",
     "usd_brl":   5.70,
+    "trade_max_brl": TRADE_MAX_BRL,
 }
 
 
@@ -392,7 +399,7 @@ async def trading_loop():
                     "volume_24h":     float(ticker.get("volume_24h", 0)),
                 }
 
-                candles_1h = _get_candles(pair, CANDLE_1H, limit=100)
+                candles_1h = _get_candles(pair, CANDLE_1H, limit=250)
                 candles_6h = _get_candles(pair, CANDLE_6H, limit=100)
                 candles_1d = _get_candles(pair, CANDLE_1D, limit=250)
 
@@ -419,12 +426,12 @@ async def trading_loop():
 
                 # ── Cada estratégia age de forma independente ─────────────────
                 # (SL/TP sempre verificado; análise de sinal só se preço mudou)
-                candles_30m = _get_candles(pair, CANDLE_30M, limit=100)
+                candles_30m = _get_candles(pair, CANDLE_30M, limit=250)
                 candle_map = {
-                    "RSI Divergence": candles_6h,
-                    "S/R Flip":       candles_1h,
-                    "BB Squeeze":     candles_30m,  # 30min — mais sinais de squeeze
-                    "Golden Cross":   candles_1d,
+                    "Donchian Breakout": candles_30m,
+                    "EMA Pullback":      candles_1h,
+                    "MACD Momentum":     candles_1h,
+                    "Stoch Bounce":      candles_30m,   # precisa MA200 → 250 candles
                 }
 
                 for strat in all_strategies:
@@ -475,23 +482,30 @@ async def trading_loop():
                                 logger.info(f"[{pair}][{strat.name}] {reason} — P&L: ${pnl_trade:+.2f}")
                                 _record_trade("SELL", pair, slot["qty"], price, net_usd, f"{strat.name}:{reason}")
                                 slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
+                                # Cooldown anti-whipsaw apenas em SL (TP/Trailing podem re-entrar)
+                                if "SL-" in reason:
+                                    sl_cooldowns[key] = SL_COOLDOWN_CYCLES
 
-                    # ── Compra: sinal BUY + slot vazio ────────────────────────
-                    # Cada estratégia usa 25% de R$250 = R$62,50 por trade
+                    # ── Compra: sinal BUY + slot vazio + sem cooldown ─────────
+                    # Cada estratégia usa 25% de R$600 = R$150 por trade
                     elif signal == "BUY" and slot["qty"] == 0:
-                        alloc_brl = TRADE_MAX_BRL * STRAT_ALLOC_PCT       # R$62,50
-                        alloc_usd = alloc_brl / usd_brl                    # ~US$12,55
-                        min_usd   = MIN_TRADE_BRL / usd_brl
-                        if engine.balance_usd < alloc_usd * 1.006:        # inclui fee
-                            logger.info(f"[{pair}][{strat.name}] BUY negado — saldo US${engine.balance_usd:.2f} insuf. para US${alloc_usd:.2f}")
+                        cooldown = sl_cooldowns.get(key, 0)
+                        if cooldown > 0:
+                            sl_cooldowns[key] = cooldown - 1
+                            logger.info(f"[{pair}][{strat.name}] BUY ignorado — cooldown ({cooldown})")
                         else:
-                            qty = alloc_usd / price
-                            if engine.buy(symbol, alloc_usd, price, strat.name):
-                                slot["qty"]   = qty
-                                slot["entry"] = price
-                                slot["peak"]  = price
-                                _record_trade("BUY", pair, qty, price, alloc_usd, strat.name)
-                                logger.info(f"[{pair}][{strat.name}] ✅ BUY R${alloc_brl:.2f} (US${alloc_usd:.2f}) @ US${price:,.2f}")
+                            alloc_brl = TRADE_MAX_BRL * STRAT_ALLOC_PCT       # R$150
+                            alloc_usd = alloc_brl / usd_brl
+                            if engine.balance_usd < alloc_usd * 1.006:
+                                logger.info(f"[{pair}][{strat.name}] BUY negado — saldo US${engine.balance_usd:.2f} insuf. para US${alloc_usd:.2f}")
+                            else:
+                                qty = alloc_usd / price
+                                if engine.buy(symbol, alloc_usd, price, strat.name):
+                                    slot["qty"]   = qty
+                                    slot["entry"] = price
+                                    slot["peak"]  = price
+                                    _record_trade("BUY", pair, qty, price, alloc_usd, strat.name)
+                                    logger.info(f"[{pair}][{strat.name}] ✅ BUY R${alloc_brl:.2f} (US${alloc_usd:.2f}) @ US${price:,.2f}")
 
                 # ── Slot manual: SL/TP/Trailing igual às estratégias ─────────
                 manual_slot = strategy_slots.get(f"manual:{pair}")

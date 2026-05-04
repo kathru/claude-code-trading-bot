@@ -143,8 +143,8 @@
     <!-- Estratégias Independentes -->
     <div class="card p-5">
       <div class="flex items-center justify-between mb-3">
-        <h3 class="font-semibold text-white">Estratégias Independentes · 25% cada</h3>
-        <span class="text-xs text-gray-500">P&L alvo: <span class="text-green-400 font-bold">+65%</span></span>
+        <h3 class="font-semibold text-white">Suite Agressiva v2 · 25% cada (R$150)</h3>
+        <span class="text-xs text-gray-500">Alvo: <span class="text-green-400 font-bold">+65% P&L</span> · R/R 6:1</span>
       </div>
       <div id="strategy-panel" class="grid grid-cols-2 lg:grid-cols-4 gap-3"></div>
     </div>
@@ -175,22 +175,22 @@
         <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Sinais independentes</p>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5" id="strat-signals-BTC">
           <div id="sig-BTC-MA" class="signal-hold rounded-lg px-2 py-2 text-center">
-            <p class="text-xs opacity-60 mb-0.5">RSI Div</p>
+            <p class="text-xs opacity-60 mb-0.5">Donchian</p>
             <p class="text-xs font-bold">HOLD</p>
             <p id="pos-BTC-MA" class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
           </div>
           <div id="sig-BTC-RSI" class="signal-hold rounded-lg px-2 py-2 text-center">
-            <p class="text-xs opacity-60 mb-0.5">S/R Flip</p>
+            <p class="text-xs opacity-60 mb-0.5">EMA Pull</p>
             <p class="text-xs font-bold">HOLD</p>
             <p id="pos-BTC-RSI" class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
           </div>
           <div id="sig-BTC-SC" class="signal-hold rounded-lg px-2 py-2 text-center">
-            <p class="text-xs opacity-60 mb-0.5">BB Squeeze</p>
+            <p class="text-xs opacity-60 mb-0.5">MACD Mom</p>
             <p class="text-xs font-bold">HOLD</p>
             <p id="pos-BTC-SC" class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
           </div>
           <div id="sig-BTC-GC" class="signal-hold rounded-lg px-2 py-2 text-center">
-            <p class="text-xs opacity-60 mb-0.5">Golden ✕</p>
+            <p class="text-xs opacity-60 mb-0.5">Stoch</p>
             <p class="text-xs font-bold">HOLD</p>
             <p id="pos-BTC-GC" class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
           </div>
@@ -221,7 +221,7 @@
         </div>
         <div class="mt-3 flex gap-2">
           <button onclick="manualTrade('buy','BTC-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors">
-            Comprar R$62,50
+            Comprar R$150,00
           </button>
           <button onclick="manualTrade('sell','BTC-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors">
             Vender tudo
@@ -252,22 +252,22 @@
         <p class="text-xs text-gray-600 uppercase tracking-wider mb-1.5">Sinais independentes</p>
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5" id="strat-signals-ETH">
           <div id="sig-ETH-MA" class="signal-hold rounded-lg px-2 py-2 text-center">
-            <p class="text-xs opacity-60 mb-0.5">RSI Div</p>
+            <p class="text-xs opacity-60 mb-0.5">Donchian</p>
             <p class="text-xs font-bold">HOLD</p>
             <p id="pos-ETH-MA" class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
           </div>
           <div id="sig-ETH-RSI" class="signal-hold rounded-lg px-2 py-2 text-center">
-            <p class="text-xs opacity-60 mb-0.5">S/R Flip</p>
+            <p class="text-xs opacity-60 mb-0.5">EMA Pull</p>
             <p class="text-xs font-bold">HOLD</p>
             <p id="pos-ETH-RSI" class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
           </div>
           <div id="sig-ETH-SC" class="signal-hold rounded-lg px-2 py-2 text-center">
-            <p class="text-xs opacity-60 mb-0.5">BB Squeeze</p>
+            <p class="text-xs opacity-60 mb-0.5">MACD Mom</p>
             <p class="text-xs font-bold">HOLD</p>
             <p id="pos-ETH-SC" class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
           </div>
           <div id="sig-ETH-GC" class="signal-hold rounded-lg px-2 py-2 text-center">
-            <p class="text-xs opacity-60 mb-0.5">Golden ✕</p>
+            <p class="text-xs opacity-60 mb-0.5">Stoch</p>
             <p class="text-xs font-bold">HOLD</p>
             <p id="pos-ETH-GC" class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
           </div>
@@ -298,7 +298,7 @@
         </div>
         <div class="mt-3 flex gap-2">
           <button onclick="manualTrade('buy','ETH-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-green-500/20 text-green-400 border border-green-500/30 hover:bg-green-500/30 transition-colors">
-            Comprar R$62,50
+            Comprar R$150,00
           </button>
           <button onclick="manualTrade('sell','ETH-USD')" class="flex-1 py-1.5 rounded-lg text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-colors">
             Vender tudo
@@ -467,8 +467,9 @@
       }
       if (s.trade_max_brl) {
         window._tradeMaxBRL = s.trade_max_brl;
+        const perTrade = s.trade_max_brl * 0.25;   // 25% por estratégia
         document.querySelectorAll('[onclick*="buy"]').forEach(b => {
-          b.textContent = `Comprar R$${s.trade_max_brl}`;
+          b.textContent = `Comprar R$${perTrade.toFixed(2).replace('.',',')}`;
         });
       }
 
@@ -535,7 +536,7 @@
           }
 
           // Sinais independentes + indicador de posição por estratégia
-          const stratMap = { 'RSI Divergence': 'MA', 'S/R Flip': 'RSI', 'BB Squeeze': 'SC', 'Golden Cross': 'GC' };
+          const stratMap = { 'Donchian Breakout': 'MA', 'EMA Pullback': 'RSI', 'MACD Momentum': 'SC', 'Stoch Bounce': 'GC' };
           const slots = s.slots || {};
           Object.entries(stratMap).forEach(([name, key]) => {
             const el    = document.getElementById('sig-' + sym + '-' + key);
@@ -648,8 +649,8 @@
 
       // Painel de estratégias independentes
       const slots = s.slots || {};
-      const stratNames = ['RSI Divergence','S/R Flip','BB Squeeze','Golden Cross'];
-      const stratIcons = {'RSI Divergence':'📈','S/R Flip':'🔄','BB Squeeze':'🎯','Golden Cross':'⭐'};
+      const stratNames = ['Donchian Breakout','EMA Pullback','MACD Momentum','Stoch Bounce'];
+      const stratIcons = {'Donchian Breakout':'🚀','EMA Pullback':'📈','MACD Momentum':'⚡','Stoch Bounce':'🎯'};
       const panel = document.getElementById('strategy-panel');
       if (panel) {
         panel.innerHTML = stratNames.map(name => {
@@ -948,7 +949,7 @@
       btn.textContent = '...';
       try {
         const url = side === 'buy'
-          ? `/trade/buy?pair=${pair}&brl=62.5`
+          ? `/trade/buy?pair=${pair}&brl=150`
           : `/trade/sell?pair=${pair}`;
         const res = await fetch(url, { method: 'POST' });
         const data = await res.json();
@@ -957,7 +958,7 @@
         alert('Erro de conexão');
       } finally {
         btn.disabled = false;
-        btn.textContent = side === 'buy' ? 'Comprar R$62,50' : 'Vender tudo';
+        btn.textContent = side === 'buy' ? 'Comprar R$150,00' : 'Vender tudo';
       }
     }
 
