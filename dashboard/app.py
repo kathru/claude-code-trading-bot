@@ -234,9 +234,11 @@ state = {
     "feed":      [],
     "history":   _load_history(),
     "cycle":     0,
-    "status":    "running",
-    "last_update": "",
-    "usd_brl":   5.70,
+    "status":        "running",
+    "last_update":   "",
+    "cycle_start_ts": 0,        # timestamp Unix do início do ciclo atual
+    "cycle_interval": CYCLE_INTERVAL,
+    "usd_brl":       5.70,
     "trade_max_brl": TRADE_MAX_BRL,
 }
 
@@ -375,7 +377,8 @@ async def trading_loop():
     while True:
         state["cycle"] += 1
         now_str = datetime.now().strftime("%H:%M:%S")
-        state["last_update"] = now_str
+        state["last_update"]    = now_str
+        state["cycle_start_ts"] = int(time.time())
 
         usd_brl = await asyncio.get_event_loop().run_in_executor(None, _fetch_usd_brl)
         state["usd_brl"] = round(usd_brl, 4)

@@ -459,7 +459,7 @@
     var usdBrl = 5.70;   // atualizado via WebSocket
 
     function updateState(s) {
-      resetCountdown();
+      resetCountdown(s);   // sincroniza countdown com timestamp do servidor
       if (candleSeries) loadCandles();
 
       // Cotação USD/BRL e valor de trade
@@ -1045,12 +1045,15 @@
       }
     }
 
-    // Countdown timer — ciclo de 90s
-    var cycleCountdown = 90;
+    // Countdown timer — sincronizado com o servidor (independente de refresh)
+    var _cycleStartTs  = 0;      // timestamp Unix recebido do servidor
+    var _cycleInterval = 90;     // duração do ciclo recebida do servidor
     var countdownInterval = null;
 
-    function resetCountdown() {
-      cycleCountdown = 90;
+    // Chamado quando o WebSocket recebe state — sincroniza com o servidor
+    function resetCountdown(s) {
+      if (s && s.cycle_start_ts)  _cycleStartTs  = s.cycle_start_ts;
+      if (s && s.cycle_interval)  _cycleInterval = s.cycle_interval;
     }
 
     function fmtCountdown(secs) {
@@ -1063,13 +1066,19 @@
     function startCountdown() {
       if (countdownInterval) clearInterval(countdownInterval);
       countdownInterval = setInterval(() => {
-        if (cycleCountdown > 0) cycleCountdown--;
-        if (cycleCountdown <= 0) cycleCountdown = 90;
-        document.getElementById('cycle-timer').textContent = cycleCountdown + 's';
+        // Calcula tempo restante com base no timestamp real do servidor
+        let remaining;
+        if (_cycleStartTs > 0) {
+          const elapsed = Math.floor(Date.now() / 1000) - _cycleStartTs;
+          remaining = Math.max(0, _cycleInterval - elapsed);
+        } else {
+          remaining = _cycleInterval;
+        }
+        document.getElementById('cycle-timer').textContent = remaining + 's';
         const hdr = document.getElementById('header-cycle-timer');
-        if (hdr) hdr.textContent = fmtCountdown(cycleCountdown);
+        if (hdr) hdr.textContent = fmtCountdown(remaining);
         const hdrM = document.getElementById('header-cycle-timer-mobile');
-        if (hdrM) hdrM.textContent = fmtCountdown(cycleCountdown);
+        if (hdrM) hdrM.textContent = fmtCountdown(remaining);
       }, 1000);
     }
 
