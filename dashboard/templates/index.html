@@ -332,7 +332,7 @@
           </div>
         </div>
       </div>
-      <div id="candle-chart" style="height:368px;position:relative;overflow:hidden;"></div>
+      <div id="candle-chart" style="overflow:hidden;"></div>
       <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
         <span><span style="color:#06b6d4" class="font-semibold">—</span> EMA9</span>
         <span><span style="color:#818cf8" class="font-semibold">—</span> EMA21 <span class="text-gray-600">(EMA Pullback)</span></span>
@@ -838,14 +838,13 @@
 
       // ── Gráfico principal: candles + EMA9/21/50 + Donchian ──
       const mainWrap = document.createElement('div');
-      mainWrap.style.cssText = 'position:relative';
       const mainLabel = document.createElement('div');
-      mainLabel.innerHTML = '<span style="color:#e5e7eb;font-weight:600">Preço</span>'
-        + ' <span style="color:#06b6d4">EMA9</span>'
-        + ' · <span style="color:#818cf8">EMA21</span>'
-        + ' · <span style="color:#c084fc">EMA50</span>'
-        + ' · <span style="color:rgba(249,115,22,0.9)">Donchian(20)</span>';
-      mainLabel.style.cssText = 'position:absolute;top:6px;left:8px;z-index:10;font-size:10px;pointer-events:none;line-height:1';
+      mainLabel.innerHTML = '<span style="color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">Preço</span>'
+        + ' &nbsp;<span style="color:#06b6d4">━ EMA9</span>'
+        + ' &nbsp;<span style="color:#818cf8">━ EMA21</span>'
+        + ' &nbsp;<span style="color:#c084fc">━ EMA50</span>'
+        + ' &nbsp;<span style="color:rgba(249,115,22,0.9)">╌ Donchian(20)</span>';
+      mainLabel.style.cssText = 'padding:0 2px 5px;font-size:10px;line-height:1;color:#6b7280;';
       const mainDiv = document.createElement('div');
       mainWrap.appendChild(mainLabel);
       mainWrap.appendChild(mainDiv);
@@ -865,14 +864,14 @@
 
       // ── Painel MACD (MACD Momentum) ──
       const macdWrap = document.createElement('div');
-      macdWrap.style.cssText = 'position:relative;margin-top:4px';
+      macdWrap.style.cssText = 'margin-top:8px';
       const macdLabel = document.createElement('div');
-      macdLabel.innerHTML = '<span style="color:#e5e7eb;font-weight:600">MACD</span>'
-        + ' <span style="color:#9ca3af">(12/26/9)</span>'
-        + ' · <span style="color:#3b82f6">MACD</span>'
-        + ' · <span style="color:#f97316">Sinal</span>'
-        + ' · <span style="color:#9ca3af">Histograma</span>';
-      macdLabel.style.cssText = 'position:absolute;top:6px;left:8px;z-index:10;font-size:10px;pointer-events:none;line-height:1';
+      macdLabel.innerHTML = '<span style="color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">MACD</span>'
+        + ' <span style="color:#6b7280">(12/26/9)</span>'
+        + ' &nbsp;<span style="color:#3b82f6">━ MACD</span>'
+        + ' &nbsp;<span style="color:#f97316">━ Sinal</span>'
+        + ' &nbsp;<span style="color:#6b7280">▮ Histograma</span>';
+      macdLabel.style.cssText = 'padding:0 2px 5px;font-size:10px;line-height:1;color:#6b7280;';
       const macdDiv = document.createElement('div');
       macdWrap.appendChild(macdLabel);
       macdWrap.appendChild(macdDiv);
@@ -888,15 +887,15 @@
 
       // ── Painel Stochastic (Stoch Bounce) ──
       const stochWrap = document.createElement('div');
-      stochWrap.style.cssText = 'position:relative;margin-top:4px';
+      stochWrap.style.cssText = 'margin-top:8px';
       const stochLabel = document.createElement('div');
-      stochLabel.innerHTML = '<span style="color:#e5e7eb;font-weight:600">Stochastic</span>'
-        + ' <span style="color:#9ca3af">(14/3)</span>'
-        + ' · <span style="color:#4ade80">%K</span>'
-        + ' · <span style="color:#f97316">%D</span>'
-        + ' · <span style="color:rgba(248,113,113,0.8)">OB 80</span>'
-        + ' · <span style="color:rgba(74,222,128,0.7)">OS 25</span>';
-      stochLabel.style.cssText = 'position:absolute;top:6px;left:8px;z-index:10;font-size:10px;pointer-events:none;line-height:1';
+      stochLabel.innerHTML = '<span style="color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">Stochastic</span>'
+        + ' <span style="color:#6b7280">(14/3)</span>'
+        + ' &nbsp;<span style="color:#4ade80">━ %K</span>'
+        + ' &nbsp;<span style="color:#f97316">━ %D</span>'
+        + ' &nbsp;<span style="color:rgba(248,113,113,0.8)">╌ OB 80</span>'
+        + ' &nbsp;<span style="color:rgba(74,222,128,0.8)">╌ OS 25</span>';
+      stochLabel.style.cssText = 'padding:0 2px 5px;font-size:10px;line-height:1;color:#6b7280;';
       const stochDiv = document.createElement('div');
       stochWrap.appendChild(stochLabel);
       stochWrap.appendChild(stochDiv);
