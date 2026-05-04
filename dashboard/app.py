@@ -75,9 +75,8 @@ def _get_candles(pair: str, granularity: str, limit: int = 100) -> list:
     return data
 
 
-# ── Cache de preço anterior para threshold de mudança ────────────
+# ── Preço anterior por par (para log de variação) ────────────────
 _last_prices: dict = {}      # {pair: float}
-PRICE_CHANGE_THRESHOLD = 0.05  # % mínimo para re-analisar estratégias
 
 
 def _load_history() -> list:
@@ -399,8 +398,6 @@ async def trading_loop():
                 if not price:
                     continue
 
-                prev_price    = _last_prices.get(pair, 0)
-                price_changed = prev_price == 0 or abs(price - prev_price) / prev_price * 100 >= PRICE_CHANGE_THRESHOLD
                 _last_prices[pair] = price
                 engine.update_price(symbol, price)
                 state["prices"][pair] = {
@@ -452,7 +449,8 @@ async def trading_loop():
                     logger.info(f"[{pair}] VOLATILIDADE EXTREMA — slots fechados")
 
                 # ── Cada estratégia age de forma independente ─────────────────
-                # (SL/TP sempre verificado; análise de sinal só se preço mudou)
+                # Análise executada todo ciclo (cache de 240s nas candles evita
+                # chamadas excessivas à API; pandas é rápido o suficiente).
                 candles_30m = _get_candles(pair, CANDLE_30M, limit=250)
                 candle_map = {
                     "Donchian Breakout": candles_30m,
@@ -465,16 +463,14 @@ async def trading_loop():
                     key  = f"{strat.name}:{pair}"
                     slot = strategy_slots.setdefault(key, _empty_slot())
 
-                    # Analisa novo sinal só quando preço mudou; senão usa último sinal
-                    if price_changed:
-                        raw    = candle_map.get(strat.name, candles_1h)
-                        df     = strat.candles_to_df(raw)
-                        signal = strat.analyze(df)
-                    else:
-                        signal = last_signals.get(f"{pair}:{strat.name}", "HOLD")
+                    # Sempre analisa — garante que novos candles (30min/1H) são
+                    # considerados independente da variação do ticker
+                    raw    = candle_map.get(strat.name, candles_1h)
+                    df     = strat.candles_to_df(raw)
+                    signal = strat.analyze(df)
                     pair_signals[strat.name] = signal
 
-                    # Feed ao vivo
+                    # Feed ao vivo — só registra quando sinal muda
                     sig_key = f"{pair}:{strat.name}"
                     if signal != last_signals.get(sig_key):
                         last_signals[sig_key] = signal
@@ -500,18 +496,34 @@ async def trading_loop():
                         elif trailing_hit:   reason = f"TRAILING-{TRAILING_STOP_PCT:.0f}%"
 
                         if reason:
-                            gross   = slot["qty"] * price
-                            fee     = gross * 0.006
-                            net_usd = gross - fee
-                            if engine.sell(symbol, slot["qty"], price, f"{strat.name}:{reason}"):
-                                pnl_trade = net_usd - (slot["entry"] * slot["qty"])
+                            # ── Saída por SL / TP / Trailing ──────────────────
+                            close_qty = slot["qty"]
+                            gross     = close_qty * price
+                            net_usd   = gross * (1 - 0.006)
+                            if engine.sell(symbol, close_qty, price, f"{strat.name}:{reason}"):
+                                pnl_trade = net_usd - (slot["entry"] * close_qty)
                                 slot["realized"] += pnl_trade
                                 logger.info(f"[{pair}][{strat.name}] {reason} — P&L: ${pnl_trade:+.2f}")
-                                _record_trade("SELL", pair, slot["qty"], price, net_usd, f"{strat.name}:{reason}")
+                                _record_trade("SELL", pair, close_qty, price, net_usd, f"{strat.name}:{reason}")
                                 slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
                                 # Cooldown anti-whipsaw apenas em SL (TP/Trailing podem re-entrar)
                                 if "SL-" in reason:
                                     sl_cooldowns[key] = SL_COOLDOWN_CYCLES
+
+                        elif signal == "SELL":
+                            # ── Saída por sinal técnico da estratégia ─────────
+                            # EMA Pullback: EMA9 < EMA21 (perda de tendência)
+                            # MACD Momentum: histograma cruza para negativo
+                            # Donchian: close < mínima do canal (breakout baixista)
+                            # Stoch Bounce: %K > 80 cruza abaixo %D (exaustão)
+                            close_qty = slot["qty"]
+                            net_usd   = close_qty * price * (1 - 0.006)
+                            if engine.sell(symbol, close_qty, price, f"{strat.name}:SIGNAL"):
+                                pnl_trade = net_usd - (slot["entry"] * close_qty)
+                                slot["realized"] += pnl_trade
+                                logger.info(f"[{pair}][{strat.name}] SELL SIGNAL — P&L: ${pnl_trade:+.2f}")
+                                _record_trade("SELL", pair, close_qty, price, net_usd, f"{strat.name}:SIGNAL")
+                                slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
 
                     # ── Compra: sinal BUY + slot vazio + sem cooldown ─────────
                     # Cada estratégia usa 25% de R$600 = R$150 por trade
