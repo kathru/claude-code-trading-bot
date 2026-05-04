@@ -39,7 +39,6 @@ STATIC_DIR   = os.path.join(os.path.dirname(__file__), "static")
 from fastapi.staticfiles import StaticFiles
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 HISTORY_FILE  = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "portfolio_history.json")
-COUNTER_FILE  = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "cycle_counter.json")
 
 
 # ── Cache de cotação USD/BRL ──────────────────────────────────────
@@ -99,22 +98,9 @@ def _save_history(history: list):
         pass
 
 
-def _load_cycle() -> int:
-    try:
-        if os.path.exists(COUNTER_FILE):
-            return int(json.load(open(COUNTER_FILE)).get("cycle", 0))
-    except Exception:
-        pass
-    return 0
-
-
-def _save_cycle(n: int):
-    try:
-        os.makedirs(os.path.dirname(COUNTER_FILE), exist_ok=True)
-        with open(COUNTER_FILE, "w") as f:
-            json.dump({"cycle": n}, f)
-    except Exception:
-        pass
+def _current_cycle() -> int:
+    """Número do ciclo baseado no relógio — igual em todos os servidores."""
+    return int(time.time()) % 86400 // CYCLE_INTERVAL
 
 PAIRS = ["BTC-USD", "ETH-USD"]
 
@@ -251,7 +237,7 @@ state = {
     "trades":    _load_trades_from_engine(),
     "feed":      [],
     "history":   _load_history(),
-    "cycle":     _load_cycle(),
+    "cycle":     _current_cycle(),
     "status":        "running",
     "last_update":   "",
     "cycle_start_ts": 0,        # timestamp Unix do início do ciclo atual
@@ -400,8 +386,7 @@ def _record_trade(side, pair, qty, price, usd, strategy):
 async def trading_loop():
     logger.info("Loop independente — 4 estratégias × 25%%, ciclo %ds", CYCLE_INTERVAL)
     while True:
-        state["cycle"] += 1
-        _save_cycle(state["cycle"])
+        state["cycle"] = _current_cycle()
         now_str = datetime.now().strftime("%H:%M:%S")
         state["last_update"]    = now_str
         state["cycle_start_ts"] = int(time.time())
