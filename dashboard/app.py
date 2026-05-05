@@ -671,15 +671,21 @@ async def trading_loop():
                 if vol_signal == "SELL":
                     pos = positions[pair]
                     if pos["qty"] > 0:
-                        close_qty = pos["qty"]
+                        # vol_guard: saída gradual 1%/ciclo (mesma regra geral)
+                        max_usd   = engine.balance_usd * TRADE_PCT
+                        close_qty = min(pos["qty"], max_usd / price if price > 0 else pos["qty"])
                         net_usd   = close_qty * price * (1 - 0.006)
                         if engine.sell(symbol, close_qty, price, "vol_guard"):
                             pnl_vg = net_usd - pos["entry"] * close_qty
                             pos["realized"] += pnl_vg
                             _record_trade("SELL", pair, close_qty, price, net_usd, "vol_guard")
                             _attr_pnl(pos.get("contributors", []), pnl_vg)
-                        pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0
-                        pos["pyramids"] = 0; pos["contributors"] = []
+                        remaining = pos["qty"] - close_qty
+                        if remaining < 1e-8:
+                            pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0
+                            pos["pyramids"] = 0; pos["contributors"] = []
+                        else:
+                            pos["qty"] = remaining
                     _save_positions(positions)
                     logger.info(f"[{pair}] VOLATILIDADE EXTREMA — posição fechada, ciclo pausado")
                     # ← Não executa estratégias neste ciclo para evitar re-abertura imediata
@@ -738,24 +744,49 @@ async def trading_loop():
                   extreme_greed = fg_value >= FG_GREED_MIN
                   effective_min = 1 if extreme_fear else CONSENSUS_BUY_MIN
 
-                  def _do_close(reason_label: str, is_sl: bool = False):
-                      """Fecha a posição de consenso e atualiza estado."""
-                      close_qty = pos["qty"]
-                      if close_qty <= 0:
+                  def _do_close(reason_label: str, is_sl: bool = False,
+                                full: bool = False):
+                      """Vende posição respeitando limite de 1% do saldo.
+                      full=True → fecha 100% (SL, TP, Trailing — proteções de risco).
+                      full=False → vende apenas 1% do saldo por ciclo (saída gradual).
+                      """
+                      if pos["qty"] <= 0:
                           return
-                      net_usd = close_qty * price * (1 - 0.006)
+
+                      if full:
+                          # SL / TP / Trailing: fecha tudo de uma vez
+                          close_qty = pos["qty"]
+                      else:
+                          # Consenso / Greed / Vol_guard: máx 1% do saldo por ciclo
+                          max_usd   = engine.balance_usd * TRADE_PCT
+                          max_qty   = max_usd / price
+                          close_qty = min(pos["qty"], max_qty)
+                          if close_qty < 1e-8:
+                              return
+
+                      net_usd      = close_qty * price * (1 - 0.006)
                       contributors = pos.get("contributors", [])
+                      pct_label    = f"({close_qty/pos['qty']*100:.0f}%)" if not full else "(100%)"
+
                       if engine.sell(symbol, close_qty, price, f"consenso:{reason_label}"):
                           pnl = net_usd - pos["entry"] * close_qty
                           pos["realized"] += pnl
                           _attr_pnl(contributors, pnl)
-                          logger.info(f"[{pair}] SELL {reason_label} — P&L: ${pnl:+.2f}")
+                          logger.info(f"[{pair}] SELL {reason_label} {pct_label} "
+                                      f"qty={close_qty:.6f} — P&L: ${pnl:+.2f}")
                           _record_trade("SELL", pair, close_qty, price, net_usd,
                                         f"consenso:{reason_label}")
                           if is_sl:
                               sl_cooldowns[pair] = SL_COOLDOWN_CYCLES
-                      pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0
-                      pos["pyramids"] = 0; pos["contributors"] = []
+
+                      # Atualiza posição após venda
+                      remaining = pos["qty"] - close_qty
+                      if remaining < 1e-8:
+                          pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0
+                          pos["pyramids"] = 0; pos["contributors"] = []
+                      else:
+                          pos["qty"] = remaining
+                          # entry e peak mantidos — custo médio e pico não mudam
 
                   def _do_open(label: str):
                       """Abre nova posição com 1% do saldo disponível."""
@@ -799,16 +830,20 @@ async def trading_loop():
                       tr_hit  = tr_act and price <= pos["peak"] * (1 - TRAILING_STOP_PCT / 100)
 
                       if tp_hit:
-                          _do_close(f"TP+{current_tp_pct:.0f}%")
+                          # TP: fecha 100% (exceção ao limite de 1%)
+                          _do_close(f"TP+{current_tp_pct:.0f}%", full=True)
                       elif sl_hit:
-                          _do_close(f"SL-{INITIAL_SL_PCT:.0f}%", is_sl=True)
+                          # SL: fecha 100% (exceção ao limite de 1%)
+                          _do_close(f"SL-{INITIAL_SL_PCT:.0f}%", is_sl=True, full=True)
                       elif tr_hit:
-                          _do_close(f"TRAILING-{TRAILING_STOP_PCT:.0f}%")
+                          # Trailing: fecha 100% (proteção de risco = exceção)
+                          _do_close(f"TRAILING-{TRAILING_STOP_PCT:.0f}%", full=True)
                       elif extreme_greed:
-                          _do_close(f"GREED·FG={fg_value}")
+                          # Ganância extrema: saída gradual 1%/ciclo
+                          _do_close(f"GREED·FG={fg_value}", full=False)
                       elif sell_score >= CONSENSUS_SELL_MIN:
-                          # Consenso de SELL: ≥2 estratégias sinalizam saída
-                          _do_close(f"SELL·{sell_score}↓·{'+'.join(sell_strats[:2])}")
+                          # Consenso SELL: saída gradual 1%/ciclo
+                          _do_close(f"SELL·{sell_score}↓·{'+'.join(sell_strats[:2])}", full=False)
                       elif buy_score >= effective_min and gain_pct >= PYRAMID_MIN_GAIN_PCT:
                           # Pyramid: posição em lucro + consenso de BUY
                           pyramids_done = pos.get("pyramids", 0)
