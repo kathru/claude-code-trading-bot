@@ -97,6 +97,18 @@ def _get_candles(pair: str, granularity: str, limit: int = 100) -> list:
 _last_prices: dict = {}      # {pair: float}
 
 
+def _dynamic_tp(fg_value: int) -> float:
+    """TP dinâmico entre 3% e 8% inversamente proporcional ao Fear & Greed.
+    Mercado com medo   → alvo maior (deixa winners correrem mais)
+    Mercado ganancioso → alvo menor (realiza antes da euforia acabar)
+    """
+    if   fg_value <= 25: return TAKE_PROFIT_MAX          # Medo extremo: +8%
+    elif fg_value <= 40: return round(TAKE_PROFIT_MIN + (TAKE_PROFIT_MAX - TAKE_PROFIT_MIN) * 0.67, 1)  # +6.5%
+    elif fg_value <= 60: return round((TAKE_PROFIT_MIN + TAKE_PROFIT_MAX) / 2, 1)  # Neutro: +5.5%
+    elif fg_value <= 74: return round(TAKE_PROFIT_MIN + (TAKE_PROFIT_MAX - TAKE_PROFIT_MIN) * 0.17, 1)  # +3.8%
+    else:                return TAKE_PROFIT_MIN           # Ganância extrema: +3%
+
+
 def _load_history() -> list:
     try:
         if os.path.exists(HISTORY_FILE):
@@ -122,7 +134,7 @@ def _current_cycle() -> int:
     SP_OFFSET = -3 * 3600   # UTC-3 fixo — SP aboliu horário de verão em 2019
     return (int(time.time()) + SP_OFFSET) % 86400 // CYCLE_INTERVAL
 
-PAIRS = ["BTC-USD", "ETH-USD"]
+PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD"]
 
 # ── Ciclo e candles ─────────────────────────────────────────────
 CYCLE_INTERVAL    = 90       # ciclo de 90s — 3.3× mais reativo (era 300s)
@@ -137,11 +149,12 @@ CONSENSUS_BUY_MIN = 2        # nº mínimo de estratégias para BUY (threshold)
 # SELL: qualquer 1 estratégia já fecha a posição
 
 # ── Gestão de risco ──────────────────────────────────────────────
-INITIAL_SL_PCT       = 5.0   # SL: -5%
-TAKE_PROFIT_PCT      = 5.0   # TP: +5% (igual ao SL — R/R 1:1)
-TRAILING_STOP_PCT    = 8.0   # trailing: -8% do pico
+INITIAL_SL_PCT        = 5.0  # SL: -5%
+TAKE_PROFIT_MIN       = 3.0  # TP mínimo: +3% (mercado em ganância)
+TAKE_PROFIT_MAX       = 8.0  # TP máximo: +8% (mercado em medo extremo)
+TRAILING_STOP_PCT     = 8.0  # trailing: -8% do pico
 TRAILING_ACTIVATE_PCT = 6.0  # trailing só ativa após +6%
-SL_COOLDOWN_CYCLES   = 2     # após SL, espera 2 ciclos antes de re-entrar
+SL_COOLDOWN_CYCLES    = 2    # após SL, espera 2 ciclos antes de re-entrar
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
 PYRAMID_MAX          = 3     # máx. 3 adições (alavancagem até 3× a entrada)
@@ -500,7 +513,8 @@ async def trading_loop():
         # Fear & Greed (cache 1h — non-blocking via executor)
         fg = await asyncio.get_event_loop().run_in_executor(None, _fetch_fear_greed)
         state["fear_greed"] = {"value": fg["value"], "label": fg["label"]}
-        fg_value = fg["value"]
+        fg_value       = fg["value"]
+        current_tp_pct = _dynamic_tp(fg_value)   # 3%–8% dinâmico
 
         portfolio_total = engine.portfolio_value()
 
@@ -648,13 +662,13 @@ async def trading_loop():
 
                       else:
                           # SL / TP / Trailing
-                          tp_hit    = price >= pos["entry"] * (1 + TAKE_PROFIT_PCT   / 100)
+                          tp_hit    = price >= pos["entry"] * (1 + current_tp_pct   / 100)
                           sl_hit    = price <= pos["entry"] * (1 - INITIAL_SL_PCT    / 100)
                           tr_active = gain_pct >= TRAILING_ACTIVATE_PCT
                           tr_hit    = tr_active and price <= pos["peak"] * (1 - TRAILING_STOP_PCT / 100)
 
                           reason = None
-                          if tp_hit:   reason = f"TP+{TAKE_PROFIT_PCT:.0f}%"
+                          if tp_hit:   reason = f"TP+{current_tp_pct:.0f}%"
                           elif sl_hit: reason = f"SL-{INITIAL_SL_PCT:.0f}%"
                           elif tr_hit: reason = f"TRAILING-{TRAILING_STOP_PCT:.0f}%"
 
@@ -843,12 +857,12 @@ async def trading_loop():
                 if manual_slot and manual_slot.get("qty", 0) > 0:
                     manual_slot["peak"] = max(manual_slot["peak"], price)
                     gain_pct     = (price - manual_slot["entry"]) / manual_slot["entry"] * 100
-                    tp_hit       = price >= manual_slot["entry"] * (1 + TAKE_PROFIT_PCT / 100)
+                    tp_hit       = price >= manual_slot["entry"] * (1 + current_tp_pct / 100)
                     sl_hit       = price <= manual_slot["entry"] * (1 - INITIAL_SL_PCT / 100)
                     trailing_act = gain_pct >= TRAILING_ACTIVATE_PCT
                     trailing_hit = trailing_act and price <= manual_slot["peak"] * (1 - TRAILING_STOP_PCT / 100)
                     reason = None
-                    if tp_hit:         reason = f"TP+{TAKE_PROFIT_PCT:.0f}%"
+                    if tp_hit:         reason = f"TP+{current_tp_pct:.0f}%"
                     elif sl_hit:       reason = f"SL-{INITIAL_SL_PCT:.0f}%"
                     elif trailing_hit: reason = f"TRAILING-{TRAILING_STOP_PCT:.0f}%"
                     if reason:
@@ -871,7 +885,7 @@ async def trading_loop():
                 if pos["qty"] > 0 and pos["entry"] > 0:
                     g_pct    = (price - pos["entry"]) / pos["entry"] * 100
                     sl_price = round(pos["entry"] * (1 - INITIAL_SL_PCT    / 100), 2)
-                    tp_price = round(pos["entry"] * (1 + TAKE_PROFIT_PCT   / 100), 2)
+                    tp_price = round(pos["entry"] * (1 + current_tp_pct   / 100), 2)
                     tr_price = round(pos["peak"]  * (1 - TRAILING_STOP_PCT / 100), 2)
                 else:
                     g_pct = sl_price = tp_price = tr_price = None
@@ -953,7 +967,7 @@ async def trading_loop():
                     "entry_price": round(entry_price, 2) if entry_price else None,
                     "change_pct":  round(change_pct,  2) if change_pct is not None else None,
                     "sl_level":    round(entry_price * (1 - INITIAL_SL_PCT  / 100), 2) if entry_price else None,
-                    "tp_level":    round(entry_price * (1 + TAKE_PROFIT_PCT / 100), 2) if entry_price else None,
+                    "tp_level":    round(entry_price * (1 + current_tp_pct / 100), 2) if entry_price else None,
                 }
                 log_cycle(logger, state["cycle"], pair, price, pair_signals, trend)
 
