@@ -114,7 +114,7 @@ CANDLE_6H         = "SIX_HOUR"
 CANDLE_1D         = "ONE_DAY"        # Trend, VolGuard
 
 # ── Modelo de consenso ──────────────────────────────────────────
-TRADE_AMOUNT_BRL  = 500.0    # valor por trade (único por par)
+TRADE_PCT         = 0.01     # 1% do saldo disponível por trade (dinâmico)
 CONSENSUS_BUY_MIN = 2        # nº mínimo de estratégias para BUY (threshold)
 # SELL: qualquer 1 estratégia já fecha a posição
 
@@ -126,9 +126,9 @@ TRAILING_ACTIVATE_PCT = 6.0  # trailing só ativa após +6%
 SL_COOLDOWN_CYCLES   = 2     # após SL, espera 2 ciclos antes de re-entrar
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
-PYRAMID_MAX          = 2     # máx. 2 adições por posição (3 entradas total)
+PYRAMID_MAX          = 3     # máx. 3 adições (alavancagem até 3× a entrada)
 PYRAMID_MIN_GAIN_PCT = 0.5   # só adiciona se ≥ +0.5% no lucro
-PYRAMID_SIZE_PCT     = 0.25  # cada pyramid = 25% do trade = R$125
+PYRAMID_SIZE_PCT     = 0.25  # cada pyramid = 25% do trade inicial
 
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
@@ -306,7 +306,8 @@ state = {
     "cycle_start_ts": 0,        # timestamp Unix do início do ciclo atual
     "cycle_interval": CYCLE_INTERVAL,
     "usd_brl":          5.70,
-    "trade_amount_brl": TRADE_AMOUNT_BRL,
+    "trade_pct":        TRADE_PCT,          # 0.01 = 1% do saldo
+    "trade_amount_brl": 0.0,               # calculado dinamicamente cada ciclo
     "consensus_min":    CONSENSUS_BUY_MIN,
     "positions_detail": {},
     "strategy_pnl":     strategy_pnl,
@@ -464,6 +465,8 @@ async def trading_loop():
 
         usd_brl = await asyncio.get_event_loop().run_in_executor(None, _fetch_usd_brl)
         state["usd_brl"] = round(usd_brl, 4)
+        # Atualiza valor do trade (1% do saldo disponível) para exibição no dashboard
+        state["trade_amount_brl"] = round(engine.balance_usd * TRADE_PCT * usd_brl, 2)
         portfolio_total  = engine.portfolio_value()
 
         for pair in PAIRS:
@@ -619,16 +622,17 @@ async def trading_loop():
                           pos["pyramids"] = 0; pos["contributors"] = []
 
                       elif buy_score >= CONSENSUS_BUY_MIN and gain_pct >= PYRAMID_MIN_GAIN_PCT:
-                          # Pyramid: score ≥ 2 + posição em lucro
+                          # Pyramid: score ≥ 2 + posição em lucro + menos que PYRAMID_MAX adições
                           pyramids_done = pos.get("pyramids", 0)
                           if pyramids_done < PYRAMID_MAX:
-                              pyr_brl = TRADE_AMOUNT_BRL * PYRAMID_SIZE_PCT   # R$125
-                              pyr_usd = pyr_brl / usd_brl
+                              # Pyramid usa % do saldo atual no momento da adição
+                              pyr_usd = engine.balance_usd * TRADE_PCT * PYRAMID_SIZE_PCT
+                              pyr_brl = pyr_usd * usd_brl
                               if engine.balance_usd >= pyr_usd * 1.006:
                                   add_qty = pyr_usd / price
                                   if engine.buy(symbol, pyr_usd, price,
                                                 f"consenso:pyramid{pyramids_done+1}·{buy_score}↑"):
-                                      total_qty  = pos["qty"] + add_qty
+                                      total_qty    = pos["qty"] + add_qty
                                       pos["entry"] = (pos["qty"] * pos["entry"] + add_qty * price) / total_qty
                                       pos["qty"]   = total_qty
                                       pos["peak"]  = max(pos["peak"], price)
@@ -648,13 +652,14 @@ async def trading_loop():
                                       state["feed"] = state["feed"][:100]
 
                   elif buy_score >= CONSENSUS_BUY_MIN:
-                      # Abre posição: score ≥ 2 estratégias de BUY
+                      # Abre posição: 1% do saldo disponível
                       cooldown = sl_cooldowns.get(pair, 0)
                       if cooldown > 0:
                           sl_cooldowns[pair] = cooldown - 1
                           logger.info(f"[{pair}] BUY consenso ignorado — cooldown ({cooldown}c)")
                       else:
-                          trade_usd = TRADE_AMOUNT_BRL / usd_brl
+                          trade_usd = engine.balance_usd * TRADE_PCT   # 1% do saldo atual
+                          trade_brl = trade_usd * usd_brl
                           if engine.balance_usd < trade_usd * 1.006:
                               logger.info(f"[{pair}] BUY consenso negado — saldo insuficiente")
                           else:
@@ -667,11 +672,11 @@ async def trading_loop():
                                   pos["entry"]        = price
                                   pos["peak"]         = price
                                   pos["pyramids"]     = 0
-                                  pos["contributors"] = strats_buying   # ← salva quem votou
+                                  pos["contributors"] = strats_buying
                                   _record_trade("BUY", pair, qty, price, trade_usd,
                                                 f"consenso·score{buy_score}·{'·'.join(strats_buying)}")
                                   logger.info(f"[{pair}] ✅ BUY CONSENSO score={buy_score}/4 "
-                                              f"R${TRADE_AMOUNT_BRL:.0f} @ ${price:,.2f} "
+                                              f"R${trade_brl:.0f} (1% saldo) @ ${price:,.2f} "
                                               f"({'+'.join(strats_buying)})")
 
                   # Atualiza P&L não realizado
@@ -718,7 +723,8 @@ async def trading_loop():
                 else:
                     g_pct = sl_price = tp_price = tr_price = None
 
-                trade_usd_needed = TRADE_AMOUNT_BRL / usd_brl
+                trade_usd_needed = engine.balance_usd * TRADE_PCT   # 1% do saldo
+                trade_brl_cur    = trade_usd_needed * usd_brl
                 bal_ok = engine.balance_usd >= trade_usd_needed * 1.006
 
                 if pos["qty"] > 0:
@@ -729,7 +735,7 @@ async def trading_loop():
                     pd_note   = f"{cooldown} ciclo{'s' if cooldown>1 else ''} restante{'s' if cooldown>1 else ''}"
                 elif not bal_ok:
                     pd_status = "saldo_insuf"
-                    pd_note   = f"saldo US${engine.balance_usd:.0f} (necesário US${trade_usd_needed:.0f})"
+                    pd_note   = f"saldo US${engine.balance_usd:.0f} (necessário US${trade_usd_needed:.0f})"
                 elif buy_score >= CONSENSUS_BUY_MIN:
                     pd_status = "pronto"
                     pd_note   = f"score {buy_score}/4 — comprando"
