@@ -140,11 +140,11 @@
       </div>
     </div>
 
-    <!-- Estratégias Independentes -->
+    <!-- Painel de Estratégias -->
     <div class="card p-5">
       <div class="flex items-center justify-between mb-3">
-        <h3 class="font-semibold text-white">Suite Agressiva v2 · Consenso ≥2 · R$500/trade</h3>
-        <span class="text-xs text-gray-500">Alvo: <span class="text-green-400 font-bold">+65% P&L</span> · SELL a 1 estratégia</span>
+        <h3 class="font-semibold text-white">Painel de estratégias</h3>
+        <span class="text-xs text-gray-500">P&L atribuído proporcionalmente por contribuição</span>
       </div>
       <div id="strategy-panel" class="grid grid-cols-2 lg:grid-cols-4 gap-3"></div>
     </div>
@@ -684,32 +684,50 @@
         `<div class="flex justify-between"><span style="color:${colors[i]}">● ${l}</span><span>R$ ${fmtBRL(values[i])} (${(values[i]/tot*100).toFixed(1)}%)</span></div>`
       ).join('');
 
-      // ── Painel de estratégias — mostra sinal individual de cada uma ──
-      const sSignals  = s.signals || {};
-      const stratNames = ['Donchian Breakout','EMA Pullback','MACD Momentum','Stoch Bounce'];
-      const stratIcons = {'Donchian Breakout':'🚀','EMA Pullback':'📈','MACD Momentum':'⚡','Stoch Bounce':'🎯'};
-      const positions  = s.positions || {};
+      // ── Painel de estratégias — P&L por estratégia ───────────────
+      const stratNames  = ['Donchian Breakout','EMA Pullback','MACD Momentum','Stoch Bounce'];
+      const stratIcons  = {'Donchian Breakout':'🚀','EMA Pullback':'📈','MACD Momentum':'⚡','Stoch Bounce':'🎯'};
+      const stratPnl    = s.strategy_pnl    || {};
+      const posDetail   = s.positions_detail || {};
       const panel = document.getElementById('strategy-panel');
       if (panel) {
-        const sigBgSm = {'BUY':'bg-green-500/20 text-green-400','SELL':'bg-red-500/20 text-red-400','HOLD':'bg-gray-700/40 text-gray-500'};
         panel.innerHTML = stratNames.map(name => {
-          const btcSig = (sSignals['BTC-USD']?.strategies || {})[name] || 'HOLD';
-          const ethSig = (sSignals['ETH-USD']?.strategies || {})[name] || 'HOLD';
-          const btcBadge = `<span class="text-[9px] font-bold px-1 py-0.5 rounded ${sigBgSm[btcSig]||sigBgSm.HOLD}">${btcSig}</span>`;
-          const ethBadge = `<span class="text-[9px] font-bold px-1 py-0.5 rounded ${sigBgSm[ethSig]||sigBgSm.HOLD}">${ethSig}</span>`;
+          const sp       = stratPnl[name] || {};
+          const realUsd  = sp.realized || 0;
+          const realBrl  = realUsd * usdBrl;
+          const trades   = sp.trades || 0;
+
+          // P&L não realizado: soma de ambos os pares se for contribuidor
+          let unrlUsd = 0;
+          for (const pair of ['BTC-USD','ETH-USD']) {
+            const pd  = posDetail[pair] || {};
+            const map = pd.unrl_per_strat || {};
+            if (name in map) unrlUsd += map[name];
+          }
+          const unrlBrl = unrlUsd * usdBrl;
+          const totalBrl = realBrl + unrlBrl;
+          const pnlColor = totalBrl >= 0 ? '#4ade80' : '#f87171';
+
+          // Indicador de posição ativa (é contribuidor em algum par?)
+          const inBTC = (posDetail['BTC-USD']?.contributors || []).includes(name);
+          const inETH = (posDetail['ETH-USD']?.contributors || []).includes(name);
+          const posIndicator = [
+            inBTC ? '<span class="text-orange-400">● BTC</span>' : '<span class="text-gray-700">○ BTC</span>',
+            inETH ? '<span class="text-blue-400">● ETH</span>'   : '<span class="text-gray-700">○ ETH</span>',
+          ].join(' ');
+
           return `<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
             <div class="flex items-center gap-1.5 mb-2">
               <span>${stratIcons[name]||'📊'}</span>
               <span class="text-xs font-semibold text-white truncate">${name}</span>
             </div>
-            <div class="flex flex-col gap-1 text-xs">
-              <div class="flex items-center justify-between">
-                <span class="text-orange-400 font-medium">BTC</span>${btcBadge}
-              </div>
-              <div class="flex items-center justify-between">
-                <span class="text-blue-400 font-medium">ETH</span>${ethBadge}
-              </div>
+            <div class="text-xs mb-2">${posIndicator}</div>
+            <p class="text-sm font-bold font-mono" style="color:${pnlColor}">${totalBrl >= 0 ? '+' : '-'}R$ ${fmtBRL(Math.abs(totalBrl))}</p>
+            <div class="flex justify-between text-[10px] text-gray-600 mt-1">
+              <span>realiz: ${realBrl >= 0 ? '+' : ''}R$ ${fmtBRL(realBrl)}</span>
+              <span>${trades} trade${trades !== 1 ? 's' : ''}</span>
             </div>
+            ${unrlUsd !== 0 ? `<p class="text-[10px] mt-0.5" style="color:${unrlBrl>=0?'#4ade80':'#f87171'}">não realiz: ${unrlBrl>=0?'+':'-'}R$ ${fmtBRL(Math.abs(unrlBrl))}</p>` : ''}
           </div>`;
         }).join('');
       }

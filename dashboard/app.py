@@ -159,7 +159,8 @@ sl_cooldowns: dict = {}   # {pair: cycles_remaining}
 # ── Posição por par (consenso) ───────────────────────────────────
 def _empty_position():
     return {"qty": 0.0, "entry": 0.0, "peak": 0.0,
-            "realized": 0.0, "unrealized": 0.0, "pyramids": 0}
+            "realized": 0.0, "unrealized": 0.0, "pyramids": 0,
+            "contributors": []}   # estratégias que votaram BUY na abertura
 
 POSITIONS_FILE = os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "data", "positions.json")
@@ -210,6 +211,44 @@ def _save_manual(slots: dict):
         pass
 
 strategy_slots = _load_manual()   # mantém compatibilidade com endpoints manuais
+
+# ── P&L por estratégia (atribuição proporcional) ─────────────────
+STRAT_PNL_FILE = os.path.join(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))), "data", "strategy_pnl.json")
+
+def _load_strategy_pnl() -> dict:
+    pnl = {s.name: {"realized": 0.0, "trades": 0} for s in all_strategies}
+    try:
+        if os.path.exists(STRAT_PNL_FILE):
+            saved = json.load(open(STRAT_PNL_FILE))
+            for k, v in saved.items():
+                if k in pnl:
+                    pnl[k].update(v)
+    except Exception:
+        pass
+    return pnl
+
+def _save_strategy_pnl(pnl: dict):
+    try:
+        os.makedirs(os.path.dirname(STRAT_PNL_FILE), exist_ok=True)
+        with open(STRAT_PNL_FILE, "w") as f:
+            json.dump(pnl, f, indent=2)
+    except Exception:
+        pass
+
+strategy_pnl = _load_strategy_pnl()
+
+def _attr_pnl(contributors: list, pnl_usd: float):
+    """Distribui P&L realizado igualmente entre os contribuidores da posição."""
+    if not contributors:
+        return
+    share = pnl_usd / len(contributors)
+    for name in contributors:
+        if name in strategy_pnl:
+            strategy_pnl[name]["realized"] += share
+            strategy_pnl[name]["trades"]   += 1
+    _save_strategy_pnl(strategy_pnl)
+    state["strategy_pnl"] = strategy_pnl
 
 last_signals: dict = {}   # {f"{pair}:{strat}": signal}
 
@@ -270,6 +309,7 @@ state = {
     "trade_amount_brl": TRADE_AMOUNT_BRL,
     "consensus_min":    CONSENSUS_BUY_MIN,
     "positions_detail": {},
+    "strategy_pnl":     strategy_pnl,
 }
 
 
@@ -469,23 +509,21 @@ async def trading_loop():
                 vol_signal = vol_guard.analyze(df_1d)
                 pair_signals = {"Trend": trend, "Vol Guard": vol_signal}
 
-                # ── Volatilidade extrema: fecha todos os slots e PULA ciclo ──
+                # ── Volatilidade extrema: fecha posição de consenso e PULA ciclo ──
                 if vol_signal == "SELL":
-                    for strat in all_strategies:
-                        key  = f"{strat.name}:{pair}"
-                        slot = strategy_slots.get(key, _empty_slot())
-                        if slot["qty"] > 0:
-                            close_qty = slot["qty"]
-                            usd = close_qty * price * (1 - 0.006)
-                            if engine.sell(symbol, close_qty, price, f"vol_guard:{strat.name}"):
-                                slot["realized"] += usd - slot["entry"] * close_qty
-                                slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
-                                _record_trade("SELL", pair, close_qty, price, usd, f"vol_guard:{strat.name}")
-                            else:
-                                # Sync forçado se engine negou (floating point extremo)
-                                slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
-                    _save_slots(strategy_slots)
-                    logger.info(f"[{pair}] VOLATILIDADE EXTREMA — slots fechados, ciclo pausado")
+                    pos = positions[pair]
+                    if pos["qty"] > 0:
+                        close_qty = pos["qty"]
+                        net_usd   = close_qty * price * (1 - 0.006)
+                        if engine.sell(symbol, close_qty, price, "vol_guard"):
+                            pnl_vg = net_usd - pos["entry"] * close_qty
+                            pos["realized"] += pnl_vg
+                            _record_trade("SELL", pair, close_qty, price, net_usd, "vol_guard")
+                            _attr_pnl(pos.get("contributors", []), pnl_vg)
+                        pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0
+                        pos["pyramids"] = 0; pos["contributors"] = []
+                    _save_positions(positions)
+                    logger.info(f"[{pair}] VOLATILIDADE EXTREMA — posição fechada, ciclo pausado")
                     # ← Não executa estratégias neste ciclo para evitar re-abertura imediata
 
                 else:
@@ -550,33 +588,35 @@ async def trading_loop():
                       elif tr_hit: reason = f"TRAILING-{TRAILING_STOP_PCT:.0f}%"
 
                       if reason:
-                          close_qty = pos["qty"]
-                          net_usd   = close_qty * price * (1 - 0.006)
+                          close_qty    = pos["qty"]
+                          net_usd      = close_qty * price * (1 - 0.006)
+                          contributors = pos.get("contributors", [])
                           if engine.sell(symbol, close_qty, price, f"consenso:{reason}"):
                               pnl = net_usd - pos["entry"] * close_qty
                               pos["realized"] += pnl
+                              _attr_pnl(contributors, pnl)
                               logger.info(f"[{pair}] {reason} — P&L: ${pnl:+.2f}")
                               _record_trade("SELL", pair, close_qty, price, net_usd, f"consenso:{reason}")
-                              pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0; pos["pyramids"] = 0
                               if "SL-" in reason:
                                   sl_cooldowns[pair] = SL_COOLDOWN_CYCLES
-                          else:
-                              pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0; pos["pyramids"] = 0
+                          pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0
+                          pos["pyramids"] = 0; pos["contributors"] = []
 
                       elif sell_score >= 1:
                           # Qualquer estratégia SELL → fecha imediatamente
-                          close_qty  = pos["qty"]
-                          net_usd    = close_qty * price * (1 - 0.006)
-                          sell_label = "+".join(sell_strats[:2])
+                          close_qty    = pos["qty"]
+                          net_usd      = close_qty * price * (1 - 0.006)
+                          contributors = pos.get("contributors", [])
+                          sell_label   = "+".join(sell_strats[:2])
                           if engine.sell(symbol, close_qty, price, f"consenso:SELL·{sell_label}"):
                               pnl = net_usd - pos["entry"] * close_qty
                               pos["realized"] += pnl
+                              _attr_pnl(contributors, pnl)
                               logger.info(f"[{pair}] SELL consenso ({sell_strats}) — P&L: ${pnl:+.2f}")
                               _record_trade("SELL", pair, close_qty, price, net_usd,
                                             f"SELL·{sell_score}↓·{sell_label}")
-                              pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0; pos["pyramids"] = 0
-                          else:
-                              pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0; pos["pyramids"] = 0
+                          pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0
+                          pos["pyramids"] = 0; pos["contributors"] = []
 
                       elif buy_score >= CONSENSUS_BUY_MIN and gain_pct >= PYRAMID_MIN_GAIN_PCT:
                           # Pyramid: score ≥ 2 + posição em lucro
@@ -623,10 +663,11 @@ async def trading_loop():
                                                if pair_signals.get(s.name) == "BUY"]
                               if engine.buy(symbol, trade_usd, price,
                                             f"consenso:{'+'.join(strats_buying[:2])}"):
-                                  pos["qty"]     = qty
-                                  pos["entry"]   = price
-                                  pos["peak"]    = price
-                                  pos["pyramids"] = 0
+                                  pos["qty"]          = qty
+                                  pos["entry"]        = price
+                                  pos["peak"]         = price
+                                  pos["pyramids"]     = 0
+                                  pos["contributors"] = strats_buying   # ← salva quem votou
                                   _record_trade("BUY", pair, qty, price, trade_usd,
                                                 f"consenso·score{buy_score}·{'·'.join(strats_buying)}")
                                   logger.info(f"[{pair}] ✅ BUY CONSENSO score={buy_score}/4 "
@@ -696,22 +737,33 @@ async def trading_loop():
                     pd_status = "aguardando"
                     pd_note   = f"score {buy_score}/4 (mín. {CONSENSUS_BUY_MIN})"
 
+                # P&L não realizado por estratégia contribuidora deste par
+                contributors = pos.get("contributors", [])
+                unrl_per_strat = {}
+                if pos["qty"] > 0 and contributors:
+                    unrl_total = (price - pos["entry"]) * pos["qty"]
+                    share      = unrl_total / len(contributors)
+                    for c in contributors:
+                        unrl_per_strat[c] = share
+
                 state["positions_detail"][pair] = {
-                    "pair":      pair,
-                    "status":    pd_status,
-                    "note":      pd_note,
-                    "buy_score":  buy_score,
-                    "sell_score": sel_score,
-                    "sell_strats": sell_strats if "sell_strats" in dir() else [],
-                    "qty":       round(pos["qty"], 8),
-                    "entry":     round(pos["entry"], 2) if pos["entry"] else None,
-                    "gain_pct":  round(g_pct, 2)    if g_pct    is not None else None,
-                    "sl":        sl_price,
-                    "tp":        tp_price,
-                    "trailing":  tr_price,
-                    "pyramids":  pos.get("pyramids", 0),
-                    "cooldown":  cooldown,
-                    "signals":   {s.name: pair_signals.get(s.name, "HOLD") for s in all_strategies},
+                    "pair":         pair,
+                    "status":       pd_status,
+                    "note":         pd_note,
+                    "buy_score":    buy_score,
+                    "sell_score":   sel_score,
+                    "sell_strats":  sell_strats if "sell_strats" in dir() else [],
+                    "qty":          round(pos["qty"], 8),
+                    "entry":        round(pos["entry"], 2) if pos["entry"] else None,
+                    "gain_pct":     round(g_pct, 2)    if g_pct    is not None else None,
+                    "sl":           sl_price,
+                    "tp":           tp_price,
+                    "trailing":     tr_price,
+                    "pyramids":     pos.get("pyramids", 0),
+                    "cooldown":     cooldown,
+                    "contributors": contributors,
+                    "signals":      {s.name: pair_signals.get(s.name, "HOLD") for s in all_strategies},
+                    "unrl_per_strat": unrl_per_strat,
                 }
 
                 _save_positions(positions)
