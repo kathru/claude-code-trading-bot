@@ -489,8 +489,11 @@
     var usdBrl = 5.70;   // atualizado via WebSocket
 
     function updateState(s) {
-      resetCountdown(s);   // sincroniza countdown com timestamp do servidor
+      resetCountdown(s);
       if (candleSeries) loadCandles();
+
+      // Declarações únicas de variáveis usadas em múltiplas seções
+      const posDetail  = s.positions_detail || {};
 
       // Cotação USD/BRL e valor de trade
       if (s.usd_brl) {
@@ -572,7 +575,6 @@
 
           // Sinais por estratégia + indicador de posição consenso (1 por par)
           const stratMap  = { 'Donchian Breakout': 'MA', 'EMA Pullback': 'RSI', 'MACD Momentum': 'SC', 'Stoch Bounce': 'GC' };
-          const posDetail = s.positions_detail || {};
           const pairPos   = posDetail[pair] || {};
           const hasPos    = (pairPos.qty || 0) > 0;
           Object.entries(stratMap).forEach(([name, key]) => {
@@ -688,7 +690,6 @@
       const stratNames  = ['Donchian Breakout','EMA Pullback','MACD Momentum','Stoch Bounce'];
       const stratIcons  = {'Donchian Breakout':'🚀','EMA Pullback':'📈','MACD Momentum':'⚡','Stoch Bounce':'🎯'};
       const stratPnl    = s.strategy_pnl    || {};
-      const posDetail   = s.positions_detail || {};
       const panel = document.getElementById('strategy-panel');
       if (panel) {
         panel.innerHTML = stratNames.map(name => {
@@ -733,7 +734,6 @@
       }
 
       // ── Status das Posições (consenso) ────────────────────────────
-      const posDetail  = s.positions_detail || {};
       const slotsTbody = document.getElementById('slots-status-panel');
       if (slotsTbody && Object.keys(posDetail).length > 0) {
         const sigBg = {'BUY':'bg-green-500/20 text-green-400','SELL':'bg-red-500/20 text-red-400','HOLD':'bg-gray-700/40 text-gray-500'};
