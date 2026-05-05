@@ -440,95 +440,97 @@ async def trading_loop():
                 vol_signal = vol_guard.analyze(df_1d)
                 pair_signals = {"Trend": trend, "Vol Guard": vol_signal}
 
-                # ── Volatilidade extrema: fecha todos os slots deste par ───────
+                # ── Volatilidade extrema: fecha todos os slots e PULA ciclo ──
                 if vol_signal == "SELL":
                     for strat in all_strategies:
                         key  = f"{strat.name}:{pair}"
                         slot = strategy_slots.get(key, _empty_slot())
                         if slot["qty"] > 0:
-                            close_qty = slot["qty"]   # salva antes de zerar
+                            close_qty = slot["qty"]
                             usd = close_qty * price * (1 - 0.006)
                             if engine.sell(symbol, close_qty, price, f"vol_guard:{strat.name}"):
                                 slot["realized"] += usd - slot["entry"] * close_qty
                                 slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
                                 _record_trade("SELL", pair, close_qty, price, usd, f"vol_guard:{strat.name}")
-                    _save_slots(strategy_slots)  # persiste imediatamente
-                    logger.info(f"[{pair}] VOLATILIDADE EXTREMA — slots fechados")
+                            else:
+                                # Sync forçado se engine negou (floating point extremo)
+                                slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
+                    _save_slots(strategy_slots)
+                    logger.info(f"[{pair}] VOLATILIDADE EXTREMA — slots fechados, ciclo pausado")
+                    # ← Não executa estratégias neste ciclo para evitar re-abertura imediata
 
-                # ── Cada estratégia age de forma independente ─────────────────
-                # Análise executada todo ciclo (cache de 240s nas candles evita
-                # chamadas excessivas à API; pandas é rápido o suficiente).
-                candles_30m = _get_candles(pair, CANDLE_30M, limit=250)
-                candle_map = {
-                    "Donchian Breakout": candles_30m,
-                    "EMA Pullback":      candles_1h,
-                    "MACD Momentum":     candles_1h,
-                    "Stoch Bounce":      candles_30m,   # precisa MA200 → 250 candles
-                }
+                else:
+                  # ── Cada estratégia age de forma independente ─────────────
+                  # Análise executada todo ciclo (cache de 240s nas candles evita
+                  # chamadas excessivas à API; pandas é rápido o suficiente).
+                  candles_30m = _get_candles(pair, CANDLE_30M, limit=250)
+                  candle_map = {
+                      "Donchian Breakout": candles_30m,
+                      "EMA Pullback":      candles_1h,
+                      "MACD Momentum":     candles_1h,
+                      "Stoch Bounce":      candles_30m,
+                  }
 
-                for strat in all_strategies:
+                  for strat in all_strategies:
                     key  = f"{strat.name}:{pair}"
                     slot = strategy_slots.setdefault(key, _empty_slot())
 
-                    # Sempre analisa — garante que novos candles (30min/1H) são
-                    # considerados independente da variação do ticker
                     raw    = candle_map.get(strat.name, candles_1h)
                     df     = strat.candles_to_df(raw)
                     signal = strat.analyze(df)
                     pair_signals[strat.name] = signal
 
-                    # Feed ao vivo — só registra quando sinal muda
-                    sig_key = f"{pair}:{strat.name}"
+                    # Feed ao vivo — registra quando sinal muda, com status de execução
+                    sig_key    = f"{pair}:{strat.name}"
+                    new_feed   = None
                     if signal != last_signals.get(sig_key):
                         last_signals[sig_key] = signal
-                        state["feed"].insert(0, {
+                        new_feed = {
                             "time":     now_str,
                             "cycle":    state["cycle"],
                             "pair":     pair,
                             "strategy": strat.name,
                             "signal":   signal,
                             "price":    price,
-                        })
+                            "executed": False,
+                            "note":     "",
+                        }
+                        state["feed"].insert(0, new_feed)
                         state["feed"] = state["feed"][:100]
 
-                    # ── Gestão da posição deste slot ──────────────────────────
+                    # ── Gestão da posição deste slot ─────────────────────────
                     if slot["qty"] > 0:
-                        # Atualiza pico (trailing stop)
                         slot["peak"] = max(slot["peak"], price)
-                        gain_pct     = (price - slot["entry"]) / slot["entry"] * 100
+                        gain_pct    = (price - slot["entry"]) / slot["entry"] * 100
 
                         tp_hit       = price >= slot["entry"] * (1 + TAKE_PROFIT_PCT / 100)
                         sl_hit       = price <= slot["entry"] * (1 - INITIAL_SL_PCT / 100)
-                        # Trailing só ativa após TRAILING_ACTIVATE_PCT de ganho
                         trailing_active = gain_pct >= TRAILING_ACTIVATE_PCT
                         trailing_hit    = trailing_active and price <= slot["peak"] * (1 - TRAILING_STOP_PCT / 100)
 
                         reason = None
-                        if tp_hit:           reason = f"TP+{TAKE_PROFIT_PCT:.0f}%"
-                        elif sl_hit:         reason = f"SL-{INITIAL_SL_PCT:.0f}%"
-                        elif trailing_hit:   reason = f"TRAILING-{TRAILING_STOP_PCT:.0f}%"
+                        if tp_hit:         reason = f"TP+{TAKE_PROFIT_PCT:.0f}%"
+                        elif sl_hit:       reason = f"SL-{INITIAL_SL_PCT:.0f}%"
+                        elif trailing_hit: reason = f"TRAILING-{TRAILING_STOP_PCT:.0f}%"
 
                         if reason:
-                            # ── Saída por SL / TP / Trailing ──────────────────
                             close_qty = slot["qty"]
-                            gross     = close_qty * price
-                            net_usd   = gross * (1 - 0.006)
+                            net_usd   = close_qty * price * (1 - 0.006)
                             if engine.sell(symbol, close_qty, price, f"{strat.name}:{reason}"):
                                 pnl_trade = net_usd - (slot["entry"] * close_qty)
                                 slot["realized"] += pnl_trade
                                 logger.info(f"[{pair}][{strat.name}] {reason} — P&L: ${pnl_trade:+.2f}")
                                 _record_trade("SELL", pair, close_qty, price, net_usd, f"{strat.name}:{reason}")
                                 slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
-                                # Cooldown anti-whipsaw apenas em SL (TP/Trailing podem re-entrar)
                                 if "SL-" in reason:
                                     sl_cooldowns[key] = SL_COOLDOWN_CYCLES
+                                if new_feed: new_feed.update({"executed": True, "note": reason})
+                            else:
+                                # Engine negou — sync forçado para evitar estado fantasma
+                                logger.warning(f"[{pair}][{strat.name}] SELL negado pela engine — sync forçado")
+                                slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
 
                         elif signal == "SELL":
-                            # ── Saída por sinal técnico da estratégia ─────────
-                            # EMA Pullback: EMA9 < EMA21 (perda de tendência)
-                            # MACD Momentum: histograma cruza para negativo
-                            # Donchian: close < mínima do canal (breakout baixista)
-                            # Stoch Bounce: %K > 80 cruza abaixo %D (exaustão)
                             close_qty = slot["qty"]
                             net_usd   = close_qty * price * (1 - 0.006)
                             if engine.sell(symbol, close_qty, price, f"{strat.name}:SIGNAL"):
@@ -537,19 +539,27 @@ async def trading_loop():
                                 logger.info(f"[{pair}][{strat.name}] SELL SIGNAL — P&L: ${pnl_trade:+.2f}")
                                 _record_trade("SELL", pair, close_qty, price, net_usd, f"{strat.name}:SIGNAL")
                                 slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
+                                if new_feed: new_feed.update({"executed": True, "note": "sinal técnico"})
+                            else:
+                                logger.warning(f"[{pair}][{strat.name}] SELL SIGNAL negado — sync forçado")
+                                slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
+                        else:
+                            # Em posição, sinal não é SELL nem TP/SL — indica motivo no feed
+                            if new_feed: new_feed["note"] = "em posição"
 
                     # ── Compra: sinal BUY + slot vazio + sem cooldown ─────────
-                    # Cada estratégia usa 25% de R$600 = R$150 por trade
                     elif signal == "BUY" and slot["qty"] == 0:
                         cooldown = sl_cooldowns.get(key, 0)
                         if cooldown > 0:
                             sl_cooldowns[key] = cooldown - 1
                             logger.info(f"[{pair}][{strat.name}] BUY ignorado — cooldown ({cooldown})")
+                            if new_feed: new_feed["note"] = f"cooldown {cooldown}c"
                         else:
-                            alloc_brl = TRADE_MAX_BRL * STRAT_ALLOC_PCT       # R$150
+                            alloc_brl = TRADE_MAX_BRL * STRAT_ALLOC_PCT
                             alloc_usd = alloc_brl / usd_brl
                             if engine.balance_usd < alloc_usd * 1.006:
-                                logger.info(f"[{pair}][{strat.name}] BUY negado — saldo US${engine.balance_usd:.2f} insuf. para US${alloc_usd:.2f}")
+                                logger.info(f"[{pair}][{strat.name}] BUY negado — saldo US${engine.balance_usd:.2f} insuf.")
+                                if new_feed: new_feed["note"] = "saldo insuf."
                             else:
                                 qty = alloc_usd / price
                                 if engine.buy(symbol, alloc_usd, price, strat.name):
@@ -557,7 +567,8 @@ async def trading_loop():
                                     slot["entry"] = price
                                     slot["peak"]  = price
                                     _record_trade("BUY", pair, qty, price, alloc_usd, strat.name)
-                                    logger.info(f"[{pair}][{strat.name}] ✅ BUY R${alloc_brl:.2f} (US${alloc_usd:.2f}) @ US${price:,.2f}")
+                                    logger.info(f"[{pair}][{strat.name}] ✅ BUY R${alloc_brl:.2f} @ US${price:,.2f}")
+                                    if new_feed: new_feed.update({"executed": True, "note": f"R${alloc_brl:.0f}"})
 
                 # ── Slot manual: SL/TP/Trailing igual às estratégias ─────────
                 manual_slot = strategy_slots.get(f"manual:{pair}")

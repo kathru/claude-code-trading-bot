@@ -99,8 +99,10 @@ class PaperTradingEngine:
 
     def sell(self, symbol: str, qty: float, price: float, strategy: str) -> bool:
         held = self.holdings.get(symbol, 0)
-        if qty > held:
-            print(Fore.RED + f"[PAPER] VENDA negada: saldo insuficiente de {symbol} ({held:.8f})")
+        # Tolera epsilon de ponto flutuante (acumulação entre múltiplos slots)
+        qty = min(qty, held)
+        if qty <= 1e-10:
+            print(Fore.RED + f"[PAPER] VENDA negada: sem {symbol} disponível (held={held:.10f})")
             return False
         gross = qty * price
         fee = gross * TAKER_FEE
