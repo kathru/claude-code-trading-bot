@@ -99,8 +99,10 @@ def _save_history(history: list):
 
 
 def _current_cycle() -> int:
-    """Número do ciclo baseado no relógio — igual em todos os servidores."""
-    return int(time.time()) % 86400 // CYCLE_INTERVAL
+    """Número do ciclo baseado no horário de São Paulo (UTC-3, fixo).
+    Vai de #0 (meia-noite SP) a #959 (23:58:30 SP), idêntico em todos os servidores."""
+    SP_OFFSET = -3 * 3600   # UTC-3 fixo — SP aboliu horário de verão em 2019
+    return (int(time.time()) + SP_OFFSET) % 86400 // CYCLE_INTERVAL
 
 PAIRS = ["BTC-USD", "ETH-USD"]
 
