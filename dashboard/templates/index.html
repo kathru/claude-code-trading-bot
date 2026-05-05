@@ -154,34 +154,6 @@
       <div id="strategy-panel" class="grid grid-cols-2 lg:grid-cols-4 gap-3"></div>
     </div>
 
-    <!-- Status das Posições (Consenso) -->
-    <div class="card p-5">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="font-semibold text-white">Status das Posições</h3>
-        <span class="text-xs text-gray-500">Consenso ≥ 2/4 para BUY · qualquer SELL fecha</span>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-xs" id="slots-table">
-          <thead>
-            <tr class="text-gray-600 uppercase text-[10px] tracking-wider border-b border-gray-800">
-              <th class="pb-2 text-left font-medium">Par</th>
-              <th class="pb-2 text-left font-medium">Status</th>
-              <th class="pb-2 text-center font-medium">Score BUY</th>
-              <th class="pb-2 text-center font-medium">Sinais</th>
-              <th class="pb-2 text-right font-medium hidden sm:table-cell">Entrada</th>
-              <th class="pb-2 text-right font-medium">Variação</th>
-              <th class="pb-2 text-right font-medium hidden md:table-cell">SL</th>
-              <th class="pb-2 text-right font-medium hidden md:table-cell">TP</th>
-              <th class="pb-2 text-left font-medium">Observação</th>
-            </tr>
-          </thead>
-          <tbody id="slots-status-panel" class="divide-y divide-gray-800/60">
-            <tr><td colspan="9" class="py-6 text-center text-gray-600">Aguardando dados...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
     <!-- Price Cards — 1 col mobile / 3 col desktop -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
@@ -200,9 +172,31 @@
             <p id="chg-BTC" class="text-sm text-gray-400">—</p>
           </div>
         </div>
-        <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center justify-between mb-2">
           <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
           <span id="trend-BTC" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
+        </div>
+        <div class="grid grid-cols-2 gap-1 mb-2">
+          <div id="slot-BTC-Don" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+            <p class="text-[9px] opacity-60 mb-0.5">🚀 Donchian</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
+          </div>
+          <div id="slot-BTC-EMA" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+            <p class="text-[9px] opacity-60 mb-0.5">📈 EMA Pull</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
+          </div>
+          <div id="slot-BTC-MACD" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+            <p class="text-[9px] opacity-60 mb-0.5">⚡ MACD Mom</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
+          </div>
+          <div id="slot-BTC-Stoch" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+            <p class="text-[9px] opacity-60 mb-0.5">🎯 Stoch</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
+          </div>
         </div>
         <div id="holdings-BTC" class="mt-1 text-xs text-gray-500 hidden">
           Posição: <span id="qty-BTC" class="text-orange-400 font-mono font-bold">0</span> BTC
@@ -248,9 +242,31 @@
             <p id="chg-ETH" class="text-sm text-gray-400">—</p>
           </div>
         </div>
-        <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center justify-between mb-2">
           <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
           <span id="trend-ETH" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
+        </div>
+        <div class="grid grid-cols-2 gap-1 mb-2">
+          <div id="slot-ETH-Don" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+            <p class="text-[9px] opacity-60 mb-0.5">🚀 Donchian</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
+          </div>
+          <div id="slot-ETH-EMA" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+            <p class="text-[9px] opacity-60 mb-0.5">📈 EMA Pull</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
+          </div>
+          <div id="slot-ETH-MACD" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+            <p class="text-[9px] opacity-60 mb-0.5">⚡ MACD Mom</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
+          </div>
+          <div id="slot-ETH-Stoch" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+            <p class="text-[9px] opacity-60 mb-0.5">🎯 Stoch</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
+          </div>
         </div>
         <div id="holdings-ETH" class="mt-1 text-xs text-gray-500 hidden">
           Posição: <span id="qty-ETH" class="text-blue-400 font-mono font-bold">0</span> ETH
@@ -296,9 +312,31 @@
             <p id="chg-SOL" class="text-sm text-gray-400">—</p>
           </div>
         </div>
-        <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center justify-between mb-2">
           <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
           <span id="trend-SOL" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
+        </div>
+        <div class="grid grid-cols-2 gap-1 mb-2">
+          <div id="slot-SOL-Don" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+            <p class="text-[9px] opacity-60 mb-0.5">🚀 Donchian</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
+          </div>
+          <div id="slot-SOL-EMA" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+            <p class="text-[9px] opacity-60 mb-0.5">📈 EMA Pull</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
+          </div>
+          <div id="slot-SOL-MACD" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+            <p class="text-[9px] opacity-60 mb-0.5">⚡ MACD Mom</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
+          </div>
+          <div id="slot-SOL-Stoch" class="signal-hold rounded-lg px-2 py-1.5 text-center">
+            <p class="text-[9px] opacity-60 mb-0.5">🎯 Stoch</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-[9px] text-gray-600 mt-0.5">sem posição</p>
+          </div>
         </div>
         <div id="holdings-SOL" class="mt-1 text-xs text-gray-500 hidden">
           Posição: <span id="qty-SOL" class="text-purple-400 font-mono font-bold">0</span> SOL
@@ -587,11 +625,35 @@
             trendEl.className = signalClass(t) + ' text-xs font-bold px-3 py-0.5 rounded-full';
           }
 
-          // Posição consenso no card (sem sinais independentes — estão em Status das Posições)
-          const pairPos = posDetail[pair] || {};
-          const hasPos  = (pairPos.qty || 0) > 0;
+          // ── Slots independentes das 4 estratégias ──────────────────
+          const slots    = s.slots || {};
+          const slotDefs = [
+            { name: 'Donchian Breakout', id: 'Don' },
+            { name: 'EMA Pullback',      id: 'EMA'  },
+            { name: 'MACD Momentum',     id: 'MACD' },
+            { name: 'Stoch Bounce',      id: 'Stoch'},
+          ];
+          slotDefs.forEach(sd => {
+            const el  = document.getElementById(`slot-${sym}-${sd.id}`);
+            if (!el) return;
+            const sig2 = (strats[sd.name] || 'HOLD');
+            const slot = slots[`${sd.name}:${pair}`] || {};
+            const ps   = el.querySelectorAll('p');
+            el.className = signalClass(sig2) + ' rounded-lg px-2 py-1.5 text-center';
+            if (ps[1]) ps[1].textContent = sig2;
+            if (ps[2]) {
+              if ((slot.qty || 0) > 0 && price && price.price && slot.entry) {
+                const chg2 = (price.price - slot.entry) / slot.entry * 100;
+                ps[2].textContent = `● ${chg2 >= 0 ? '+' : ''}${chg2.toFixed(1)}%`;
+                ps[2].style.color = chg2 >= 0 ? '#4ade80' : '#f87171';
+              } else {
+                ps[2].textContent = 'sem posição';
+                ps[2].style.color = '#4b5563';
+              }
+            }
+          });
 
-          // Stop Loss / Take Profit
+          // Stop Loss / Take Profit (baseado em entry_price do engine)
           const sltpEl = document.getElementById('sltp-' + sym);
           if (sltpEl && sig.entry_price) {
             sltpEl.classList.remove('hidden');
@@ -692,24 +754,22 @@
           const realBrl  = realUsd * usdBrl;
           const trades   = sp.trades || 0;
 
-          // P&L não realizado: soma de ambos os pares se for contribuidor
+          // P&L não realizado: soma dos slots desta estratégia em todos os pares
+          const allSlots = s.slots || {};
           let unrlUsd = 0;
-          for (const pair of ['BTC-USD','ETH-USD']) {
-            const pd  = posDetail[pair] || {};
-            const map = pd.unrl_per_strat || {};
-            if (name in map) unrlUsd += map[name];
-          }
-          const unrlBrl = unrlUsd * usdBrl;
+          const pairColors = {'BTC-USD':'text-orange-400','ETH-USD':'text-blue-400','SOL-USD':'text-purple-400'};
+          const pairDots = ['BTC-USD','ETH-USD','SOL-USD'].map(pair => {
+            const sl = allSlots[`${name}:${pair}`] || {};
+            unrlUsd += (sl.unrealized || 0);
+            const sym = pair.split('-')[0];
+            return (sl.qty||0) > 0
+              ? `<span class="${pairColors[pair]}">● ${sym}</span>`
+              : `<span class="text-gray-700">○ ${sym}</span>`;
+          });
+          const posIndicator = pairDots.join(' ');
+          const unrlBrl  = unrlUsd * usdBrl;
           const totalBrl = realBrl + unrlBrl;
           const pnlColor = totalBrl >= 0 ? '#4ade80' : '#f87171';
-
-          // Indicador de posição ativa (é contribuidor em algum par?)
-          const inBTC = (posDetail['BTC-USD']?.contributors || []).includes(name);
-          const inETH = (posDetail['ETH-USD']?.contributors || []).includes(name);
-          const posIndicator = [
-            inBTC ? '<span class="text-orange-400">● BTC</span>' : '<span class="text-gray-700">○ BTC</span>',
-            inETH ? '<span class="text-blue-400">● ETH</span>'   : '<span class="text-gray-700">○ ETH</span>',
-          ].join(' ');
 
           return `<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
             <div class="flex items-center gap-1.5 mb-2">
@@ -727,91 +787,7 @@
         }).join('');
       }
 
-      // ── Status das Posições (consenso) ────────────────────────────
-      const slotsTbody = document.getElementById('slots-status-panel');
-      if (slotsTbody && Object.keys(posDetail).length > 0) {
-        const sigBg = {'BUY':'bg-green-500/20 text-green-400','SELL':'bg-red-500/20 text-red-400','HOLD':'bg-gray-700/40 text-gray-500'};
-        const rows = ['BTC-USD','ETH-USD','SOL-USD'].map(pair => {
-          const d = posDetail[pair];
-          if (!d) return '';
-          const sym      = pair.split('-')[0];
-          const symColor = sym === 'BTC' ? 'text-orange-400' : sym === 'ETH' ? 'text-blue-400' : 'text-purple-400';
-
-          // Status badge
-          let statusHtml;
-          const st = d.status;
-          if (st === 'em_posicao') {
-            const gc = (d.gain_pct||0) >= 0 ? '#4ade80' : '#f87171';
-            statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold" style="background:${gc}22;color:${gc};border:1px solid ${gc}55">● Em posição</span>`;
-          } else if (st === 'pronto') {
-            statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/40">✓ Comprando</span>`;
-          } else if (st === 'retest_pending') {
-            statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">⏳ Retest</span>`;
-          } else if (st === 'fear_entry') {
-            statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/40">😱 Medo</span>`;
-          } else if (st === 'greed_block') {
-            statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/15 text-red-400 border border-red-500/30">🔴 Euforia</span>`;
-          } else if (st === 'cooldown') {
-            statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-500/15 text-orange-400 border border-orange-500/30">⏳ Cooldown</span>`;
-          } else if (st === 'saldo_insuf') {
-            statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">⚠ Saldo</span>`;
-          } else {
-            statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-700/50 text-gray-500 border border-gray-700">○ Aguardando</span>`;
-          }
-
-          // Score BUY — barra de progresso visual
-          const bs = d.buy_score || 0;
-          const consensusMin = s.consensus_min || 2;
-          const dots = ['🚀','📈','⚡','🎯'].map((ic,i) => {
-            const stName = stratNames[i];
-            const sig = (d.signals || {})[stName] || 'HOLD';
-            const c = sig === 'BUY' ? '#4ade80' : sig === 'SELL' ? '#f87171' : '#374151';
-            return `<span title="${stName}: ${sig}" style="color:${c}">${ic}</span>`;
-          }).join(' ');
-          const scoreHtml = `<div class="flex items-center gap-1">
-            <span class="font-bold text-sm ${bs >= consensusMin ? 'text-green-400' : 'text-gray-500'}">${bs}/4</span>
-            <span class="text-[11px]">${dots}</span>
-          </div>`;
-
-          // Sinais individuais mini
-          const sigsHtml = stratNames.map(n => {
-            const sig = (d.signals||{})[n] || 'HOLD';
-            return `<span class="text-[9px] font-bold px-1 py-0.5 rounded ${sigBg[sig]||sigBg.HOLD}">${sig[0]}</span>`;
-          }).join('');
-
-          // Variação
-          let gainHtml = '<span class="text-gray-700">—</span>';
-          if (d.gain_pct !== null && d.gain_pct !== undefined) {
-            const gc2 = d.gain_pct >= 0 ? '#4ade80' : '#f87171';
-            gainHtml = `<span class="font-mono font-bold" style="color:${gc2}">${d.gain_pct >= 0 ? '+' : ''}${d.gain_pct.toFixed(2)}%</span>`;
-          }
-          const entryHtml = d.entry ? `<span class="font-mono text-gray-300">R$ ${fmtBRL(d.entry * usdBrl)}</span>` : '<span class="text-gray-700">—</span>';
-          const slHtml    = d.sl    ? `<span class="font-mono text-red-400">R$ ${fmtBRL(d.sl * usdBrl)}</span>` : '<span class="text-gray-700">—</span>';
-          const tpHtml    = d.tp    ? `<span class="font-mono text-green-400">R$ ${fmtBRL(d.tp * usdBrl)}</span>` : '<span class="text-gray-700">—</span>';
-
-          // Observação
-          let noteHtml = `<span class="text-gray-500 text-[10px]">${d.note||''}</span>`;
-          if (d.pyramids > 0 && d.status === 'em_posicao')
-            noteHtml = `<span class="text-indigo-400 font-semibold">+${d.pyramids}▲ pyramid</span>`;
-          if (d.status === 'cooldown')
-            noteHtml = `<span class="text-orange-400 text-[10px]">${d.note}</span>`;
-          if (d.status === 'saldo_insuf')
-            noteHtml = `<span class="text-yellow-400 text-[10px]">${d.note}</span>`;
-
-          return `<tr class="hover:bg-gray-800/30 transition-colors">
-            <td class="py-3 pr-3"><span class="font-bold text-sm ${symColor}">${sym}</span></td>
-            <td class="py-3 pr-3">${statusHtml}</td>
-            <td class="py-3 pr-3 text-center">${scoreHtml}</td>
-            <td class="py-3 pr-3">${sigsHtml}</td>
-            <td class="py-3 pr-3 text-right hidden sm:table-cell">${entryHtml}</td>
-            <td class="py-3 pr-3 text-right">${gainHtml}</td>
-            <td class="py-3 pr-3 text-right hidden md:table-cell">${slHtml}</td>
-            <td class="py-3 pr-3 text-right hidden md:table-cell">${tpHtml}</td>
-            <td class="py-3 text-gray-500">${noteHtml}</td>
-          </tr>`;
-        });
-        slotsTbody.innerHTML = rows.join('');
-      }
+      // (Status das Posições removido — informações agora nos cards das criptos)
 
       // Trades
       const trades = s.trades || [];

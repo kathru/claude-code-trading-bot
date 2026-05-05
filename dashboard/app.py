@@ -190,65 +190,46 @@ STRAT_CANDLES = {
 vol_guard    = VolatilityGuard(threshold_pct=12.0, consecutive_days=3)
 trend_filter = TrendFilter(period=50)   # EMA50 1H — alinhado com EMA Pullback e MACD Momentum
 
-# ── Cooldown anti-whipsaw após SL ────────────────────────────────
-sl_cooldowns: dict = {}   # {pair: cycles_remaining}
+# ── Cooldown anti-whipsaw após SL (por slot) ─────────────────────
+sl_cooldowns: dict = {}   # {f"{strat}:{pair}": cycles_remaining}
 
-# ── Posição por par (consenso) ───────────────────────────────────
-def _empty_position():
+# ── Slots independentes: 4 estratégias × 3 pares + 3 manuais ────
+def _empty_slot():
     return {"qty": 0.0, "entry": 0.0, "peak": 0.0,
-            "realized": 0.0, "unrealized": 0.0, "pyramids": 0,
-            "contributors": [],
-            "pending": {"active": False, "breakout_price": 0.0, "cycles": 0}}
+            "realized": 0.0, "unrealized": 0.0, "pyramids": 0}
 
-POSITIONS_FILE = os.path.join(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__))), "data", "positions.json")
+SLOTS_FILE = os.path.join(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))), "data", "strategy_slots.json")
 
-def _load_positions() -> dict:
-    pos = {p: _empty_position() for p in PAIRS}
+def _load_slots() -> dict:
+    slots = {}
+    for s in all_strategies:
+        for p in PAIRS:
+            slots[f"{s.name}:{p}"] = _empty_slot()
+    for p in PAIRS:
+        slots[f"manual:{p}"] = _empty_slot()
     try:
-        if os.path.exists(POSITIONS_FILE):
-            saved = json.load(open(POSITIONS_FILE))
+        if os.path.exists(SLOTS_FILE):
+            saved = json.load(open(SLOTS_FILE))
             for k, v in saved.items():
-                if k in pos:
-                    pos[k].update(v)
-    except Exception:
-        pass
-    return pos
-
-def _save_positions(pos: dict):
-    try:
-        os.makedirs(os.path.dirname(POSITIONS_FILE), exist_ok=True)
-        with open(POSITIONS_FILE, "w") as f:
-            json.dump(pos, f, indent=2)
-    except Exception:
-        pass
-
-positions = _load_positions()
-
-# ── Slots manuais (trades via botão) ─────────────────────────────
-MANUAL_FILE = os.path.join(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__))), "data", "manual_slots.json")
-
-def _load_manual() -> dict:
-    slots = {f"manual:{p}": {"qty": 0.0, "entry": 0.0, "peak": 0.0,
-                               "realized": 0.0, "unrealized": 0.0} for p in PAIRS}
-    try:
-        if os.path.exists(MANUAL_FILE):
-            saved = json.load(open(MANUAL_FILE))
-            slots.update({k: v for k, v in saved.items() if k in slots})
+                if k in slots:
+                    slots[k].update(v)
     except Exception:
         pass
     return slots
 
-def _save_manual(slots: dict):
+def _save_slots(slots: dict):
     try:
-        os.makedirs(os.path.dirname(MANUAL_FILE), exist_ok=True)
-        with open(MANUAL_FILE, "w") as f:
+        os.makedirs(os.path.dirname(SLOTS_FILE), exist_ok=True)
+        with open(SLOTS_FILE, "w") as f:
             json.dump(slots, f, indent=2)
     except Exception:
         pass
 
-strategy_slots = _load_manual()   # mantém compatibilidade com endpoints manuais
+strategy_slots = _load_slots()
+
+# compat aliases para endpoints manuais
+def _save_manual(s): _save_slots(s)
 
 # ── P&L por estratégia (atribuição proporcional) ─────────────────
 STRAT_PNL_FILE = os.path.join(os.path.dirname(os.path.dirname(
@@ -276,15 +257,11 @@ def _save_strategy_pnl(pnl: dict):
 
 strategy_pnl = _load_strategy_pnl()
 
-def _attr_pnl(contributors: list, pnl_usd: float):
-    """Distribui P&L realizado igualmente entre os contribuidores da posição."""
-    if not contributors:
-        return
-    share = pnl_usd / len(contributors)
-    for name in contributors:
-        if name in strategy_pnl:
-            strategy_pnl[name]["realized"] += share
-            strategy_pnl[name]["trades"]   += 1
+def _attr_pnl(strat_name: str, pnl_usd: float):
+    """Atribui P&L realizado diretamente à estratégia."""
+    if strat_name in strategy_pnl:
+        strategy_pnl[strat_name]["realized"] += pnl_usd
+        strategy_pnl[strat_name]["trades"]   += 1
     _save_strategy_pnl(strategy_pnl)
     state["strategy_pnl"] = strategy_pnl
 
@@ -329,8 +306,7 @@ def _load_trades_from_engine() -> list:
 state = {
     "prices":    {},
     "signals":   {},
-    "positions": positions,         # posições consenso por par
-    "slots":     strategy_slots,   # slots manuais (compat. botões buy/sell)
+    "slots":     strategy_slots,   # 12 slots independentes + 3 manuais
     "portfolio": {"usd": engine.balance_usd, "total": engine.balance_usd,
                   "pnl": 0.0, "pnl_pct": 0.0,
                   "initial_balance": engine.initial_balance,
@@ -341,13 +317,10 @@ state = {
     "cycle":     _current_cycle(),
     "status":        "running",
     "last_update":   "",
-    "cycle_start_ts": 0,        # timestamp Unix do início do ciclo atual
+    "cycle_start_ts": 0,
     "cycle_interval": CYCLE_INTERVAL,
     "usd_brl":          5.70,
-    "trade_pct":        TRADE_PCT,          # 0.01 = 1% do saldo
-    "trade_amount_brl": 0.0,               # calculado dinamicamente cada ciclo
-    "consensus_min":    CONSENSUS_BUY_MIN,
-    "positions_detail": {},
+    "trade_amount_brl": 0.0,
     "strategy_pnl":     strategy_pnl,
     "fear_greed":       {"value": 50, "label": "Neutral"},
 }
@@ -421,20 +394,12 @@ async def manual_sell(pair: str, qty: float = 0, brl: float = 0):
     usd = sell_qty * price * (1 - 0.006)
     if not engine.sell(symbol, sell_qty, price, "manual"):
         return {"ok": False, "error": "Falha na venda"}
-    # Venda total: zera slot manual e posição de consenso deste par
+    # Venda total: zera slot manual
     if sell_qty >= held:
         slot_k = f"manual:{pair}"
         if slot_k in strategy_slots:
-            strategy_slots[slot_k]["qty"]   = 0.0
-            strategy_slots[slot_k]["entry"] = 0.0
-            strategy_slots[slot_k]["peak"]  = 0.0
-        if pair in positions:
-            positions[pair]["qty"]   = 0.0
-            positions[pair]["entry"] = 0.0
-            positions[pair]["peak"]  = 0.0
-            positions[pair]["pyramids"] = 0
-        _save_positions(positions)
-    _save_manual(strategy_slots)
+            strategy_slots[slot_k].update({"qty": 0.0, "entry": 0.0, "peak": 0.0})
+    _save_slots(strategy_slots)
     _record_trade("SELL", pair, sell_qty, price, usd, "manual")
     _update_portfolio_state()
     await broadcast(state)
@@ -486,27 +451,26 @@ async def reset_portfolio(token: str = ""):
         engine.prices[sym]       = price
     engine._save_state()
 
-    # ── Reinicia posições de consenso ────────────────────────────
+    # ── Reinicia todos os slots (estratégias + manual) ───────────
+    # Slots das estratégias: posição inicial 1 cripto = 1 slot por par
+    # Usamos um slot "reset" para registrar a posição inicial
+    for s in all_strategies:
+        for pair in PAIRS:
+            strategy_slots[f"{s.name}:{pair}"] = _empty_slot()
+    # Slot manual zerado
     for pair in PAIRS:
+        strategy_slots[f"manual:{pair}"] = _empty_slot()
+        # Posição inicial do reset vai pro primeiro slot por par (Donchian)
         sym   = pair.split("-")[0]
         price = prices[pair]
         qty   = engine.holdings[sym]
-        positions[pair] = {
+        first_key = f"{all_strategies[0].name}:{pair}"
+        strategy_slots[first_key] = {
             "qty": qty, "entry": price, "peak": price,
-            "realized": 0.0, "unrealized": 0.0, "pyramids": 0,
-            "contributors": ["reset"],
-            "pending": {"active": False, "breakout_price": 0.0, "cycles": 0}
+            "realized": 0.0, "unrealized": 0.0, "pyramids": 0
         }
-    _save_positions(positions)
-    state["positions"] = positions
-
-    # ── Reinicia slots manuais ───────────────────────────────────
-    for pair in PAIRS:
-        strategy_slots[f"manual:{pair}"] = {
-            "qty": 0.0, "entry": 0.0, "peak": 0.0,
-            "realized": 0.0, "unrealized": 0.0
-        }
-    _save_manual(strategy_slots)
+    _save_slots(strategy_slots)
+    state["slots"] = strategy_slots
 
     # ── Reinicia P&L por estratégia ──────────────────────────────
     for name in strategy_pnl:
@@ -664,25 +628,26 @@ async def trading_loop():
 
                 # ── Volatilidade extrema: fecha posição de consenso e PULA ciclo ──
                 if vol_signal == "SELL":
-                    pos = positions[pair]
-                    if pos["qty"] > 0:
-                        # vol_guard: saída gradual 1%/ciclo (mesma regra geral)
-                        max_usd   = engine.balance_usd * TRADE_PCT
-                        close_qty = min(pos["qty"], max_usd / price if price > 0 else pos["qty"])
-                        net_usd   = close_qty * price * (1 - 0.006)
-                        if engine.sell(symbol, close_qty, price, "vol_guard"):
-                            pnl_vg = net_usd - pos["entry"] * close_qty
-                            pos["realized"] += pnl_vg
-                            _record_trade("SELL", pair, close_qty, price, net_usd, "vol_guard")
-                            _attr_pnl(pos.get("contributors", []), pnl_vg)
-                        remaining = pos["qty"] - close_qty
-                        if remaining < 1e-8:
-                            pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0
-                            pos["pyramids"] = 0; pos["contributors"] = []
-                        else:
-                            pos["qty"] = remaining
-                    _save_positions(positions)
-                    logger.info(f"[{pair}] VOLATILIDADE EXTREMA — posição fechada, ciclo pausado")
+                    # vol_guard: reduz 1%/ciclo em cada slot aberto deste par
+                    max_usd = engine.balance_usd * TRADE_PCT
+                    for strat in all_strategies:
+                        vkey = f"{strat.name}:{pair}"
+                        vslot = strategy_slots.get(vkey, _empty_slot())
+                        if vslot["qty"] > 0:
+                            vqty = min(vslot["qty"], max_usd / price if price > 0 else vslot["qty"])
+                            vnet = vqty * price * (1 - 0.006)
+                            if engine.sell(symbol, vqty, price, f"vol_guard:{strat.name}"):
+                                pnl_vg = vnet - vslot["entry"] * vqty
+                                vslot["realized"] += pnl_vg
+                                _attr_pnl(strat.name, pnl_vg)
+                                _record_trade("SELL", pair, vqty, price, vnet, f"vol_guard:{strat.name}")
+                            rem = vslot["qty"] - vqty
+                            if rem < 1e-8:
+                                vslot["qty"] = 0.0; vslot["entry"] = 0.0; vslot["peak"] = 0.0
+                            else:
+                                vslot["qty"] = rem
+                    _save_slots(strategy_slots)
+                    logger.info(f"[{pair}] VOLATILIDADE EXTREMA — reduzindo posições 1%/ciclo")
                     # ← Não executa estratégias neste ciclo para evitar re-abertura imediata
 
                 else:
@@ -733,269 +698,134 @@ async def trading_loop():
                           })
                           state["feed"] = state["feed"][:100]
 
-                  # ── PASSO 2: execução por consenso ────────────────────────
-                  pos           = positions[pair]
+                  # ── PASSO 2: execução independente por estratégia ────────
                   extreme_fear  = fg_value <= FG_FEAR_MAX
                   extreme_greed = fg_value >= FG_GREED_MIN
-                  effective_min = 1 if extreme_fear else CONSENSUS_BUY_MIN
 
-                  def _do_close(reason_label: str, is_sl: bool = False,
-                                full: bool = False):
-                      """Vende posição respeitando limite de 1% do saldo.
-                      full=True → fecha 100% (SL, TP, Trailing — proteções de risco).
-                      full=False → vende apenas 1% do saldo por ciclo (saída gradual).
-                      """
-                      if pos["qty"] <= 0:
-                          return
+                  for strat in all_strategies:
+                      key    = f"{strat.name}:{pair}"
+                      slot   = strategy_slots.setdefault(key, _empty_slot())
+                      signal = signals_this_cycle.get(strat.name, "HOLD")
 
-                      if full:
-                          # SL / TP / Trailing: fecha tudo de uma vez
-                          close_qty = pos["qty"]
-                      else:
-                          # Consenso / Greed / Vol_guard: máx 1% do saldo por ciclo
-                          max_usd   = engine.balance_usd * TRADE_PCT
-                          max_qty   = max_usd / price
-                          close_qty = min(pos["qty"], max_qty)
-                          if close_qty < 1e-8:
-                              return
+                      if slot["qty"] > 0:
+                          slot["peak"] = max(slot["peak"], price)
+                          gain_pct     = (price - slot["entry"]) / slot["entry"] * 100
+                          tp_hit = price >= slot["entry"] * (1 + current_tp_pct / 100)
+                          sl_hit = price <= slot["entry"] * (1 - INITIAL_SL_PCT  / 100)
+                          tr_act = gain_pct >= TRAILING_ACTIVATE_PCT
+                          tr_hit = tr_act and price <= slot["peak"] * (1 - TRAILING_STOP_PCT / 100)
 
-                      net_usd      = close_qty * price * (1 - 0.006)
-                      contributors = pos.get("contributors", [])
-                      pct_label    = f"({close_qty/pos['qty']*100:.0f}%)" if not full else "(100%)"
+                          def _sell_slot(qty, label, is_sl=False):
+                              net = qty * price * (1 - 0.006)
+                              if engine.sell(symbol, qty, price, f"{strat.name}:{label}"):
+                                  pnl = net - slot["entry"] * qty
+                                  slot["realized"] += pnl
+                                  _attr_pnl(strat.name, pnl)
+                                  _record_trade("SELL", pair, qty, price, net, f"{strat.name}:{label}")
+                                  logger.info(f"[{pair}][{strat.name}] SELL {label} P&L ${pnl:+.2f}")
+                                  if is_sl:
+                                      sl_cooldowns[key] = SL_COOLDOWN_CYCLES
+                              rem = slot["qty"] - qty
+                              if rem < 1e-8:
+                                  slot["qty"] = 0.0; slot["entry"] = 0.0
+                                  slot["peak"] = 0.0; slot["pyramids"] = 0
+                              else:
+                                  slot["qty"] = rem
 
-                      if engine.sell(symbol, close_qty, price, f"consenso:{reason_label}"):
-                          pnl = net_usd - pos["entry"] * close_qty
-                          pos["realized"] += pnl
-                          _attr_pnl(contributors, pnl)
-                          logger.info(f"[{pair}] SELL {reason_label} {pct_label} "
-                                      f"qty={close_qty:.6f} — P&L: ${pnl:+.2f}")
-                          _record_trade("SELL", pair, close_qty, price, net_usd,
-                                        f"consenso:{reason_label}")
-                          if is_sl:
-                              sl_cooldowns[pair] = SL_COOLDOWN_CYCLES
+                          if tp_hit:
+                              _sell_slot(slot["qty"], f"TP+{current_tp_pct:.0f}%")
+                          elif sl_hit:
+                              _sell_slot(slot["qty"], f"SL-{INITIAL_SL_PCT:.0f}%", is_sl=True)
+                          elif tr_hit:
+                              _sell_slot(slot["qty"], f"TRAILING-{TRAILING_STOP_PCT:.0f}%")
+                          elif extreme_greed or signal == "SELL":
+                              # Saída gradual: 1% do saldo por ciclo
+                              max_qty = engine.balance_usd * TRADE_PCT / price
+                              sell_q  = min(slot["qty"], max_qty)
+                              if sell_q > 1e-8:
+                                  lbl = f"GREED{fg_value}" if extreme_greed else "SELL"
+                                  _sell_slot(sell_q, lbl)
+                          elif signal == "BUY" and gain_pct >= PYRAMID_MIN_GAIN_PCT:
+                              pdone = slot.get("pyramids", 0)
+                              if pdone < PYRAMID_MAX:
+                                  pyr_usd = engine.balance_usd * TRADE_PCT * PYRAMID_SIZE_PCT
+                                  if engine.balance_usd >= pyr_usd * 1.006:
+                                      add_qty = pyr_usd / price
+                                      if engine.buy(symbol, pyr_usd, price,
+                                                    f"{strat.name}:pyramid{pdone+1}"):
+                                          total   = slot["qty"] + add_qty
+                                          slot["entry"] = (slot["qty"]*slot["entry"]+add_qty*price)/total
+                                          slot["qty"]   = total
+                                          slot["peak"]  = max(slot["peak"], price)
+                                          slot["pyramids"] = pdone + 1
+                                          _record_trade("BUY", pair, add_qty, price, pyr_usd,
+                                                        f"{strat.name}:pyramid{pdone+1}")
+                                          logger.info(f"[{pair}][{strat.name}] 📈 PYRAMID #{pdone+1} "
+                                                      f"(gain {gain_pct:.1f}%)")
 
-                      # Atualiza posição após venda
-                      remaining = pos["qty"] - close_qty
-                      if remaining < 1e-8:
-                          pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0
-                          pos["pyramids"] = 0; pos["contributors"] = []
-                      else:
-                          pos["qty"] = remaining
-                          # entry e peak mantidos — custo médio e pico não mudam
+                          slot["unrealized"] = (price - slot["entry"]) * slot["qty"] if slot["qty"] > 0 else 0.0
 
-                  def _do_open(label: str):
-                      """Abre nova posição com 1% do saldo disponível."""
-                      trade_usd     = engine.balance_usd * TRADE_PCT
-                      trade_brl     = trade_usd * usd_brl
-                      strats_buying = [s.name for s in all_strategies
-                                       if signals_this_cycle.get(s.name) == "BUY"]
-                      if engine.balance_usd < trade_usd * 1.006:
-                          logger.info(f"[{pair}] BUY negado — saldo insuficiente "
-                                      f"(US${engine.balance_usd:.2f})")
-                          return
-                      qty = trade_usd / price
-                      if engine.buy(symbol, trade_usd, price,
-                                    f"{label}·score{buy_score}·{'+'.join(strats_buying[:2])}"):
-                          pos["qty"]          = qty
-                          pos["entry"]        = price
-                          pos["peak"]         = price
-                          pos["pyramids"]     = 0
-                          pos["contributors"] = strats_buying
-                          _record_trade("BUY", pair, qty, price, trade_usd,
-                                        f"{label}·score{buy_score}·{'·'.join(strats_buying)}")
-                          logger.info(f"[{pair}] ✅ BUY {label} score={buy_score}/4 "
-                                      f"R${trade_brl:.0f} @ ${price:,.2f}")
-                          state["feed"].insert(0, {
-                              "time": now_str, "cycle": state["cycle"],
-                              "pair": pair, "strategy": label,
-                              "signal": "BUY", "price": price,
-                              "executed": True,
-                              "note": f"R${trade_brl:.0f} (1% saldo) score {buy_score}/4",
-                          })
-                          state["feed"] = state["feed"][:100]
-
-                  # ── Em posição: gestão de saída ────────────────────────────
-                  if pos["qty"] > 0:
-                      pos["peak"] = max(pos["peak"], price)
-                      gain_pct    = (price - pos["entry"]) / pos["entry"] * 100
-
-                      tp_hit  = price >= pos["entry"] * (1 + current_tp_pct / 100)
-                      sl_hit  = price <= pos["entry"] * (1 - INITIAL_SL_PCT / 100)
-                      tr_act  = gain_pct >= TRAILING_ACTIVATE_PCT
-                      tr_hit  = tr_act and price <= pos["peak"] * (1 - TRAILING_STOP_PCT / 100)
-
-                      if tp_hit:
-                          # TP: fecha 100% (exceção ao limite de 1%)
-                          _do_close(f"TP+{current_tp_pct:.0f}%", full=True)
-                      elif sl_hit:
-                          # SL: fecha 100% (exceção ao limite de 1%)
-                          _do_close(f"SL-{INITIAL_SL_PCT:.0f}%", is_sl=True, full=True)
-                      elif tr_hit:
-                          # Trailing: fecha 100% (proteção de risco = exceção)
-                          _do_close(f"TRAILING-{TRAILING_STOP_PCT:.0f}%", full=True)
-                      elif extreme_greed:
-                          # Ganância extrema: saída gradual 1%/ciclo
-                          _do_close(f"GREED·FG={fg_value}", full=False)
-                      elif sell_score >= CONSENSUS_SELL_MIN:
-                          # Consenso SELL: saída gradual 1%/ciclo
-                          _do_close(f"SELL·{sell_score}↓·{'+'.join(sell_strats[:2])}", full=False)
-                      elif buy_score >= effective_min and gain_pct >= PYRAMID_MIN_GAIN_PCT:
-                          # Pyramid: posição em lucro + consenso de BUY
-                          pyramids_done = pos.get("pyramids", 0)
-                          if pyramids_done < PYRAMID_MAX:
-                              pyr_usd = engine.balance_usd * TRADE_PCT * PYRAMID_SIZE_PCT
-                              pyr_brl = pyr_usd * usd_brl
-                              if engine.balance_usd >= pyr_usd * 1.006:
-                                  add_qty = pyr_usd / price
-                                  if engine.buy(symbol, pyr_usd, price,
-                                                f"pyramid{pyramids_done+1}·{buy_score}↑"):
-                                      total_qty    = pos["qty"] + add_qty
-                                      pos["entry"] = (pos["qty"]*pos["entry"] + add_qty*price) / total_qty
-                                      pos["qty"]   = total_qty
-                                      pos["peak"]  = max(pos["peak"], price)
-                                      pos["pyramids"] = pyramids_done + 1
-                                      _record_trade("BUY", pair, add_qty, price, pyr_usd,
-                                                    f"pyramid{pyramids_done+1}·score{buy_score}")
-                                      logger.info(f"[{pair}] 📈 PYRAMID #{pyramids_done+1} "
-                                                  f"R${pyr_brl:.0f} @ ${price:,.2f} "
-                                                  f"(gain {gain_pct:.1f}%)")
+                      elif signal == "BUY" and not extreme_greed:
+                          cooldown = sl_cooldowns.get(key, 0)
+                          if cooldown > 0:
+                              sl_cooldowns[key] = cooldown - 1
+                          else:
+                              trade_usd = engine.balance_usd * TRADE_PCT
+                              if engine.balance_usd >= trade_usd * 1.006:
+                                  qty = trade_usd / price
+                                  if engine.buy(symbol, trade_usd, price, strat.name):
+                                      slot["qty"]      = qty
+                                      slot["entry"]    = price
+                                      slot["peak"]     = price
+                                      slot["pyramids"] = 0
+                                      _record_trade("BUY", pair, qty, price, trade_usd, strat.name)
+                                      logger.info(f"[{pair}][{strat.name}] ✅ BUY 1% "
+                                                  f"R${trade_usd*usd_brl:.0f} @ ${price:,.2f}")
                                       state["feed"].insert(0, {
                                           "time": now_str, "cycle": state["cycle"],
-                                          "pair": pair, "strategy": "Pyramid",
+                                          "pair": pair, "strategy": strat.name,
                                           "signal": "BUY", "price": price,
                                           "executed": True,
-                                          "note": f"pyramid #{pyramids_done+1} R${pyr_brl:.0f}",
+                                          "note": f"R${trade_usd*usd_brl:.0f} (1% saldo)",
                                       })
                                       state["feed"] = state["feed"][:100]
+                              else:
+                                  logger.info(f"[{pair}][{strat.name}] BUY negado — saldo insuficiente")
 
-                  # ── Sem posição: tenta abrir ───────────────────────────────
-                  elif not extreme_greed:
-                      cooldown = sl_cooldowns.get(pair, 0)
-                      if cooldown > 0:
-                          sl_cooldowns[pair] = cooldown - 1
-                          logger.info(f"[{pair}] BUY ignorado — cooldown ({cooldown}c)")
-                      elif extreme_fear and buy_score >= 1:
-                          # Medo extremo: qualquer estratégia basta, entrada direta
-                          _do_open(f"FEAR·FG={fg_value}")
-                      elif buy_score >= CONSENSUS_BUY_MIN:
-                          # Consenso normal: ≥2 estratégias, entrada direta sem retest
-                          _do_open("consenso")
-
-                  # Atualiza P&L não realizado
-                  if pos["qty"] > 0:
-                      pos["unrealized"] = (price - pos["entry"]) * pos["qty"]
-                  else:
-                      pos["unrealized"] = 0.0
-
-                # ── Slot manual: SL/TP/Trailing ──────────────────────────────
-                manual_slot = strategy_slots.get(f"manual:{pair}")
-                if manual_slot and manual_slot.get("qty", 0) > 0:
-                    manual_slot["peak"] = max(manual_slot["peak"], price)
-                    gain_pct     = (price - manual_slot["entry"]) / manual_slot["entry"] * 100
-                    tp_hit       = price >= manual_slot["entry"] * (1 + current_tp_pct / 100)
-                    sl_hit       = price <= manual_slot["entry"] * (1 - INITIAL_SL_PCT / 100)
-                    trailing_act = gain_pct >= TRAILING_ACTIVATE_PCT
-                    trailing_hit = trailing_act and price <= manual_slot["peak"] * (1 - TRAILING_STOP_PCT / 100)
-                    reason = None
-                    if tp_hit:         reason = f"TP+{current_tp_pct:.0f}%"
-                    elif sl_hit:       reason = f"SL-{INITIAL_SL_PCT:.0f}%"
-                    elif trailing_hit: reason = f"TRAILING-{TRAILING_STOP_PCT:.0f}%"
-                    if reason:
-                        close_qty = manual_slot["qty"]
-                        net_usd   = close_qty * price * (1 - 0.006)
-                        if engine.sell(symbol, close_qty, price, f"manual:{reason}"):
-                            manual_slot["realized"] += net_usd - manual_slot["entry"] * close_qty
-                            manual_slot["qty"] = 0.0; manual_slot["entry"] = 0.0; manual_slot["peak"] = 0.0
-                            _record_trade("SELL", pair, close_qty, price, net_usd, f"manual:{reason}")
-                            logger.info(f"[{pair}][manual] {reason} @ ${price:,.2f}")
+                # ── Slot manual: SL/TP/Trailing (fecha 100%) ──────────────────
+                ms = strategy_slots.get(f"manual:{pair}")
+                if ms and ms.get("qty", 0) > 0:
+                    ms["peak"] = max(ms["peak"], price)
+                    g   = (price - ms["entry"]) / ms["entry"] * 100
+                    tph = price >= ms["entry"] * (1 + current_tp_pct / 100)
+                    slh = price <= ms["entry"] * (1 - INITIAL_SL_PCT  / 100)
+                    tra = g >= TRAILING_ACTIVATE_PCT
+                    trh = tra and price <= ms["peak"] * (1 - TRAILING_STOP_PCT / 100)
+                    rsn = (f"TP+{current_tp_pct:.0f}%" if tph else
+                           f"SL-{INITIAL_SL_PCT:.0f}%"  if slh else
+                           f"TRAILING-{TRAILING_STOP_PCT:.0f}%" if trh else None)
+                    if rsn:
+                        net = ms["qty"] * price * (1 - 0.006)
+                        if engine.sell(symbol, ms["qty"], price, f"manual:{rsn}"):
+                            ms["realized"] += net - ms["entry"] * ms["qty"]
+                            _record_trade("SELL", pair, ms["qty"], price, net, f"manual:{rsn}")
+                            logger.info(f"[{pair}][manual] {rsn} @ ${price:,.2f}")
+                        ms["qty"] = 0.0; ms["entry"] = 0.0; ms["peak"] = 0.0
                     else:
-                        manual_slot["unrealized"] = (price - manual_slot["entry"]) * manual_slot["qty"]
+                        ms["unrealized"] = (price - ms["entry"]) * ms["qty"]
 
-                # ── Monta positions_detail para o dashboard ───────────────────
-                pos         = positions[pair]
-                cooldown    = sl_cooldowns.get(pair, 0)
-                buy_score   = pair_signals.get("buy_score",  0)
-                sell_score  = pair_signals.get("sell_score", 0)
-                # sell_strats pode não estar definido se vol_guard disparou (pula o else)
-                sell_strats = locals().get("sell_strats", [])
-
-                if pos["qty"] > 0 and pos["entry"] > 0:
-                    g_pct    = (price - pos["entry"]) / pos["entry"] * 100
-                    sl_price = round(pos["entry"] * (1 - INITIAL_SL_PCT    / 100), 2)
-                    tp_price = round(pos["entry"] * (1 + current_tp_pct   / 100), 2)
-                    tr_price = round(pos["peak"]  * (1 - TRAILING_STOP_PCT / 100), 2)
-                else:
-                    g_pct = sl_price = tp_price = tr_price = None
-
-                trade_usd_needed = engine.balance_usd * TRADE_PCT   # 1% do saldo
-                trade_brl_cur    = trade_usd_needed * usd_brl
-                bal_ok = engine.balance_usd >= trade_usd_needed * 1.006
-
-                if pos["qty"] > 0:
-                    pd_status = "em_posicao"
-                    pd_note   = f"+{pos['pyramids']}▲ pyramid" if pos.get("pyramids", 0) else ""
-                elif cooldown > 0:
-                    pd_status = "cooldown"
-                    pd_note   = f"{cooldown} ciclo{'s' if cooldown>1 else ''} restante{'s' if cooldown>1 else ''}"
-                elif not bal_ok:
-                    pd_status = "saldo_insuf"
-                    pd_note   = f"saldo US${engine.balance_usd:.0f} (necessário US${trade_usd_needed:.0f})"
-                elif extreme_greed:
-                    pd_status = "greed_block"
-                    pd_note   = f"🔴 Ganância Extrema FG={fg_value} — entradas bloqueadas"
-                elif extreme_fear:
-                    pd_status = "fear_entry"
-                    pd_note   = f"😱 Medo Extremo FG={fg_value} — entra com score ≥1"
-                elif buy_score >= CONSENSUS_BUY_MIN:
-                    pd_status = "pronto"
-                    pd_note   = f"score {buy_score}/4 ≥ {CONSENSUS_BUY_MIN} — comprando"
-                else:
-                    pd_status = "aguardando"
-                    pd_note   = f"score {buy_score}/4 (mín. {effective_min})"
-
-                # P&L não realizado por estratégia contribuidora deste par
-                contributors   = pos.get("contributors", [])
-                unrl_per_strat = {}
-                if pos["qty"] > 0 and contributors:
-                    unrl_total = (price - pos["entry"]) * pos["qty"]
-                    share      = unrl_total / len(contributors)
-                    for c in contributors:
-                        unrl_per_strat[c] = share
-
-                state["positions_detail"][pair] = {
-                    "pair":         pair,
-                    "status":       pd_status,
-                    "note":         pd_note,
-                    "buy_score":    buy_score,
-                    "sell_score":   sell_score,
-                    "sell_strats":  sell_strats,
-                    "qty":          round(pos["qty"], 8),
-                    "entry":        round(pos["entry"], 2) if pos["entry"] else None,
-                    "gain_pct":     round(g_pct, 2)    if g_pct    is not None else None,
-                    "sl":           sl_price,
-                    "tp":           tp_price,
-                    "trailing":     tr_price,
-                    "pyramids":     pos.get("pyramids", 0),
-                    "cooldown":     cooldown,
-                    "contributors": contributors,
-                    "signals":      {s.name: pair_signals.get(s.name, "HOLD") for s in all_strategies},
-                    "unrl_per_strat": unrl_per_strat,
-                    "pending":      pos.get("pending", {}),
-                }
-
-                _save_positions(positions)
-                state["positions"] = positions
+                # ── Salva slots e atualiza signals no state ───────────────────
+                _save_slots(strategy_slots)
+                state["slots"] = strategy_slots
 
                 rsi_val     = get_rsi_value(candles_1h)
-                entry_price = pos["entry"] if pos["qty"] > 0 else engine.entry_prices.get(symbol)
+                entry_price = engine.entry_prices.get(symbol)
                 change_pct  = ((price - entry_price) / entry_price * 100) if entry_price else None
                 state["signals"][pair] = {
                     "strategies":  pair_signals,
                     "trend":       trend,
                     "vol_guard":   vol_signal,
                     "rsi":         rsi_val,
-                    "buy_score":   pair_signals.get("buy_score", 0),
-                    "sell_score":  pair_signals.get("sell_score", 0),
                     "entry_price": round(entry_price, 2) if entry_price else None,
                     "change_pct":  round(change_pct,  2) if change_pct is not None else None,
                     "sl_level":    round(entry_price * (1 - INITIAL_SL_PCT  / 100), 2) if entry_price else None,
