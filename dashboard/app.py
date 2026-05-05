@@ -461,34 +461,29 @@ async def reset_portfolio(token: str = ""):
         return {"ok": False, "error": f"Preços indisponíveis: {prices}"}
 
     TOTAL_BRL = 4000.0
-    ALLOC_BRL = 1000.0                    # R$1.000 por cripto + R$1.000 caixa
-    alloc_usd = ALLOC_BRL / usd_brl       # ≈ US$175
-    total_usd = TOTAL_BRL / usd_brl       # ≈ US$701
+    ALLOC_BRL = 1000.0                     # R$1.000 por cripto + R$1.000 caixa
+    alloc_usd = ALLOC_BRL / usd_brl        # valor exato em USD sem arredondamento
+    total_usd = TOTAL_BRL / usd_brl        # portfolio total em USD
 
-    # ── Reinicia engine ──────────────────────────────────────────
+    # ── Reinicia engine DIRETAMENTE — sem compra, sem taxas ──────
+    # qty = alloc_usd / price  →  qty * price = alloc_usd exatamente
+    # portfolio_value() = balance_usd + Σ(qty * price) = 4 * alloc_usd = total_usd
+    # P&L = portfolio_value() - initial_balance = total_usd - total_usd = 0,00 ✅
     engine.initial_balance = total_usd
-    engine.balance_usd     = alloc_usd    # caixa disponível
+    engine.balance_usd     = alloc_usd     # caixa: R$1.000
     engine.holdings        = {}
     engine.entry_prices    = {}
     engine.trades          = []
     engine.total_fees_usd  = 0.0
     engine.prices          = {}
 
-    # Compra inicial: R$1.000 em cada cripto
-    FEE = 0.006
     for pair in PAIRS:
         sym   = pair.split("-")[0]
         price = prices[pair]
-        qty   = (alloc_usd / price) * (1 - FEE)
+        qty   = alloc_usd / price           # sem desconto de fee — P&L parte de 0
         engine.holdings[sym]     = qty
         engine.entry_prices[sym] = price
         engine.prices[sym]       = price
-        engine.trades.append({
-            "time": datetime.now().isoformat(), "side": "BUY",
-            "symbol": sym, "qty": qty, "price": price,
-            "usd": alloc_usd, "fee": round(alloc_usd * FEE, 6),
-            "strategy": "reset"
-        })
     engine._save_state()
 
     # ── Reinicia posições de consenso ────────────────────────────
