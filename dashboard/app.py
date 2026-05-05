@@ -59,6 +59,24 @@ def _fetch_usd_brl() -> float:
         return _usd_brl_cache["rate"]
 
 
+# ── Fear & Greed Index (alternative.me) ──────────────────────────
+_fg_cache: dict = {"value": 50, "label": "Neutral", "ts": 0.0}
+
+def _fetch_fear_greed() -> dict:
+    now = time.time()
+    if now - _fg_cache["ts"] < FG_TTL:
+        return _fg_cache
+    try:
+        r = requests.get("https://api.alternative.me/fng/?limit=1", timeout=6)
+        d = r.json()["data"][0]
+        _fg_cache["value"] = int(d["value"])
+        _fg_cache["label"] = d["value_classification"]
+        _fg_cache["ts"]    = now
+    except Exception:
+        pass   # mantém cache anterior em caso de falha
+    return _fg_cache
+
+
 # ── Cache de candles por par ──────────────────────────────────────
 # Refresh mais frequente para acompanhar cycle de 90s e capturar breakouts
 CANDLE_TTL = 240             # 4 min — suficiente para 30min/1H candles
@@ -130,6 +148,16 @@ PYRAMID_MAX          = 3     # máx. 3 adições (alavancagem até 3× a entrada
 PYRAMID_MIN_GAIN_PCT = 0.5   # só adiciona se ≥ +0.5% no lucro
 PYRAMID_SIZE_PCT     = 0.25  # cada pyramid = 25% do trade inicial
 
+# ── Retest (confirmação de entrada) ──────────────────────────────
+RETEST_TOLERANCE_PCT  = 1.0  # preço pode recuar até 1% abaixo do nível de sinal
+RETEST_TIMEOUT_CYCLES = 8    # cancela pending após 8 ciclos sem retest (~12 min)
+RETEST_MIN_BODY_PCT   = 0.40 # candle de confirmação: corpo ≥ 40% do range total
+
+# ── Fear & Greed ─────────────────────────────────────────────────
+FG_FEAR_MAX    = 25   # Medo Extremo: consensus_min → 1, entrada direta
+FG_GREED_MIN   = 75   # Ganância Extrema: fecha posições, bloqueia novas entradas
+FG_TTL         = 3600 # cache de 1 hora (índice atualiza 1×/dia)
+
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
 
@@ -160,7 +188,8 @@ sl_cooldowns: dict = {}   # {pair: cycles_remaining}
 def _empty_position():
     return {"qty": 0.0, "entry": 0.0, "peak": 0.0,
             "realized": 0.0, "unrealized": 0.0, "pyramids": 0,
-            "contributors": []}   # estratégias que votaram BUY na abertura
+            "contributors": [],
+            "pending": {"active": False, "breakout_price": 0.0, "cycles": 0}}
 
 POSITIONS_FILE = os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "data", "positions.json")
@@ -311,6 +340,7 @@ state = {
     "consensus_min":    CONSENSUS_BUY_MIN,
     "positions_detail": {},
     "strategy_pnl":     strategy_pnl,
+    "fear_greed":       {"value": 50, "label": "Neutral"},
 }
 
 
@@ -465,9 +495,14 @@ async def trading_loop():
 
         usd_brl = await asyncio.get_event_loop().run_in_executor(None, _fetch_usd_brl)
         state["usd_brl"] = round(usd_brl, 4)
-        # Atualiza valor do trade (1% do saldo disponível) para exibição no dashboard
         state["trade_amount_brl"] = round(engine.balance_usd * TRADE_PCT * usd_brl, 2)
-        portfolio_total  = engine.portfolio_value()
+
+        # Fear & Greed (cache 1h — non-blocking via executor)
+        fg = await asyncio.get_event_loop().run_in_executor(None, _fetch_fear_greed)
+        state["fear_greed"] = {"value": fg["value"], "label": fg["label"]}
+        fg_value = fg["value"]
+
+        portfolio_total = engine.portfolio_value()
 
         for pair in PAIRS:
             symbol = pair.split("-")[0]
@@ -572,112 +607,230 @@ async def trading_loop():
                   pair_signals["buy_score"]  = buy_score
                   pair_signals["sell_score"] = sell_score
 
-                  # ── PASSO 2: execução por consenso (1 posição por par) ───
+                  # ── PASSO 2: execução por consenso + retest + fear&greed ─
                   pos = positions[pair]
+
+                  # Fear & Greed: threshold efetivo de consenso
+                  extreme_fear  = fg_value <= FG_FEAR_MAX
+                  extreme_greed = fg_value >= FG_GREED_MIN
+                  effective_min = 1 if extreme_fear else CONSENSUS_BUY_MIN
+
+                  # Candle de confirmação (penúltima vela fechada para evitar vela em formação)
+                  _sorted_1h = sorted(candles_1h, key=lambda x: int(x["start"]))
+                  if len(_sorted_1h) >= 2:
+                      _lc = _sorted_1h[-2]
+                      _body  = float(_lc["close"]) - float(_lc["open"])
+                      _range = float(_lc["high"])  - float(_lc["low"])
+                      candle_confirmed = (_body > 0 and
+                                          _range > 0 and
+                                          (_body / _range) >= RETEST_MIN_BODY_PCT)
+                  else:
+                      candle_confirmed = False
 
                   if pos["qty"] > 0:
                       pos["peak"] = max(pos["peak"], price)
                       gain_pct    = (price - pos["entry"]) / pos["entry"] * 100
 
-                      # SL / TP / Trailing
-                      tp_hit      = price >= pos["entry"] * (1 + TAKE_PROFIT_PCT   / 100)
-                      sl_hit      = price <= pos["entry"] * (1 - INITIAL_SL_PCT    / 100)
-                      tr_active   = gain_pct >= TRAILING_ACTIVATE_PCT
-                      tr_hit      = tr_active and price <= pos["peak"] * (1 - TRAILING_STOP_PCT / 100)
-
-                      reason = None
-                      if tp_hit:  reason = f"TP+{TAKE_PROFIT_PCT:.0f}%"
-                      elif sl_hit: reason = f"SL-{INITIAL_SL_PCT:.0f}%"
-                      elif tr_hit: reason = f"TRAILING-{TRAILING_STOP_PCT:.0f}%"
-
-                      if reason:
+                      # ── Ganância extrema: fecha posição (mercado em euforia) ─
+                      if extreme_greed:
                           close_qty    = pos["qty"]
                           net_usd      = close_qty * price * (1 - 0.006)
                           contributors = pos.get("contributors", [])
-                          if engine.sell(symbol, close_qty, price, f"consenso:{reason}"):
+                          label        = f"GREED·{fg_value}"
+                          if engine.sell(symbol, close_qty, price, f"fear_greed:{label}"):
                               pnl = net_usd - pos["entry"] * close_qty
                               pos["realized"] += pnl
                               _attr_pnl(contributors, pnl)
-                              logger.info(f"[{pair}] {reason} — P&L: ${pnl:+.2f}")
-                              _record_trade("SELL", pair, close_qty, price, net_usd, f"consenso:{reason}")
-                              if "SL-" in reason:
-                                  sl_cooldowns[pair] = SL_COOLDOWN_CYCLES
+                              logger.info(f"[{pair}] 🔴 GANÂNCIA EXTREMA (FG={fg_value}) — fechando posição, P&L: ${pnl:+.2f}")
+                              _record_trade("SELL", pair, close_qty, price, net_usd, f"fear_greed:GREED{fg_value}")
                           pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0
                           pos["pyramids"] = 0; pos["contributors"] = []
 
-                      elif sell_score >= 1:
-                          # Qualquer estratégia SELL → fecha imediatamente
-                          close_qty    = pos["qty"]
-                          net_usd      = close_qty * price * (1 - 0.006)
-                          contributors = pos.get("contributors", [])
-                          sell_label   = "+".join(sell_strats[:2])
-                          if engine.sell(symbol, close_qty, price, f"consenso:SELL·{sell_label}"):
-                              pnl = net_usd - pos["entry"] * close_qty
-                              pos["realized"] += pnl
-                              _attr_pnl(contributors, pnl)
-                              logger.info(f"[{pair}] SELL consenso ({sell_strats}) — P&L: ${pnl:+.2f}")
-                              _record_trade("SELL", pair, close_qty, price, net_usd,
-                                            f"SELL·{sell_score}↓·{sell_label}")
-                          pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0
-                          pos["pyramids"] = 0; pos["contributors"] = []
+                      else:
+                          # SL / TP / Trailing
+                          tp_hit    = price >= pos["entry"] * (1 + TAKE_PROFIT_PCT   / 100)
+                          sl_hit    = price <= pos["entry"] * (1 - INITIAL_SL_PCT    / 100)
+                          tr_active = gain_pct >= TRAILING_ACTIVATE_PCT
+                          tr_hit    = tr_active and price <= pos["peak"] * (1 - TRAILING_STOP_PCT / 100)
 
-                      elif buy_score >= CONSENSUS_BUY_MIN and gain_pct >= PYRAMID_MIN_GAIN_PCT:
-                          # Pyramid: score ≥ 2 + posição em lucro + menos que PYRAMID_MAX adições
-                          pyramids_done = pos.get("pyramids", 0)
-                          if pyramids_done < PYRAMID_MAX:
-                              # Pyramid usa % do saldo atual no momento da adição
-                              pyr_usd = engine.balance_usd * TRADE_PCT * PYRAMID_SIZE_PCT
-                              pyr_brl = pyr_usd * usd_brl
-                              if engine.balance_usd >= pyr_usd * 1.006:
-                                  add_qty = pyr_usd / price
-                                  if engine.buy(symbol, pyr_usd, price,
-                                                f"consenso:pyramid{pyramids_done+1}·{buy_score}↑"):
-                                      total_qty    = pos["qty"] + add_qty
-                                      pos["entry"] = (pos["qty"] * pos["entry"] + add_qty * price) / total_qty
-                                      pos["qty"]   = total_qty
-                                      pos["peak"]  = max(pos["peak"], price)
-                                      pos["pyramids"] = pyramids_done + 1
-                                      _record_trade("BUY", pair, add_qty, price, pyr_usd,
-                                                    f"pyramid{pyramids_done+1}·score{buy_score}")
-                                      logger.info(f"[{pair}] 📈 PYRAMID #{pyramids_done+1} "
-                                                  f"R${pyr_brl:.0f} @ ${price:,.2f} "
-                                                  f"(score {buy_score}/4, gain {gain_pct:.1f}%)")
-                                      state["feed"].insert(0, {
-                                          "time": now_str, "cycle": state["cycle"],
-                                          "pair": pair, "strategy": "Consenso",
-                                          "signal": "BUY", "price": price,
-                                          "executed": True,
-                                          "note": f"pyramid #{pyramids_done+1} R${pyr_brl:.0f} score {buy_score}/4",
-                                      })
-                                      state["feed"] = state["feed"][:100]
+                          reason = None
+                          if tp_hit:   reason = f"TP+{TAKE_PROFIT_PCT:.0f}%"
+                          elif sl_hit: reason = f"SL-{INITIAL_SL_PCT:.0f}%"
+                          elif tr_hit: reason = f"TRAILING-{TRAILING_STOP_PCT:.0f}%"
 
-                  elif buy_score >= CONSENSUS_BUY_MIN:
-                      # Abre posição: 1% do saldo disponível
+                          if reason:
+                              close_qty    = pos["qty"]
+                              net_usd      = close_qty * price * (1 - 0.006)
+                              contributors = pos.get("contributors", [])
+                              if engine.sell(symbol, close_qty, price, f"consenso:{reason}"):
+                                  pnl = net_usd - pos["entry"] * close_qty
+                                  pos["realized"] += pnl
+                                  _attr_pnl(contributors, pnl)
+                                  logger.info(f"[{pair}] {reason} — P&L: ${pnl:+.2f}")
+                                  _record_trade("SELL", pair, close_qty, price, net_usd, f"consenso:{reason}")
+                                  if "SL-" in reason:
+                                      sl_cooldowns[pair] = SL_COOLDOWN_CYCLES
+                              pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0
+                              pos["pyramids"] = 0; pos["contributors"] = []
+
+                          elif sell_score >= 1:
+                              # Qualquer estratégia SELL → fecha imediatamente
+                              close_qty    = pos["qty"]
+                              net_usd      = close_qty * price * (1 - 0.006)
+                              contributors = pos.get("contributors", [])
+                              sell_label   = "+".join(sell_strats[:2])
+                              if engine.sell(symbol, close_qty, price, f"consenso:SELL·{sell_label}"):
+                                  pnl = net_usd - pos["entry"] * close_qty
+                                  pos["realized"] += pnl
+                                  _attr_pnl(contributors, pnl)
+                                  logger.info(f"[{pair}] SELL consenso ({sell_strats}) — P&L: ${pnl:+.2f}")
+                                  _record_trade("SELL", pair, close_qty, price, net_usd,
+                                                f"SELL·{sell_score}↓·{sell_label}")
+                              pos["qty"] = 0.0; pos["entry"] = 0.0; pos["peak"] = 0.0
+                              pos["pyramids"] = 0; pos["contributors"] = []
+
+                          elif buy_score >= effective_min and gain_pct >= PYRAMID_MIN_GAIN_PCT:
+                              # Pyramid
+                              pyramids_done = pos.get("pyramids", 0)
+                              if pyramids_done < PYRAMID_MAX:
+                                  pyr_usd = engine.balance_usd * TRADE_PCT * PYRAMID_SIZE_PCT
+                                  pyr_brl = pyr_usd * usd_brl
+                                  if engine.balance_usd >= pyr_usd * 1.006:
+                                      add_qty = pyr_usd / price
+                                      if engine.buy(symbol, pyr_usd, price,
+                                                    f"consenso:pyramid{pyramids_done+1}·{buy_score}↑"):
+                                          total_qty    = pos["qty"] + add_qty
+                                          pos["entry"] = (pos["qty"] * pos["entry"] + add_qty * price) / total_qty
+                                          pos["qty"]   = total_qty
+                                          pos["peak"]  = max(pos["peak"], price)
+                                          pos["pyramids"] = pyramids_done + 1
+                                          _record_trade("BUY", pair, add_qty, price, pyr_usd,
+                                                        f"pyramid{pyramids_done+1}·score{buy_score}")
+                                          logger.info(f"[{pair}] 📈 PYRAMID #{pyramids_done+1} "
+                                                      f"R${pyr_brl:.0f} @ ${price:,.2f} "
+                                                      f"(score {buy_score}/4, gain {gain_pct:.1f}%)")
+                                          state["feed"].insert(0, {
+                                              "time": now_str, "cycle": state["cycle"],
+                                              "pair": pair, "strategy": "Consenso",
+                                              "signal": "BUY", "price": price,
+                                              "executed": True,
+                                              "note": f"pyramid #{pyramids_done+1} R${pyr_brl:.0f}",
+                                          })
+                                          state["feed"] = state["feed"][:100]
+
+                  elif not extreme_greed and buy_score >= effective_min:
+                      # ── Ganância extrema: bloqueia novas entradas ─────────
+                      # (extreme_greed checked above)
+
                       cooldown = sl_cooldowns.get(pair, 0)
                       if cooldown > 0:
                           sl_cooldowns[pair] = cooldown - 1
-                          logger.info(f"[{pair}] BUY consenso ignorado — cooldown ({cooldown}c)")
+                          logger.info(f"[{pair}] BUY ignorado — cooldown ({cooldown}c)")
                       else:
-                          trade_usd = engine.balance_usd * TRADE_PCT   # 1% do saldo atual
-                          trade_brl = trade_usd * usd_brl
+                          trade_usd     = engine.balance_usd * TRADE_PCT
+                          trade_brl     = trade_usd * usd_brl
+                          strats_buying = [s.name for s in all_strategies
+                                           if pair_signals.get(s.name) == "BUY"]
+                          pending       = pos.setdefault("pending",
+                                              {"active": False, "breakout_price": 0.0, "cycles": 0})
+
                           if engine.balance_usd < trade_usd * 1.006:
-                              logger.info(f"[{pair}] BUY consenso negado — saldo insuficiente")
-                          else:
-                              qty = trade_usd / price
-                              strats_buying = [s.name for s in all_strategies
-                                               if pair_signals.get(s.name) == "BUY"]
+                              logger.info(f"[{pair}] BUY negado — saldo insuficiente")
+                              pending["active"] = False
+
+                          elif extreme_fear:
+                              # ── Medo extremo: entrada direta sem retest ─────
                               if engine.buy(symbol, trade_usd, price,
-                                            f"consenso:{'+'.join(strats_buying[:2])}"):
-                                  pos["qty"]          = qty
+                                            f"fear_greed:FEAR{fg_value}·{'+'.join(strats_buying[:2])}"):
+                                  pos["qty"]          = trade_usd / price
                                   pos["entry"]        = price
                                   pos["peak"]         = price
                                   pos["pyramids"]     = 0
                                   pos["contributors"] = strats_buying
-                                  _record_trade("BUY", pair, qty, price, trade_usd,
-                                                f"consenso·score{buy_score}·{'·'.join(strats_buying)}")
-                                  logger.info(f"[{pair}] ✅ BUY CONSENSO score={buy_score}/4 "
-                                              f"R${trade_brl:.0f} (1% saldo) @ ${price:,.2f} "
-                                              f"({'+'.join(strats_buying)})")
+                                  pending["active"]   = False
+                                  _record_trade("BUY", pair, pos["qty"], price, trade_usd,
+                                                f"FEAR{fg_value}·score{buy_score}·{'·'.join(strats_buying)}")
+                                  logger.info(f"[{pair}] 🟢 BUY MEDO EXTREMO (FG={fg_value}) "
+                                              f"R${trade_brl:.0f} @ ${price:,.2f}")
+                                  state["feed"].insert(0, {
+                                      "time": now_str, "cycle": state["cycle"],
+                                      "pair": pair, "strategy": "Fear&Greed",
+                                      "signal": "BUY", "price": price,
+                                      "executed": True,
+                                      "note": f"😱 Medo Extremo FG={fg_value} — entrada direta",
+                                  })
+                                  state["feed"] = state["feed"][:100]
+
+                          elif not pending["active"]:
+                              # ── Novo sinal: aguarda retest ─────────────────
+                              pending["active"]         = True
+                              pending["breakout_price"] = price
+                              pending["cycles"]         = 0
+                              logger.info(f"[{pair}] ⏳ PENDING score={buy_score}/4 @ ${price:,.2f} "
+                                          f"— aguardando retest ≤{RETEST_TIMEOUT_CYCLES} ciclos")
+                              state["feed"].insert(0, {
+                                  "time": now_str, "cycle": state["cycle"],
+                                  "pair": pair, "strategy": "Orquestrador",
+                                  "signal": "BUY", "price": price,
+                                  "executed": False,
+                                  "note": f"⏳ aguardando retest (score {buy_score}/4)",
+                              })
+                              state["feed"] = state["feed"][:100]
+
+                          else:
+                              # ── Verifica retest + confirmação ──────────────
+                              bp       = pending["breakout_price"]
+                              retest_lo = bp * (1 - RETEST_TOLERANCE_PCT / 100)
+                              in_zone   = retest_lo <= price <= bp * 1.005
+
+                              pending["cycles"] += 1
+                              if pending["cycles"] >= RETEST_TIMEOUT_CYCLES:
+                                  # Timeout: cancela pending
+                                  logger.info(f"[{pair}] ❌ RETEST expirado em "
+                                              f"{pending['cycles']} ciclos — cancelado")
+                                  pending["active"] = False
+                                  pending["breakout_price"] = 0.0
+                                  pending["cycles"] = 0
+
+                              elif in_zone and candle_confirmed and buy_score >= effective_min:
+                                  # ✅ Retest confirmado → executa compra
+                                  if engine.buy(symbol, trade_usd, price,
+                                                f"retest·{'+'.join(strats_buying[:2])}"):
+                                      pos["qty"]          = trade_usd / price
+                                      pos["entry"]        = price
+                                      pos["peak"]         = price
+                                      pos["pyramids"]     = 0
+                                      pos["contributors"] = strats_buying
+                                      pending["active"]   = False
+                                      pending["breakout_price"] = 0.0
+                                      pending["cycles"]   = 0
+                                      _record_trade("BUY", pair, pos["qty"], price, trade_usd,
+                                                    f"retest·score{buy_score}·{'·'.join(strats_buying)}")
+                                      logger.info(f"[{pair}] ✅ BUY RETEST CONFIRMADO "
+                                                  f"R${trade_brl:.0f} @ ${price:,.2f} "
+                                                  f"(bp=${bp:,.2f}, score {buy_score}/4)")
+                                      state["feed"].insert(0, {
+                                          "time": now_str, "cycle": state["cycle"],
+                                          "pair": pair, "strategy": "Orquestrador",
+                                          "signal": "BUY", "price": price,
+                                          "executed": True,
+                                          "note": f"✓ retest confirmado (bp ${bp:,.0f})",
+                                      })
+                                      state["feed"] = state["feed"][:100]
+                              else:
+                                  logger.info(f"[{pair}] ⏳ Aguardando retest "
+                                              f"(ciclo {pending['cycles']}/{RETEST_TIMEOUT_CYCLES}, "
+                                              f"price=${price:,.0f}, zone=${retest_lo:,.0f}-${bp:,.0f}, "
+                                              f"confirmed={candle_confirmed})")
+
+                  else:
+                      # Score insuficiente: cancela qualquer pending ativo
+                      pending = pos.get("pending", {})
+                      if pending.get("active"):
+                          pending["active"] = False
+                          pending["breakout_price"] = 0.0
+                          pending["cycles"] = 0
+                          logger.info(f"[{pair}] Pending cancelado — score caiu ({buy_score}/4)")
 
                   # Atualiza P&L não realizado
                   if pos["qty"] > 0:
@@ -736,15 +889,26 @@ async def trading_loop():
                 elif not bal_ok:
                     pd_status = "saldo_insuf"
                     pd_note   = f"saldo US${engine.balance_usd:.0f} (necessário US${trade_usd_needed:.0f})"
+                elif extreme_greed:
+                    pd_status = "greed_block"
+                    pd_note   = f"🔴 Ganância Extrema FG={fg_value} — entradas bloqueadas"
+                elif extreme_fear:
+                    pd_status = "fear_entry"
+                    pd_note   = f"😱 Medo Extremo FG={fg_value} — entrada direta"
+                elif pos.get("pending", {}).get("active"):
+                    pnd       = pos["pending"]
+                    pd_status = "retest_pending"
+                    pd_note   = (f"⏳ aguardando retest de ${pnd['breakout_price']:,.0f} "
+                                 f"(ciclo {pnd['cycles']}/{RETEST_TIMEOUT_CYCLES})")
                 elif buy_score >= CONSENSUS_BUY_MIN:
                     pd_status = "pronto"
-                    pd_note   = f"score {buy_score}/4 — comprando"
+                    pd_note   = f"score {buy_score}/4 — aguardando retest"
                 else:
                     pd_status = "aguardando"
-                    pd_note   = f"score {buy_score}/4 (mín. {CONSENSUS_BUY_MIN})"
+                    pd_note   = f"score {buy_score}/4 (mín. {effective_min})"
 
                 # P&L não realizado por estratégia contribuidora deste par
-                contributors = pos.get("contributors", [])
+                contributors   = pos.get("contributors", [])
                 unrl_per_strat = {}
                 if pos["qty"] > 0 and contributors:
                     unrl_total = (price - pos["entry"]) * pos["qty"]
@@ -757,8 +921,8 @@ async def trading_loop():
                     "status":       pd_status,
                     "note":         pd_note,
                     "buy_score":    buy_score,
-                    "sell_score":   sel_score,
-                    "sell_strats":  sell_strats if "sell_strats" in dir() else [],
+                    "sell_score":   sell_score,
+                    "sell_strats":  sell_strats,
                     "qty":          round(pos["qty"], 8),
                     "entry":        round(pos["entry"], 2) if pos["entry"] else None,
                     "gain_pct":     round(g_pct, 2)    if g_pct    is not None else None,
@@ -770,6 +934,7 @@ async def trading_loop():
                     "contributors": contributors,
                     "signals":      {s.name: pair_signals.get(s.name, "HOLD") for s in all_strategies},
                     "unrl_per_strat": unrl_per_strat,
+                    "pending":      pos.get("pending", {}),
                 }
 
                 _save_positions(positions)

@@ -112,7 +112,7 @@
   <main class="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
 
     <!-- Portfolio Summary -->
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-2">
+    <div class="grid grid-cols-2 lg:grid-cols-6 gap-2">
       <div class="card px-4 py-3">
         <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Portfolio Total</p>
         <p id="portfolio-total" class="text-base lg:text-lg font-bold text-white leading-tight truncate">R$ —</p>
@@ -137,6 +137,11 @@
         <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Taxas Pagas</p>
         <p id="total-fees" class="text-base lg:text-lg font-bold text-orange-400 leading-tight truncate">R$ 0,00</p>
         <p id="total-fees-usd" class="text-[10px] text-gray-500 mt-0.5 truncate">0,60%/trade</p>
+      </div>
+      <div class="card px-4 py-3 col-span-2 lg:col-span-1" id="fg-card">
+        <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Fear &amp; Greed</p>
+        <p id="fg-value" class="text-base lg:text-lg font-bold leading-tight">—</p>
+        <p id="fg-label" class="text-[10px] text-gray-500 mt-0.5 truncate">—</p>
       </div>
     </div>
 
@@ -504,6 +509,24 @@
         window._tradeMaxBRL = s.trade_amount_brl;  // R$500 trade consenso
       }
 
+      // Fear & Greed
+      if (s.fear_greed) {
+        const fg  = s.fear_greed;
+        const fgV = fg.value || 50;
+        const fgL = fg.label || 'Neutral';
+        const fgEl = document.getElementById('fg-value');
+        const fgLEl = document.getElementById('fg-label');
+        if (fgEl) {
+          fgEl.textContent = fgV;
+          fgEl.style.color = fgV <= 25 ? '#4ade80'
+                           : fgV <= 40 ? '#86efac'
+                           : fgV <= 60 ? '#9ca3af'
+                           : fgV <= 75 ? '#fb923c'
+                           :             '#f87171';
+        }
+        if (fgLEl) fgLEl.textContent = fgL;
+      }
+
       // Header
       document.getElementById('last-update').textContent = s.last_update || '--:--:--';
 
@@ -745,14 +768,21 @@
 
           // Status badge
           let statusHtml;
-          if (d.status === 'em_posicao') {
+          const st = d.status;
+          if (st === 'em_posicao') {
             const gc = (d.gain_pct||0) >= 0 ? '#4ade80' : '#f87171';
             statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold" style="background:${gc}22;color:${gc};border:1px solid ${gc}55">● Em posição</span>`;
-          } else if (d.status === 'pronto') {
+          } else if (st === 'pronto') {
             statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/40">✓ Comprando</span>`;
-          } else if (d.status === 'cooldown') {
+          } else if (st === 'retest_pending') {
+            statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">⏳ Retest</span>`;
+          } else if (st === 'fear_entry') {
+            statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500/20 text-green-400 border border-green-500/40">😱 Medo</span>`;
+          } else if (st === 'greed_block') {
+            statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/15 text-red-400 border border-red-500/30">🔴 Euforia</span>`;
+          } else if (st === 'cooldown') {
             statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-500/15 text-orange-400 border border-orange-500/30">⏳ Cooldown</span>`;
-          } else if (d.status === 'saldo_insuf') {
+          } else if (st === 'saldo_insuf') {
             statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">⚠ Saldo</span>`;
           } else {
             statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-700/50 text-gray-500 border border-gray-700">○ Aguardando</span>`;
