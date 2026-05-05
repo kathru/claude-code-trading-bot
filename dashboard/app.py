@@ -120,7 +120,7 @@ MIN_TRADE_BRL     = 10.0
 
 # ── Gestão de risco — modo agressivo (R/R = 6:1) ────────────────
 INITIAL_SL_PCT       = 5.0   # SL: -5% (era -3%) — evita whipsaws de wick
-TAKE_PROFIT_PCT      = 30.0  # TP: +30% (era +20%) — deixa winners correrem
+TAKE_PROFIT_PCT      = 5.0   # TP: +5% — igual ao SL (R/R 1:1)
 TRAILING_STOP_PCT    = 8.0   # trailing: -8% do pico (era -5%) — mais espaço
 TRAILING_ACTIVATE_PCT = 6.0  # trailing só ativa após +6% (era +2%)
 SL_COOLDOWN_CYCLES   = 2     # após SL, espera 2 ciclos antes de re-entrar
