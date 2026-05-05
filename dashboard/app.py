@@ -445,6 +445,116 @@ async def manual_sell(pair: str, qty: float = 0, brl: float = 0):
     return {"ok": True, "qty": sell_qty, "price": price, "usd": usd}
 
 
+@app.post("/admin/reset-portfolio")
+async def reset_portfolio(token: str = ""):
+    """Reset completo: R$4.000 total — R$1.000/cripto + R$1.000 caixa."""
+    expected = os.getenv("RESET_TOKEN", "reset2026")
+    if token != expected:
+        return {"ok": False, "error": "Token inválido"}
+
+    # ── Busca preços e câmbio ────────────────────────────────────
+    usd_brl = _fetch_usd_brl()
+    prices  = {}
+    for pair in PAIRS:
+        try:
+            t = client.get_ticker(pair)
+            prices[pair] = float(t.get("price", 0))
+        except Exception as e:
+            logger.error(f"reset: preço de {pair} indisponível: {e}")
+    if not all(prices.get(p) for p in PAIRS):
+        return {"ok": False, "error": f"Preços indisponíveis: {prices}"}
+
+    TOTAL_BRL = 4000.0
+    ALLOC_BRL = 1000.0                    # R$1.000 por cripto + R$1.000 caixa
+    alloc_usd = ALLOC_BRL / usd_brl       # ≈ US$175
+    total_usd = TOTAL_BRL / usd_brl       # ≈ US$701
+
+    # ── Reinicia engine ──────────────────────────────────────────
+    engine.initial_balance = total_usd
+    engine.balance_usd     = alloc_usd    # caixa disponível
+    engine.holdings        = {}
+    engine.entry_prices    = {}
+    engine.trades          = []
+    engine.total_fees_usd  = 0.0
+    engine.prices          = {}
+
+    # Compra inicial: R$1.000 em cada cripto
+    FEE = 0.006
+    for pair in PAIRS:
+        sym   = pair.split("-")[0]
+        price = prices[pair]
+        qty   = (alloc_usd / price) * (1 - FEE)
+        engine.holdings[sym]     = qty
+        engine.entry_prices[sym] = price
+        engine.prices[sym]       = price
+        engine.trades.append({
+            "time": datetime.now().isoformat(), "side": "BUY",
+            "symbol": sym, "qty": qty, "price": price,
+            "usd": alloc_usd, "fee": round(alloc_usd * FEE, 6),
+            "strategy": "reset"
+        })
+    engine._save_state()
+
+    # ── Reinicia posições de consenso ────────────────────────────
+    for pair in PAIRS:
+        sym   = pair.split("-")[0]
+        price = prices[pair]
+        qty   = engine.holdings[sym]
+        positions[pair] = {
+            "qty": qty, "entry": price, "peak": price,
+            "realized": 0.0, "unrealized": 0.0, "pyramids": 0,
+            "contributors": ["reset"],
+            "pending": {"active": False, "breakout_price": 0.0, "cycles": 0}
+        }
+    _save_positions(positions)
+    state["positions"] = positions
+
+    # ── Reinicia slots manuais ───────────────────────────────────
+    for pair in PAIRS:
+        strategy_slots[f"manual:{pair}"] = {
+            "qty": 0.0, "entry": 0.0, "peak": 0.0,
+            "realized": 0.0, "unrealized": 0.0
+        }
+    _save_manual(strategy_slots)
+
+    # ── Reinicia P&L por estratégia ──────────────────────────────
+    for name in strategy_pnl:
+        strategy_pnl[name] = {"realized": 0.0, "trades": 0}
+    _save_strategy_pnl(strategy_pnl)
+    state["strategy_pnl"] = strategy_pnl
+
+    # ── Reinicia histórico e feed ─────────────────────────────────
+    state["history"] = []
+    state["trades"]  = []
+    state["feed"]    = []
+    _save_history(state["history"])
+
+    # ── Reinicia cooldowns e sinais ───────────────────────────────
+    sl_cooldowns.clear()
+    last_signals.clear()
+
+    _update_portfolio_state()
+    await broadcast(state)
+
+    summary = {
+        "ok":        True,
+        "total_brl": TOTAL_BRL,
+        "usd_brl":   round(usd_brl, 4),
+        "total_usd": round(total_usd, 2),
+        "cash_usd":  round(alloc_usd, 2),
+        "cash_brl":  ALLOC_BRL,
+        "holdings":  {
+            p.split("-")[0]: {
+                "qty":       round(engine.holdings[p.split("-")[0]], 6),
+                "price_usd": prices[p],
+                "value_brl": round(alloc_usd * usd_brl, 2)
+            } for p in PAIRS
+        }
+    }
+    logger.info(f"✅ RESET COMPLETO — {summary}")
+    return summary
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
