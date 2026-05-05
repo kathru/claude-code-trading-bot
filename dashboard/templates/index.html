@@ -678,8 +678,12 @@
               <span class="text-xs font-semibold text-white">${name}</span>
             </div>
             <div class="text-xs text-gray-500 mb-1.5">
-              ${hasBTC ? `<span class="text-orange-400">● BTC</span> ` : '<span class="text-gray-700">○ BTC</span> '}
-              ${hasETH ? `<span class="text-blue-400">● ETH</span>` : '<span class="text-gray-700">○ ETH</span>'}
+              ${hasBTC
+                ? `<span class="text-orange-400">● BTC</span>${(btcSlot.pyramids||0) > 0 ? `<span class="text-[9px] text-indigo-400 ml-0.5">+${btcSlot.pyramids}▲</span>` : ''} `
+                : '<span class="text-gray-700">○ BTC</span> '}
+              ${hasETH
+                ? `<span class="text-blue-400">● ETH</span>${(ethSlot.pyramids||0) > 0 ? `<span class="text-[9px] text-indigo-400 ml-0.5">+${ethSlot.pyramids}▲</span>` : ''}`
+                : '<span class="text-gray-700">○ ETH</span>'}
             </div>
             <p class="text-sm font-bold font-mono" style="color:${pnlColor}">${totalPnl >= 0 ? '+' : '-'}R$ ${fmtBRL(Math.abs(totalPnl))}</p>
             <p class="text-[10px] text-gray-600 mt-0.5">P&L realiz + não realiz</p>

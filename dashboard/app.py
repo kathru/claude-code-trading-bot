@@ -126,6 +126,11 @@ TRAILING_ACTIVATE_PCT = 6.0  # trailing só ativa após +6% (era +2%)
 SL_COOLDOWN_CYCLES   = 2     # após SL, espera 2 ciclos antes de re-entrar
 VOL_REDUCE_PCT       = 0.40
 
+# ── Pyramid (scale-in em posição lucrativa) ──────────────────────
+PYRAMID_MAX          = 2     # máx. 2 adições por slot (3 entradas no total)
+PYRAMID_MIN_GAIN_PCT = 0.5   # só adiciona se posição estiver ≥ +0.5% no lucro
+PYRAMID_SIZE_PCT     = 0.50  # cada pyramid = 50% da alocação inicial (R$75)
+
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
 
@@ -155,7 +160,7 @@ sl_cooldowns: dict = {}   # {f"{strat}:{pair}": cycles_remaining}
 # ── Estado por slot (estratégia × par) ─────────────────────────
 # Slot: {qty, entry_price, peak_price, realized_pnl_usd}
 def _empty_slot():
-    return {"qty": 0.0, "entry": 0.0, "peak": 0.0, "realized": 0.0}
+    return {"qty": 0.0, "entry": 0.0, "peak": 0.0, "realized": 0.0, "pyramids": 0}
 
 SLOTS_FILE = os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "data", "strategy_slots.json")
@@ -521,14 +526,14 @@ async def trading_loop():
                                 slot["realized"] += pnl_trade
                                 logger.info(f"[{pair}][{strat.name}] {reason} — P&L: ${pnl_trade:+.2f}")
                                 _record_trade("SELL", pair, close_qty, price, net_usd, f"{strat.name}:{reason}")
-                                slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
+                                slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0; slot["pyramids"] = 0
                                 if "SL-" in reason:
                                     sl_cooldowns[key] = SL_COOLDOWN_CYCLES
                                 if new_feed: new_feed.update({"executed": True, "note": reason})
                             else:
                                 # Engine negou — sync forçado para evitar estado fantasma
                                 logger.warning(f"[{pair}][{strat.name}] SELL negado pela engine — sync forçado")
-                                slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
+                                slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0; slot["pyramids"] = 0
 
                         elif signal == "SELL":
                             close_qty = slot["qty"]
@@ -538,13 +543,45 @@ async def trading_loop():
                                 slot["realized"] += pnl_trade
                                 logger.info(f"[{pair}][{strat.name}] SELL SIGNAL — P&L: ${pnl_trade:+.2f}")
                                 _record_trade("SELL", pair, close_qty, price, net_usd, f"{strat.name}:SIGNAL")
-                                slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
+                                slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0; slot["pyramids"] = 0
                                 if new_feed: new_feed.update({"executed": True, "note": "sinal técnico"})
                             else:
                                 logger.warning(f"[{pair}][{strat.name}] SELL SIGNAL negado — sync forçado")
-                                slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0
+                                slot["qty"] = 0.0; slot["entry"] = 0.0; slot["peak"] = 0.0; slot["pyramids"] = 0
+
+                        elif signal == "BUY":
+                            # ── Pyramid: adiciona à posição se em lucro e abaixo do limite ──
+                            pyramids_done = slot.get("pyramids", 0)
+                            if pyramids_done >= PYRAMID_MAX:
+                                if new_feed: new_feed["note"] = f"em posição · max pyramids ({PYRAMID_MAX})"
+                            elif gain_pct < PYRAMID_MIN_GAIN_PCT:
+                                if new_feed: new_feed["note"] = f"em posição · aguard. +{PYRAMID_MIN_GAIN_PCT}%"
+                            else:
+                                pyr_brl = TRADE_MAX_BRL * STRAT_ALLOC_PCT * PYRAMID_SIZE_PCT  # R$75
+                                pyr_usd = pyr_brl / usd_brl
+                                if engine.balance_usd < pyr_usd * 1.006:
+                                    if new_feed: new_feed["note"] = "pyramid · saldo insuf."
+                                    logger.info(f"[{pair}][{strat.name}] Pyramid bloqueado — saldo insuficiente")
+                                else:
+                                    add_qty = pyr_usd / price
+                                    if engine.buy(symbol, pyr_usd, price, f"{strat.name}:pyramid"):
+                                        total_qty      = slot["qty"] + add_qty
+                                        slot["entry"]  = (slot["qty"] * slot["entry"] + add_qty * price) / total_qty
+                                        slot["qty"]    = total_qty
+                                        slot["peak"]   = max(slot["peak"], price)
+                                        slot["pyramids"] = pyramids_done + 1
+                                        _record_trade("BUY", pair, add_qty, price, pyr_usd, f"{strat.name}:pyramid{pyramids_done+1}")
+                                        logger.info(f"[{pair}][{strat.name}] 📈 PYRAMID #{pyramids_done+1} R${pyr_brl:.0f} @ ${price:,.2f} (gain {gain_pct:.1f}%)")
+                                        state["feed"].insert(0, {
+                                            "time": now_str, "cycle": state["cycle"],
+                                            "pair": pair, "strategy": strat.name,
+                                            "signal": "BUY", "price": price,
+                                            "executed": True,
+                                            "note": f"pyramid #{pyramids_done+1} R${pyr_brl:.0f}",
+                                        })
+                                        state["feed"] = state["feed"][:100]
                         else:
-                            # Em posição, sinal não é SELL nem TP/SL — indica motivo no feed
+                            # Em posição, sinal HOLD — aguardando saída
                             if new_feed: new_feed["note"] = "em posição"
 
                     # ── Compra: sinal BUY + slot vazio + sem cooldown ─────────
