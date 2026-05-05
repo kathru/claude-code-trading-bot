@@ -789,27 +789,66 @@
 
       // (Status das Posições removido — informações agora nos cards das criptos)
 
-      // Trades
+      // ── Histórico de Trades ─────────────────────────────────────
+      function tradeReason(strategy, side) {
+        if (!strategy || strategy === 'manual') return '👤 Manual';
+        const sMap = {
+          'Donchian Breakout': 'Donchian 🚀',
+          'EMA Pullback':      'EMA Pull 📈',
+          'MACD Momentum':     'MACD Mom ⚡',
+          'Stoch Bounce':      'Stoch Bounce 🎯',
+          'consenso':          'Consenso',
+          'vol_guard':         'Vol.Guard',
+          'Pyramid':           'Pyramid 📈',
+          'Fear&Greed':        'Fear&Greed 😱',
+          'reset':             'Reset inicial',
+        };
+        // Format: "StratName:Reason" or just "StratName"
+        const colon = strategy.indexOf(':');
+        if (colon === -1) {
+          const n = sMap[strategy] || strategy;
+          return side === 'BUY' ? `${n} · 📗 Compra` : `${n}`;
+        }
+        const stratPart  = strategy.slice(0, colon);
+        const reasonPart = strategy.slice(colon + 1);
+        const n = sMap[stratPart] || stratPart;
+        if (reasonPart.startsWith('TP+'))       return `${n} · 🎯 Take Profit ${reasonPart.slice(2)}`;
+        if (reasonPart.startsWith('SL-'))       return `${n} · 🛑 Stop Loss ${reasonPart.slice(2)}`;
+        if (reasonPart.startsWith('TRAILING'))  return `${n} · 📉 Trailing Stop`;
+        if (reasonPart === 'SELL')              return `${n} · 📉 Sinal SELL (1%/ciclo)`;
+        if (reasonPart.startsWith('pyramid'))   return `${n} · ▲ Pyramid`;
+        if (reasonPart.startsWith('FEAR'))      return `${n} · 😱 Medo Extremo`;
+        if (reasonPart.startsWith('GREED'))     return `${n} · 🔴 Euforia (1%/ciclo)`;
+        if (reasonPart.startsWith('vol_guard')) return `Vol.Guard · 📉 Volatilidade`;
+        return `${n} · ${reasonPart}`;
+      }
+
       const trades = s.trades || [];
       const tradesList = document.getElementById('trades-list');
+      document.getElementById('trade-badge').textContent = trades.length + ' trade' + (trades.length !== 1 ? 's' : '');
       if (trades.length === 0) {
         tradesList.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Nenhum trade ainda...</p>';
       } else {
-        tradesList.innerHTML = trades.map(t => `
-          <div class="trade-${t.side.toLowerCase()} bg-gray-800/40 rounded-lg px-4 py-2.5 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <span class="${t.side === 'BUY' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'} text-xs font-bold px-2 py-0.5 rounded">${t.side}</span>
-              <div>
-                <p class="font-medium text-white text-sm">${t.pair}</p>
-                <p class="text-gray-500 text-xs">${t.strategy || 'manual'}</p>
+        tradesList.innerHTML = trades.map(t => {
+          const isBuy    = t.side === 'BUY';
+          const badgeCls = isBuy ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400';
+          const reason   = tradeReason(t.strategy, t.side);
+          const valColor = isBuy ? 'text-green-300' : 'text-red-300';
+          return `
+          <div class="trade-${t.side.toLowerCase()} bg-gray-800/40 rounded-lg px-3 py-2.5 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="${badgeCls} text-xs font-bold px-2 py-0.5 rounded shrink-0">${t.side}</span>
+              <div class="min-w-0">
+                <p class="font-semibold text-white text-sm leading-none">${t.pair}</p>
+                <p class="text-gray-400 text-[11px] mt-0.5 truncate">${reason}</p>
               </div>
             </div>
-            <div class="text-right">
-              <p class="text-white text-sm font-semibold">R$ ${fmtBRL(t.usd * usdBrl)}</p>
-              <p class="text-gray-500 text-xs">${t.time} · taxa R$ ${fmtBRL((t.fee||0) * usdBrl)}</p>
+            <div class="text-right shrink-0">
+              <p class="${valColor} text-sm font-semibold font-mono">${isBuy ? '-' : '+'}R$ ${fmtBRL(t.usd * usdBrl)}</p>
+              <p class="text-gray-600 text-[10px] mt-0.5">${t.time} · fee R$ ${fmtBRL((t.fee||0)*usdBrl)}</p>
             </div>
-          </div>
-        `).join('');
+          </div>`;
+        }).join('');
       }
 
       // Feed de sinais
