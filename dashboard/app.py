@@ -251,6 +251,7 @@ state = {
     "cycle_interval": CYCLE_INTERVAL,
     "usd_brl":       5.70,
     "trade_max_brl": TRADE_MAX_BRL,
+    "slots_detail":  {},
 }
 
 
@@ -631,7 +632,11 @@ async def trading_loop():
                     else:
                         manual_slot["unrealized"] = (price - manual_slot["entry"]) * manual_slot["qty"]
 
-                # Atualiza P&L não realizado dos slots de estratégia
+                # Atualiza P&L não realizado + monta slots_detail para o dashboard
+                alloc_brl = TRADE_MAX_BRL * STRAT_ALLOC_PCT
+                alloc_usd = alloc_brl / usd_brl
+                bal_ok    = engine.balance_usd >= alloc_usd * 1.006
+
                 for strat in all_strategies:
                     key  = f"{strat.name}:{pair}"
                     slot = strategy_slots.get(key, _empty_slot())
@@ -639,6 +644,46 @@ async def trading_loop():
                         slot["unrealized"] = (price - slot["entry"]) * slot["qty"]
                     else:
                         slot["unrealized"] = 0.0
+
+                    # ── Detalhe do slot para visualização ─────────────────
+                    signal   = pair_signals.get(strat.name, "HOLD")
+                    cooldown = sl_cooldowns.get(key, 0)
+                    if slot["qty"] > 0 and slot["entry"] > 0:
+                        g_pct    = (price - slot["entry"]) / slot["entry"] * 100
+                        sl_price = round(slot["entry"] * (1 - INITIAL_SL_PCT   / 100), 2)
+                        tp_price = round(slot["entry"] * (1 + TAKE_PROFIT_PCT  / 100), 2)
+                        tr_price = round(slot["peak"]  * (1 - TRAILING_STOP_PCT / 100), 2)
+                    else:
+                        g_pct = sl_price = tp_price = tr_price = None
+
+                    if slot["qty"] > 0:
+                        status = "em_posicao"
+                        note   = f"+{slot.get('pyramids',0)}▲ pyramid" if slot.get("pyramids", 0) else ""
+                    elif cooldown > 0:
+                        status = "cooldown"
+                        note   = f"{cooldown} ciclo{'s' if cooldown>1 else ''} restante{'s' if cooldown>1 else ''}"
+                    elif not bal_ok:
+                        status = "saldo_insuf"
+                        note   = f"saldo US$ {engine.balance_usd:.0f} (necessário US$ {alloc_usd:.0f})"
+                    else:
+                        status = "aguardando"
+                        note   = ""
+
+                    state["slots_detail"][key] = {
+                        "strategy": strat.name,
+                        "pair":     pair,
+                        "status":   status,
+                        "note":     note,
+                        "signal":   signal,
+                        "qty":      round(slot["qty"], 8),
+                        "entry":    round(slot["entry"], 2) if slot["entry"] else None,
+                        "gain_pct": round(g_pct, 2)    if g_pct    is not None else None,
+                        "sl":       sl_price,
+                        "tp":       tp_price,
+                        "trailing": tr_price,
+                        "pyramids": slot.get("pyramids", 0),
+                        "cooldown": cooldown,
+                    }
 
                 rsi_val     = get_rsi_value(candles_1h)
                 entry_price = engine.entry_prices.get(symbol)

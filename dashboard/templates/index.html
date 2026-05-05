@@ -149,6 +149,34 @@
       <div id="strategy-panel" class="grid grid-cols-2 lg:grid-cols-4 gap-3"></div>
     </div>
 
+    <!-- Status dos Slots -->
+    <div class="card p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-semibold text-white">Status dos Slots</h3>
+        <span class="text-xs text-gray-500">8 slots · 4 estratégias × 2 pares</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs" id="slots-table">
+          <thead>
+            <tr class="text-gray-600 uppercase text-[10px] tracking-wider border-b border-gray-800">
+              <th class="pb-2 text-left font-medium">Estratégia</th>
+              <th class="pb-2 text-left font-medium">Par</th>
+              <th class="pb-2 text-left font-medium">Status</th>
+              <th class="pb-2 text-left font-medium">Sinal</th>
+              <th class="pb-2 text-right font-medium hidden sm:table-cell">Entrada</th>
+              <th class="pb-2 text-right font-medium">Variação</th>
+              <th class="pb-2 text-right font-medium hidden md:table-cell">SL</th>
+              <th class="pb-2 text-right font-medium hidden md:table-cell">TP</th>
+              <th class="pb-2 text-left font-medium">Observação</th>
+            </tr>
+          </thead>
+          <tbody id="slots-status-panel" class="divide-y divide-gray-800/60">
+            <tr><td colspan="9" class="py-6 text-center text-gray-600">Aguardando dados...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Price Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
@@ -689,6 +717,87 @@
             <p class="text-[10px] text-gray-600 mt-0.5">P&L realiz + não realiz</p>
           </div>`;
         }).join('');
+      }
+
+      // ── Status dos Slots ──────────────────────────────────────────
+      const slotsDetail  = s.slots_detail || {};
+      const slotsTbody   = document.getElementById('slots-status-panel');
+      const stratOrder   = ['Donchian Breakout','EMA Pullback','MACD Momentum','Stoch Bounce'];
+      const sIcons       = {'Donchian Breakout':'🚀','EMA Pullback':'📈','MACD Momentum':'⚡','Stoch Bounce':'🎯'};
+      const sShort       = {'Donchian Breakout':'Donchian','EMA Pullback':'EMA Pull','MACD Momentum':'MACD Mom','Stoch Bounce':'Stoch'};
+      if (slotsTbody && Object.keys(slotsDetail).length > 0) {
+        const rows = [];
+        for (const strat of stratOrder) {
+          for (const pair of ['BTC-USD','ETH-USD']) {
+            const d = slotsDetail[`${strat}:${pair}`];
+            if (!d) continue;
+            const sym = pair.split('-')[0];
+            const symColor = sym === 'BTC' ? 'text-orange-400' : 'text-blue-400';
+
+            // Status badge
+            let statusHtml = '';
+            if (d.status === 'em_posicao') {
+              const gc = (d.gain_pct||0) >= 0 ? '#4ade80' : '#f87171';
+              statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold" style="background:${gc}22;color:${gc};border:1px solid ${gc}55">● Em posição</span>`;
+            } else if (d.status === 'cooldown') {
+              statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-500/15 text-orange-400 border border-orange-500/30">⏳ Cooldown</span>`;
+            } else if (d.status === 'saldo_insuf') {
+              statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">⚠ Saldo</span>`;
+            } else {
+              statusHtml = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-700/50 text-gray-500 border border-gray-700">○ Livre</span>`;
+            }
+
+            // Sinal badge
+            const sigColor = {'BUY':'bg-green-500/20 text-green-400','SELL':'bg-red-500/20 text-red-400','HOLD':'bg-gray-700/40 text-gray-500'};
+            const sigHtml  = `<span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${sigColor[d.signal]||sigColor.HOLD}">${d.signal}</span>`;
+
+            // Variação
+            let gainHtml = '<span class="text-gray-700">—</span>';
+            if (d.gain_pct !== null && d.gain_pct !== undefined) {
+              const gc2 = d.gain_pct >= 0 ? '#4ade80' : '#f87171';
+              gainHtml = `<span class="font-mono font-bold" style="color:${gc2}">${d.gain_pct >= 0 ? '+' : ''}${d.gain_pct.toFixed(2)}%</span>`;
+            }
+
+            // Entrada
+            const entryHtml = d.entry ? `<span class="font-mono text-gray-300">R$ ${fmtBRL(d.entry * usdBrl)}</span>` : '<span class="text-gray-700">—</span>';
+
+            // SL / TP
+            const slHtml = d.sl ? `<span class="font-mono text-red-400">R$ ${fmtBRL(d.sl * usdBrl)}</span>` : '<span class="text-gray-700">—</span>';
+            const tpHtml = d.tp ? `<span class="font-mono text-green-400">R$ ${fmtBRL(d.tp * usdBrl)}</span>` : '<span class="text-gray-700">—</span>';
+
+            // Observação
+            let noteHtml = '';
+            if (d.note) {
+              noteHtml = `<span class="text-gray-500">${d.note}</span>`;
+            }
+            if (d.pyramids > 0 && d.status === 'em_posicao') {
+              noteHtml = `<span class="text-indigo-400 font-semibold">+${d.pyramids}▲ pyramid</span>`;
+            }
+            if (d.cooldown > 0) {
+              noteHtml = `<span class="text-orange-400">${d.note}</span>`;
+            }
+            if (d.status === 'saldo_insuf') {
+              noteHtml = `<span class="text-yellow-400/80 text-[10px]">${d.note}</span>`;
+            }
+
+            rows.push(`<tr class="hover:bg-gray-800/30 transition-colors">
+              <td class="py-2.5 pr-3">
+                <span class="font-medium text-gray-300">${sIcons[strat]||'📊'} ${sShort[strat]||strat}</span>
+              </td>
+              <td class="py-2.5 pr-3">
+                <span class="font-bold ${symColor}">${sym}</span>
+              </td>
+              <td class="py-2.5 pr-3">${statusHtml}</td>
+              <td class="py-2.5 pr-3">${sigHtml}</td>
+              <td class="py-2.5 pr-3 text-right hidden sm:table-cell">${entryHtml}</td>
+              <td class="py-2.5 pr-3 text-right">${gainHtml}</td>
+              <td class="py-2.5 pr-3 text-right hidden md:table-cell">${slHtml}</td>
+              <td class="py-2.5 pr-3 text-right hidden md:table-cell">${tpHtml}</td>
+              <td class="py-2.5 text-gray-500">${noteHtml}</td>
+            </tr>`);
+          }
+        }
+        slotsTbody.innerHTML = rows.join('');
       }
 
       // Trades
