@@ -136,12 +136,28 @@ def _current_cycle() -> int:
     return (int(time.time()) + SP_OFFSET) % 86400 // CYCLE_INTERVAL
 
 
-def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float = TRADE_PCT) -> float:
+PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD", "AVAX-USD", "LINK-USD", "DOGE-USD"]  # 6 pares para melhor diversificação
+
+# ── Ciclo e candles ─────────────────────────────────────────────
+CYCLE_INTERVAL    = 180      # ciclo de 180s (3 minutos)
+CANDLE_30M        = "THIRTY_MINUTE"  # Donchian, Stoch
+CANDLE_1H         = "ONE_HOUR"       # EMA Pullback, MACD
+CANDLE_6H         = "SIX_HOUR"
+CANDLE_1D         = "ONE_DAY"        # Trend, VolGuard
+
+# ── Execução por estratégia (independente, sem consenso) ──────────
+TRADE_PCT          = 0.075   # 7.5% do portfolio total por trade (dinâmico) — aumentado para aproveitar capital
+
+
+def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float = None) -> float:
     """Calcula tamanho de posição dinamicamente baseado em volatilidade.
 
     Alta volatilidade → posição menor (2%)
     Baixa volatilidade → posição maior (até 10%)
     """
+    if base_pct is None:
+        base_pct = TRADE_PCT
+
     if len(candles) < 20:
         return base_pct  # Fallback ao base
 
@@ -167,17 +183,6 @@ def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float =
 
     return size
 
-PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD", "AVAX-USD", "LINK-USD", "DOGE-USD"]  # 6 pares para melhor diversificação
-
-# ── Ciclo e candles ─────────────────────────────────────────────
-CYCLE_INTERVAL    = 180      # ciclo de 180s (3 minutos)
-CANDLE_30M        = "THIRTY_MINUTE"  # Donchian, Stoch
-CANDLE_1H         = "ONE_HOUR"       # EMA Pullback, MACD
-CANDLE_6H         = "SIX_HOUR"
-CANDLE_1D         = "ONE_DAY"        # Trend, VolGuard
-
-# ── Execução por estratégia (independente, sem consenso) ──────────
-TRADE_PCT          = 0.075   # 7.5% do portfolio total por trade (dinâmico) — aumentado para aproveitar capital
 
 # ── Gestão de risco ──────────────────────────────────────────────
 INITIAL_SL_PCT        = 5.0  # SL: -5%
