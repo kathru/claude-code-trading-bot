@@ -497,14 +497,11 @@
             zoom: {
               wheel: { enabled: true, speed: 0.1 },
               pinch: { enabled: true },
-              mode: 'x'
+              mode: 'xy'
             },
             pan: {
               enabled: true,
-              mode: 'x',
-              onPan: ({ chart }) => {
-                chart.options.scales.y.max = window._portfolioTotal * 1.05;
-              }
+              mode: 'xy'
             },
             limits: { x: { min: 'original', max: 'original' }, y: { min: 'original', max: 'original' } }
           }
