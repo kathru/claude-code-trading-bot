@@ -841,7 +841,10 @@
         if (reasonPart.startsWith('SL-'))       return `${n} · 🛑 Stop Loss ${reasonPart.slice(2)}`;
         if (reasonPart.startsWith('TRAILING'))  return `${n} · 📉 Trailing Stop`;
         if (reasonPart === 'SELL')              return `${n} · 📉 Sinal SELL (${(s?.trade_pct*100).toFixed(0)}%/ciclo)`;
-        if (reasonPart.startsWith('pyramid'))   return `${n} · ▲ Pyramid`;
+        if (reasonPart.startsWith('pyramid')) {
+          const pyramidNum = reasonPart.match(/\d+/)?.[0] || '';
+          return `${n} · ▲ Pyramid ${pyramidNum ? `x${pyramidNum}` : ''}`;
+        }
         if (reasonPart.startsWith('FEAR'))      return `${n} · 😱 Medo Extremo`;
         if (reasonPart.startsWith('GREED'))     return `${n} · 🔴 Euforia (${(s?.trade_pct*100).toFixed(0)}%/ciclo)`;
         if (reasonPart.startsWith('vol_guard')) return `Vol.Guard · 📉 Volatilidade`;
