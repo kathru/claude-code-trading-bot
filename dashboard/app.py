@@ -839,9 +839,11 @@ async def trading_loop():
 @app.on_event("startup")
 async def startup():
     # Inicializa preços antes de iniciar trading loop
+    logger.info(f"[STARTUP] Iniciando inicialização de preços para {PAIRS}")
     for pair in PAIRS:
         try:
             ticker = client.get_ticker(pair)
+            logger.info(f"[STARTUP] Resposta de ticker para {pair}: {ticker}")
             price = float(ticker.get("price", 0))
             if price:
                 state["prices"][pair] = {
@@ -849,7 +851,11 @@ async def startup():
                     "price_pct_chg": float(ticker.get("price_percentage_change_24h", 0)),
                     "volume_24h": float(ticker.get("volume_24h", 0)),
                 }
+                logger.info(f"[STARTUP] Preço de {pair} inicializado: R${price:.2f}")
+            else:
+                logger.warning(f"[STARTUP] Preço inválido para {pair}: {ticker.get('price')}")
         except Exception as e:
-            logger.error(f"startup: preço de {pair} indisponível: {e}")
+            logger.error(f"[STARTUP] Erro ao buscar {pair}: {type(e).__name__}: {e}")
 
+    logger.info(f"[STARTUP] state['prices'] após inicialização: {state['prices'].keys()}")
     asyncio.create_task(trading_loop())
