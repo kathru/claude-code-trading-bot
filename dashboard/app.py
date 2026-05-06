@@ -4,6 +4,7 @@ import time
 import json
 import asyncio
 import requests
+import pandas as pd
 from datetime import datetime
 from typing import List
 
@@ -134,7 +135,39 @@ def _current_cycle() -> int:
     SP_OFFSET = -3 * 3600   # UTC-3 fixo — SP aboliu horário de verão em 2019
     return (int(time.time()) + SP_OFFSET) % 86400 // CYCLE_INTERVAL
 
-PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD"]
+
+def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float = TRADE_PCT) -> float:
+    """Calcula tamanho de posição dinamicamente baseado em volatilidade.
+
+    Alta volatilidade → posição menor (2%)
+    Baixa volatilidade → posição maior (até 10%)
+    """
+    if len(candles) < 20:
+        return base_pct  # Fallback ao base
+
+    df = pd.DataFrame(candles, columns=["start", "low", "high", "open", "close", "volume"])
+    df["close"] = df["close"].astype(float)
+    df["high"] = df["high"].astype(float)
+    df["low"] = df["low"].astype(float)
+
+    # Calcular ATR (Average True Range)
+    df["tr"] = df["high"] - df["low"]
+    atr_current = df["tr"].iloc[-1]
+    atr_avg = df["tr"].tail(14).mean()
+
+    # Ratio de volatilidade (inverso: mais vol = posição menor)
+    if atr_current > 0:
+        vol_ratio = atr_avg / atr_current
+    else:
+        vol_ratio = 1.0
+
+    # Aplicar ratio com limites
+    size = base_pct * vol_ratio
+    size = max(0.02, min(0.10, size))  # Min 2%, Max 10%
+
+    return size
+
+PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD", "AVAX-USD", "LINK-USD", "DOGE-USD"]  # 6 pares para melhor diversificação
 
 # ── Ciclo e candles ─────────────────────────────────────────────
 CYCLE_INTERVAL    = 180      # ciclo de 180s (3 minutos)
@@ -144,7 +177,7 @@ CANDLE_6H         = "SIX_HOUR"
 CANDLE_1D         = "ONE_DAY"        # Trend, VolGuard
 
 # ── Execução por estratégia (independente, sem consenso) ──────────
-TRADE_PCT          = 0.05    # 5% do portfolio total por trade (dinâmico)
+TRADE_PCT          = 0.075   # 7.5% do portfolio total por trade (dinâmico) — aumentado para aproveitar capital
 
 # ── Gestão de risco ──────────────────────────────────────────────
 INITIAL_SL_PCT        = 5.0  # SL: -5%
@@ -170,8 +203,8 @@ engine = PaperTradingEngine(initial_balance_usd=10000.0)
 # ── 4 estratégias agressivas independentes ──────────────────────
 all_strategies = [
     DonchianBreakout(period=20, rsi_min=55.0, vol_mult=1.2),
-    EMAPullback(fast=9, mid=21, slow=50, touch_tolerance_pct=0.5),
-    MACDMomentum(fast=12, slow=26, signal=9, ema_filter=50),
+    EMAPullback(fast=9, mid=21, slow=50, touch_tolerance_pct=0.2),  # Reduzido de 0.5 para 0.2 — menos false signals
+    MACDMomentum(fast=12, slow=26, signal=9, ema_filter=30),  # Reduzido de 50 para 30 — aumenta sinais sem perder qualidade
     StochBounce(k_period=14, d_period=3, oversold=25, overbought=80, ma_filter=200),
 ]
 
@@ -295,6 +328,46 @@ def _update_portfolio_state():
     return total, pnl
 
 
+def _calculate_kpis() -> dict:
+    """Calcula métricas de performance do sistema"""
+    trades_with_result = [t for t in engine.trades if t.get("side") == "SELL"]
+    if not trades_with_result:
+        return {
+            "total_trades": len(engine.trades),
+            "win_rate": 0.0,
+            "avg_win": 0.0,
+            "avg_loss": 0.0,
+            "profit_factor": 0.0,
+            "expected_value": 0.0,
+        }
+
+    wins = sum(1 for t in trades_with_result if t.get("pnl", 0) > 0)
+    losses = len(trades_with_result) - wins
+
+    win_trades = [t.get("pnl", 0) for t in trades_with_result if t.get("pnl", 0) > 0]
+    loss_trades = [t.get("pnl", 0) for t in trades_with_result if t.get("pnl", 0) < 0]
+
+    avg_win = sum(win_trades) / len(win_trades) if win_trades else 0.0
+    avg_loss = sum(loss_trades) / len(loss_trades) if loss_trades else 0.0
+
+    sum_wins = sum(win_trades) if win_trades else 0.0
+    sum_losses = abs(sum(loss_trades)) if loss_trades else 0.0
+
+    profit_factor = sum_wins / sum_losses if sum_losses > 0 else 0.0
+
+    return {
+        "total_trades": len(engine.trades),
+        "sell_trades": len(trades_with_result),
+        "win_rate": (wins / len(trades_with_result) * 100) if trades_with_result else 0.0,
+        "win_count": wins,
+        "loss_count": losses,
+        "avg_win": avg_win,
+        "avg_loss": avg_loss,
+        "profit_factor": profit_factor,
+        "expected_value": (avg_win * (wins / len(trades_with_result))) + (avg_loss * (losses / len(trades_with_result))),
+    }
+
+
 def _load_trades_from_engine() -> list:
     """Converte trades salvos no engine para o formato do dashboard."""
     result = []
@@ -332,6 +405,7 @@ state = {
     "trade_amount_brl": 0.0,
     "strategy_pnl":     strategy_pnl,
     "fear_greed":       {"value": 50, "label": "Neutral"},
+    "kpis":             _calculate_kpis(),  # Métricas de performance
 }
 
 
@@ -888,6 +962,10 @@ async def trading_loop():
         state["history"].append({"time": now_str, "ts": int(time.time()), "total": round(total, 2)})
         state["history"] = state["history"][-90000:]
         _save_history(state["history"])
+
+        # Atualizar KPIs a cada ciclo
+        state["kpis"] = _calculate_kpis()
+
         await broadcast(state)
         await asyncio.sleep(CYCLE_INTERVAL)
 
