@@ -506,14 +506,22 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 async def broadcast(data: dict):
+    """Broadcast estado com timeout para evitar travamentos de clientes lentos"""
     dead = []
     for ws in connected_clients:
         try:
-            await ws.send_json(data)
-        except Exception:
+            await asyncio.wait_for(ws.send_json(data), timeout=5.0)
+        except asyncio.TimeoutError:
+            logger.warning("WebSocket send timeout - removendo cliente")
+            dead.append(ws)
+        except Exception as e:
+            logger.debug(f"WebSocket send error: {e}")
             dead.append(ws)
     for ws in dead:
-        connected_clients.remove(ws)
+        try:
+            connected_clients.remove(ws)
+        except ValueError:
+            pass
 
 
 def get_rsi_value(candles, period=14):
@@ -548,13 +556,21 @@ def _record_trade(side, pair, qty, price, usd, strategy):
 
 async def trading_loop():
     logger.info("Loop independente — 4 estratégias × 25%%, ciclo %ds", CYCLE_INTERVAL)
+    loop = asyncio.get_event_loop()
     while True:
         state["cycle"] = _current_cycle()
         now_str = datetime.now().strftime("%H:%M:%S")
         state["last_update"]    = now_str
         state["cycle_start_ts"] = int(time.time())
 
-        usd_brl = await asyncio.get_event_loop().run_in_executor(None, _fetch_usd_brl)
+        try:
+            usd_brl = await asyncio.wait_for(
+                loop.run_in_executor(None, _fetch_usd_brl),
+                timeout=10.0
+            )
+        except asyncio.TimeoutError:
+            logger.warning("USD/BRL fetch timeout - usando cache")
+            usd_brl = _usd_brl_cache["rate"]
         state["usd_brl"] = round(usd_brl, 4)
         state["trade_pct"] = TRADE_PCT
 
@@ -563,7 +579,14 @@ async def trading_loop():
         state["trade_amount_brl"] = round(portfolio_total * TRADE_PCT * usd_brl, 2)
 
         # Fear & Greed (cache 1h — non-blocking via executor)
-        fg = await asyncio.get_event_loop().run_in_executor(None, _fetch_fear_greed)
+        try:
+            fg = await asyncio.wait_for(
+                loop.run_in_executor(None, _fetch_fear_greed),
+                timeout=10.0
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Fear&Greed fetch timeout - usando cache")
+            fg = _fg_cache
         state["fear_greed"] = {"value": fg["value"], "label": fg["label"]}
         fg_value       = fg["value"]
         current_tp_pct = _dynamic_tp(fg_value)   # 3%–5% dinâmico
@@ -572,7 +595,11 @@ async def trading_loop():
         for pair in PAIRS:
             symbol = pair.split("-")[0]
             try:
-                ticker = client.get_ticker(pair)
+                # Fetch ticker com timeout via executor (evita bloquear event loop)
+                ticker = await asyncio.wait_for(
+                    loop.run_in_executor(None, client.get_ticker, pair),
+                    timeout=8.0
+                )
                 price  = float(ticker.get("price", 0))
                 if not price:
                     continue
@@ -585,9 +612,33 @@ async def trading_loop():
                     "volume_24h":     float(ticker.get("volume_24h", 0)),
                 }
 
-                candles_1h = _get_candles(pair, CANDLE_1H, limit=250)
-                candles_6h = _get_candles(pair, CANDLE_6H, limit=100)
-                candles_1d = _get_candles(pair, CANDLE_1D, limit=250)
+                # Fetch candles com timeout (evita bloquear se API está lenta)
+                try:
+                    candles_1h = await asyncio.wait_for(
+                        loop.run_in_executor(None, _get_candles, pair, CANDLE_1H, 250),
+                        timeout=8.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"[{pair}] Candles 1H timeout - usando cache")
+                    candles_1h = _candle_cache.get(f"{pair}:{CANDLE_1H}", {}).get("data", [])
+
+                try:
+                    candles_6h = await asyncio.wait_for(
+                        loop.run_in_executor(None, _get_candles, pair, CANDLE_6H, 100),
+                        timeout=8.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"[{pair}] Candles 6H timeout - usando cache")
+                    candles_6h = _candle_cache.get(f"{pair}:{CANDLE_6H}", {}).get("data", [])
+
+                try:
+                    candles_1d = await asyncio.wait_for(
+                        loop.run_in_executor(None, _get_candles, pair, CANDLE_1D, 250),
+                        timeout=8.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"[{pair}] Candles 1D timeout - usando cache")
+                    candles_1d = _candle_cache.get(f"{pair}:{CANDLE_1D}", {}).get("data", [])
 
                 # Macro: tendência EMA9·21·50 em 1H (idêntico ao EMA Pullback) + vol diária
                 df_1h_trend = trend_filter.candles_to_df(candles_1h)
@@ -639,7 +690,14 @@ async def trading_loop():
                 else:
                   # ── PASSO 1: coleta TODOS os sinais antes de agir ─────────
                   # (score completo no feed — sem notas parciais)
-                  candles_30m = _get_candles(pair, CANDLE_30M, limit=250)
+                  try:
+                      candles_30m = await asyncio.wait_for(
+                          loop.run_in_executor(None, _get_candles, pair, CANDLE_30M, 250),
+                          timeout=8.0
+                      )
+                  except asyncio.TimeoutError:
+                      logger.warning(f"[{pair}] Candles 30M timeout - usando cache")
+                      candles_30m = _candle_cache.get(f"{pair}:{CANDLE_30M}", {}).get("data", [])
                   candle_map  = {
                       "Donchian Breakout": candles_30m,
                       "EMA Pullback":      candles_1h,
