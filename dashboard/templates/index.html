@@ -816,7 +816,7 @@
               <span class="text-gray-600">${buys}↑ ${sells}↓ (${trades} ops)</span>
             </div>
             ${unrlUsd !== 0 ? `<p class="text-[10px] mt-0.5" style="color:#f97316">não realiz: ${unrlBrl>=0?'+':'-'}R$ ${fmtBRL(Math.abs(unrlBrl))}</p>` : ''}
-            ${tpUsd > 0 ? `<p class="text-[9px] mt-1 text-blue-400">🎯 TP: +${tpPct}% (R$ ${fmtBRL(tpBrl)}) Falta: R$ ${fmtBRL(tpFaltaBrl)}</p>` : ''}
+            ${tpUsd > 0 ? `<p class="text-[9px] mt-1 text-blue-400">🎯 TP: +${tpPct}% (R$ ${fmtBRL(tpBrl)}) · Falta R$ ${fmtBRL(tpFaltaBrl)} (${tpBrl > 0 ? ((tpFaltaBrl/tpBrl)*100).toFixed(0) : 0}%)</p>` : ''}
           </div>`;
         }).join('');
       }
