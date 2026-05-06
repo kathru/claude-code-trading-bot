@@ -557,15 +557,16 @@ async def trading_loop():
         usd_brl = await asyncio.get_event_loop().run_in_executor(None, _fetch_usd_brl)
         state["usd_brl"] = round(usd_brl, 4)
         state["trade_pct"] = TRADE_PCT
-        state["trade_amount_brl"] = round(engine.balance_usd * TRADE_PCT * usd_brl, 2)
+
+        # Calcula portfolio_total (3% de TRADE_PCT é baseado no patrimonio total)
+        portfolio_total = engine.portfolio_value()
+        state["trade_amount_brl"] = round(portfolio_total * TRADE_PCT * usd_brl, 2)
 
         # Fear & Greed (cache 1h — non-blocking via executor)
         fg = await asyncio.get_event_loop().run_in_executor(None, _fetch_fear_greed)
         state["fear_greed"] = {"value": fg["value"], "label": fg["label"]}
         fg_value       = fg["value"]
         current_tp_pct = _dynamic_tp(fg_value)   # 3%–8% dinâmico
-
-        portfolio_total = engine.portfolio_value()
 
         for pair in PAIRS:
             symbol = pair.split("-")[0]
@@ -612,8 +613,8 @@ async def trading_loop():
 
                 # ── Volatilidade extrema: fecha posição de consenso e PULA ciclo ──
                 if vol_signal == "SELL":
-                    # vol_guard: reduz 1%/ciclo em cada slot aberto deste par
-                    max_usd = engine.balance_usd * TRADE_PCT
+                    # vol_guard: reduz 3%/ciclo em cada slot aberto deste par
+                    max_usd = portfolio_total * TRADE_PCT
                     for strat in all_strategies:
                         vkey = f"{strat.name}:{pair}"
                         vslot = strategy_slots.get(vkey, _empty_slot())
@@ -659,7 +660,7 @@ async def trading_loop():
                       sig_key = f"{pair}:{strat.name}"
                       if signal != last_signals.get(sig_key):
                           last_signals[sig_key] = signal
-                          trade_usd = engine.balance_usd * TRADE_PCT
+                          trade_usd = portfolio_total * TRADE_PCT
                           state["feed"].insert(0, {
                               "time":     now_str,
                               "cycle":    state["cycle"],
@@ -713,8 +714,8 @@ async def trading_loop():
                           elif tr_hit:
                               _sell_slot(slot["qty"], f"TRAILING-{TRAILING_STOP_PCT:.0f}%")
                           elif extreme_greed or signal == "SELL":
-                              # Saída gradual: TRADE_PCT% do saldo por ciclo
-                              max_qty = engine.balance_usd * TRADE_PCT / price
+                              # Saída gradual: TRADE_PCT% do patrimonio por ciclo
+                              max_qty = portfolio_total * TRADE_PCT / price
                               sell_q  = min(slot["qty"], max_qty)
                               if sell_q > 1e-8:
                                   lbl = f"GREED{fg_value}" if extreme_greed else "SELL"
@@ -722,9 +723,9 @@ async def trading_loop():
                           elif signal == "BUY" and gain_pct >= PYRAMID_MIN_GAIN_PCT:
                               pdone = slot.get("pyramids", 0)
                               if pdone < PYRAMID_MAX:
-                                  pyr_usd = engine.balance_usd * TRADE_PCT * PYRAMID_SIZE_PCT
+                                  pyr_usd = portfolio_total * TRADE_PCT * PYRAMID_SIZE_PCT
                                   if engine.balance_usd < pyr_usd * 1.006:
-                                      # Se não tem o valor do pyramid, usa o saldo restante
+                                      # Se não tem o valor do pyramid, usa o saldo restante em caixa
                                       pyr_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
 
                                   if pyr_usd > 1.0:  # Mínimo de $1 para pyramid
@@ -749,10 +750,10 @@ async def trading_loop():
                           if cooldown > 0:
                               sl_cooldowns[key] = cooldown - 1
                           else:
-                              # Tenta 3% primeiro, se não houver usa o restante do saldo
-                              trade_usd = engine.balance_usd * TRADE_PCT
+                              # Tenta 3% do patrimonio, se não houver em caixa usa o restante disponível
+                              trade_usd = portfolio_total * TRADE_PCT
                               if engine.balance_usd < trade_usd * 1.006:
-                                  # Se não tem 3%, usa o saldo restante (menos margem de taxa)
+                                  # Se não tem 3% em caixa, usa o saldo restante (menos margem de taxa)
                                   trade_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
 
                               if trade_usd > 1.0:  # Mínimo de $1 para trade
