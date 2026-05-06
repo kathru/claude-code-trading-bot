@@ -143,11 +143,8 @@ CANDLE_1H         = "ONE_HOUR"       # EMA Pullback, MACD
 CANDLE_6H         = "SIX_HOUR"
 CANDLE_1D         = "ONE_DAY"        # Trend, VolGuard
 
-# ── Modelo de consenso ──────────────────────────────────────────
+# ── Execução por estratégia (independente, sem consenso) ──────────
 TRADE_PCT          = 0.05    # 5% do saldo disponível por trade (dinâmico)
-CONSENSUS_BUY_MIN  = 2       # nº mínimo de estratégias para BUY
-CONSENSUS_SELL_MIN = 2       # nº mínimo de estratégias para SELL fechar posição
-# SL/TP/Trailing fecham posição independente do SELL score
 
 # ── Gestão de risco ──────────────────────────────────────────────
 INITIAL_SL_PCT        = 5.0  # SL: -5%
@@ -163,7 +160,7 @@ PYRAMID_MIN_GAIN_PCT = 0.5   # só adiciona se ≥ +0.5% no lucro
 PYRAMID_SIZE_PCT     = 0.25  # cada pyramid = 25% do trade inicial
 
 # ── Fear & Greed ─────────────────────────────────────────────────
-FG_FEAR_MAX    = 25   # Medo Extremo: consensus_min → 1, entrada direta
+FG_FEAR_MAX    = 25   # Medo Extremo: entrada direta, sem restrições
 FG_GREED_MIN   = 75   # Ganância Extrema: fecha posições, bloqueia novas entradas
 FG_TTL         = 3600 # cache de 1 hora (índice atualiza 1×/dia)
 
@@ -648,9 +645,6 @@ async def trading_loop():
                       "Stoch Bounce":      candles_30m,
                   }
                   signals_this_cycle = {}
-                  buy_score   = 0
-                  sell_score  = 0
-                  sell_strats = []
 
                   for strat in all_strategies:
                       raw    = candle_map.get(strat.name, candles_1h)
@@ -658,14 +652,6 @@ async def trading_loop():
                       signal = strat.analyze(df)
                       pair_signals[strat.name]        = signal
                       signals_this_cycle[strat.name]  = signal
-                      if signal == "BUY":
-                          buy_score  += 1
-                      elif signal == "SELL":
-                          sell_score += 1
-                          sell_strats.append(strat.name)
-
-                  pair_signals["buy_score"]  = buy_score
-                  pair_signals["sell_score"] = sell_score
 
                   # Feed: registra mudanças de sinal com valor e percentual
                   for strat in all_strategies:
