@@ -144,7 +144,7 @@ CANDLE_6H         = "SIX_HOUR"
 CANDLE_1D         = "ONE_DAY"        # Trend, VolGuard
 
 # ── Modelo de consenso ──────────────────────────────────────────
-TRADE_PCT          = 0.10    # 10% do saldo disponível por trade (dinâmico)
+TRADE_PCT          = 0.05    # 5% do saldo disponível por trade (dinâmico)
 CONSENSUS_BUY_MIN  = 2       # nº mínimo de estratégias para BUY
 CONSENSUS_SELL_MIN = 2       # nº mínimo de estratégias para SELL fechar posição
 # SL/TP/Trailing fecham posição independente do SELL score
@@ -559,6 +559,7 @@ async def trading_loop():
 
         usd_brl = await asyncio.get_event_loop().run_in_executor(None, _fetch_usd_brl)
         state["usd_brl"] = round(usd_brl, 4)
+        state["trade_pct"] = TRADE_PCT
         state["trade_amount_brl"] = round(engine.balance_usd * TRADE_PCT * usd_brl, 2)
 
         # Fear & Greed (cache 1h — non-blocking via executor)
@@ -633,7 +634,7 @@ async def trading_loop():
                             else:
                                 vslot["qty"] = rem
                     _save_slots(strategy_slots)
-                    logger.info(f"[{pair}] VOLATILIDADE EXTREMA — reduzindo posições 1%/ciclo")
+                    logger.info(f"[{pair}] VOLATILIDADE EXTREMA — reduzindo posições {TRADE_PCT*100:.0f}%/ciclo")
                     # ← Não executa estratégias neste ciclo para evitar re-abertura imediata
 
                 else:
@@ -725,7 +726,7 @@ async def trading_loop():
                           elif tr_hit:
                               _sell_slot(slot["qty"], f"TRAILING-{TRAILING_STOP_PCT:.0f}%")
                           elif extreme_greed or signal == "SELL":
-                              # Saída gradual: 1% do saldo por ciclo
+                              # Saída gradual: TRADE_PCT% do saldo por ciclo
                               max_qty = engine.balance_usd * TRADE_PCT / price
                               sell_q  = min(slot["qty"], max_qty)
                               if sell_q > 1e-8:
@@ -767,14 +768,14 @@ async def trading_loop():
                                       slot["pyramids"] = 0
                                       _record_trade("BUY", pair, qty, price, trade_usd, strat.name)
                                       _count_buy(strat.name)
-                                      logger.info(f"[{pair}][{strat.name}] ✅ BUY 1% "
+                                      logger.info(f"[{pair}][{strat.name}] ✅ BUY {TRADE_PCT*100:.0f}% "
                                                   f"R${trade_usd*usd_brl:.0f} @ ${price:,.2f}")
                                       state["feed"].insert(0, {
                                           "time": now_str, "cycle": state["cycle"],
                                           "pair": pair, "strategy": strat.name,
                                           "signal": "BUY", "price": price,
                                           "executed": True,
-                                          "note": f"R${trade_usd*usd_brl:.0f} (1% saldo)",
+                                          "note": f"R${trade_usd*usd_brl:.0f} ({TRADE_PCT*100:.0f}% saldo)",
                                       })
                                       state["feed"] = state["feed"][:100]
                               else:
