@@ -144,7 +144,7 @@ CANDLE_6H         = "SIX_HOUR"
 CANDLE_1D         = "ONE_DAY"        # Trend, VolGuard
 
 # ── Execução por estratégia (independente, sem consenso) ──────────
-TRADE_PCT          = 0.03    # 3% do saldo disponível por trade (dinâmico)
+TRADE_PCT          = 0.05    # 5% do portfolio total por trade (dinâmico)
 
 # ── Gestão de risco ──────────────────────────────────────────────
 INITIAL_SL_PCT        = 5.0  # SL: -5%
@@ -558,7 +558,7 @@ async def trading_loop():
         state["usd_brl"] = round(usd_brl, 4)
         state["trade_pct"] = TRADE_PCT
 
-        # Calcula portfolio_total (3% de TRADE_PCT é baseado no patrimonio total)
+        # Calcula portfolio_total (5% de TRADE_PCT é baseado no patrimonio total)
         portfolio_total = engine.portfolio_value()
         state["trade_amount_brl"] = round(portfolio_total * TRADE_PCT * usd_brl, 2)
 
@@ -613,7 +613,7 @@ async def trading_loop():
 
                 # ── Volatilidade extrema: fecha posição de consenso e PULA ciclo ──
                 if vol_signal == "SELL":
-                    # vol_guard: reduz 3%/ciclo em cada slot aberto deste par
+                    # vol_guard: reduz 5%/ciclo em cada slot aberto deste par
                     max_usd = portfolio_total * TRADE_PCT
                     for strat in all_strategies:
                         vkey = f"{strat.name}:{pair}"
@@ -750,10 +750,10 @@ async def trading_loop():
                           if cooldown > 0:
                               sl_cooldowns[key] = cooldown - 1
                           else:
-                              # Tenta 3% do patrimonio, se não houver em caixa usa o restante disponível
+                              # Tenta 5% do patrimonio, se não houver em caixa usa o restante disponível
                               trade_usd = portfolio_total * TRADE_PCT
                               if engine.balance_usd < trade_usd * 1.006:
-                                  # Se não tem 3% em caixa, usa o saldo restante (menos margem de taxa)
+                                  # Se não tem 5% em caixa, usa o saldo restante (menos margem de taxa)
                                   trade_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
 
                               if trade_usd > 1.0:  # Mínimo de $1 para trade
@@ -773,7 +773,7 @@ async def trading_loop():
                                           "pair": pair, "strategy": strat.name,
                                           "signal": "BUY", "price": price,
                                           "executed": True,
-                                          "note": f"R${trade_usd*usd_brl:.0f} ({pct_used:.1f}% do saldo)",
+                                          "note": f"R${trade_usd*usd_brl:.0f} ({pct_used:.1f}% PL)",
                                       })
                                       state["feed"] = state["feed"][:100]
                               else:
