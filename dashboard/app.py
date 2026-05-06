@@ -669,7 +669,7 @@ async def trading_loop():
                               "signal":   signal,
                               "price":    price,
                               "executed": False,
-                              "note":     f"R${trade_usd*usd_brl:.0f} ({TRADE_PCT*100:.0f}% saldo)",
+                              "note":     f"R${trade_usd*usd_brl:.0f} ({TRADE_PCT*100:.0f}% PL)",
                           })
                           state["feed"] = state["feed"][:100]
 
