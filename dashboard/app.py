@@ -78,7 +78,7 @@ def _fetch_fear_greed() -> dict:
 
 
 # ── Cache de candles por par ──────────────────────────────────────
-# Refresh mais frequente para acompanhar cycle de 90s e capturar breakouts
+# Refresh a cada 3 minutos para acompanhar cycle de 180s e capturar breakouts
 CANDLE_TTL = 240             # 4 min — suficiente para 30min/1H candles
 _candle_cache: dict = {}     # {pair: {"data": [...], "ts": float}}
 
@@ -137,7 +137,7 @@ def _current_cycle() -> int:
 PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD"]
 
 # ── Ciclo e candles ─────────────────────────────────────────────
-CYCLE_INTERVAL    = 90       # ciclo de 90s — 3.3× mais reativo (era 300s)
+CYCLE_INTERVAL    = 180      # ciclo de 180s (3 minutos)
 CANDLE_30M        = "THIRTY_MINUTE"  # Donchian, Stoch
 CANDLE_1H         = "ONE_HOUR"       # EMA Pullback, MACD
 CANDLE_6H         = "SIX_HOUR"
@@ -152,7 +152,7 @@ TAKE_PROFIT_MIN       = 3.0  # TP mínimo: +3% (mercado em ganância)
 TAKE_PROFIT_MAX       = 5.0  # TP máximo: +5% (mercado em medo extremo)
 TRAILING_STOP_PCT     = 8.0  # trailing: -8% do pico
 TRAILING_ACTIVATE_PCT = 6.0  # trailing só ativa após +6%
-SL_COOLDOWN_CYCLES    = 1    # após SL, espera 1 ciclo antes de re-entrar (90s)
+SL_COOLDOWN_CYCLES    = 1    # após SL, espera 1 ciclo antes de re-entrar (180s)
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
 PYRAMID_MAX          = 5     # máx. 5 adições (alavancagem até 5× a entrada)
