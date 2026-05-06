@@ -587,6 +587,7 @@
       }
       window._balanceUSD = p.usd || 0;
       window._usdBrl     = usdBrl;
+      window._portfolioTotal = total;
       const pct      = p.pnl_pct || 0;
       const totalBRL = total * usdBrl;
       const pnlBRL   = pnl   * usdBrl;
@@ -1231,11 +1232,11 @@
       portfolioChart.data.datasets[0].data = sampled.map(h => h.total);
       const last = sampled[sampled.length - 1]?.total || 10000;
       const positive = last >= 10000;
-      const maxTotal = Math.max(...sampled.map(h => h.total), 10000);
+      const portfolioTotal = window._portfolioTotal || 10000;
       portfolioChart.data.datasets[0].borderColor = positive ? '#6366f1' : '#ef4444';
       portfolioChart.data.datasets[0].backgroundColor = positive ? 'rgba(99,102,241,0.08)' : 'rgba(239,68,68,0.08)';
       portfolioChart.options.scales.y.min = 0;
-      portfolioChart.options.scales.y.max = maxTotal * 1.05;
+      portfolioChart.options.scales.y.max = portfolioTotal * 1.05;
       portfolioChart.update('none');
     }
 
