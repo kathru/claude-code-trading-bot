@@ -149,7 +149,7 @@
     <div class="card p-5">
       <div class="flex items-center justify-between mb-3">
         <h3 class="font-semibold text-white">Painel de estratégias</h3>
-        <span class="text-xs text-gray-500">P&L atribuído proporcionalmente por contribuição · TP +5%</span>
+        <span class="text-xs text-gray-500">P&L atribuído proporcionalmente por contribuição · TP +3%-5% (dinâmico)</span>
       </div>
       <div id="strategy-panel" class="grid grid-cols-2 lg:grid-cols-4 gap-3"></div>
     </div>
@@ -779,13 +779,19 @@
           const sells    = sp.sells || 0;
           const trades   = sp.trades || (buys + sells);
 
-          // P&L não realizado: soma dos slots desta estratégia em todos os pares
+          // P&L não realizado e TP esperado: soma dos slots desta estratégia em todos os pares
           const allSlots = s.slots || {};
           let unrlUsd = 0;
+          let tpUsd = 0;
           const pairColors = {'BTC-USD':'text-orange-400','ETH-USD':'text-blue-400','SOL-USD':'text-purple-400'};
+          const tpPct = s.tp_objective?.current || 5;
           const pairDots = ['BTC-USD','ETH-USD','SOL-USD'].map(pair => {
             const sl = allSlots[`${name}:${pair}`] || {};
             unrlUsd += (sl.unrealized || 0);
+            // Calcula TP esperado: entrada × quantidade × (TP% / 100)
+            if ((sl.qty || 0) > 0 && (sl.entry || 0) > 0) {
+              tpUsd += sl.entry * sl.qty * (tpPct / 100);
+            }
             const sym = pair.split('-')[0];
             return (sl.qty||0) > 0
               ? `<span class="${pairColors[pair]}">● ${sym}</span>`
@@ -793,6 +799,8 @@
           });
           const posIndicator = pairDots.join(' ');
           const unrlBrl  = unrlUsd * usdBrl;
+          const tpBrl = tpUsd * usdBrl;
+          const tpFaltaBrl = Math.max(0, tpBrl - realBrl); // quanto falta para atingir TP
           const totalBrl = realBrl + unrlBrl;
           const pnlColor = totalBrl >= 0 ? '#4ade80' : '#f87171';
 
@@ -808,7 +816,7 @@
               <span class="text-gray-600">${buys}↑ ${sells}↓ (${trades} ops)</span>
             </div>
             ${unrlUsd !== 0 ? `<p class="text-[10px] mt-0.5" style="color:#f97316">não realiz: ${unrlBrl>=0?'+':'-'}R$ ${fmtBRL(Math.abs(unrlBrl))}</p>` : ''}
-            ${realBrl !== 0 ? `<p class="text-[9px] mt-1 text-blue-400">🎯 TP: ${realBrl>=0?'+':''}R$ ${fmtBRL(realBrl)}</p>` : ''}
+            ${tpUsd > 0 ? `<p class="text-[9px] mt-1 text-blue-400">🎯 TP: +${tpPct}% (R$ ${fmtBRL(tpBrl)}) Falta: R$ ${fmtBRL(tpFaltaBrl)}</p>` : ''}
           </div>`;
         }).join('');
       }
