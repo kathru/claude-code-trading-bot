@@ -669,7 +669,7 @@
               const qtyStr = slot.qty.toFixed(8).replace(/\.?0+$/, '');
               const pnlRealizado = slot.realized ? (slot.realized >= 0 ? '+' : '') + slot.realized.toFixed(2) : '0.00';
               const pyramidStr = slot.pyramids ? ` | ▲×${slot.pyramids}` : '';
-              infoEl.textContent = `${qtyStr} ${symbol === 'BTC-USD' ? '₿' : symbol === 'ETH-USD' ? 'Ξ' : '◎'} | P&L: $${pnlRealizado}${pyramidStr}`;
+              infoEl.textContent = `${qtyStr} ${pair === 'BTC-USD' ? '₿' : pair === 'ETH-USD' ? 'Ξ' : '◎'} | P&L: $${pnlRealizado}${pyramidStr}`;
               infoEl.classList.remove('hidden');
             } else if (infoEl) {
               infoEl.classList.add('hidden');
