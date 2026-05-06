@@ -431,44 +431,24 @@ async def reset_portfolio(token: str = ""):
     total_usd = TOTAL_BRL / usd_brl        # portfolio total em USD
 
     # ── Reinicia engine DIRETAMENTE — sem compra, sem taxas ──────
-    # qty = alloc_usd / price  →  qty * price = alloc_usd exatamente
-    # portfolio_value() = balance_usd + Σ(qty * price) = 4 * alloc_usd = total_usd
+    # Portfólio: 100% em caixa — sem posições pré-carregadas
+    # Estratégias compram naturalmente via sinais → histórico 100% real
     # P&L = portfolio_value() - initial_balance = total_usd - total_usd = 0,00 ✅
     engine.initial_balance = total_usd
-    engine.balance_usd     = alloc_usd     # caixa: R$1.000
+    engine.balance_usd     = total_usd   # tudo em caixa
     engine.holdings        = {}
     engine.entry_prices    = {}
     engine.trades          = []
     engine.total_fees_usd  = 0.0
-    engine.prices          = {}
-
-    for pair in PAIRS:
-        sym   = pair.split("-")[0]
-        price = prices[pair]
-        qty   = alloc_usd / price           # sem desconto de fee — P&L parte de 0
-        engine.holdings[sym]     = qty
-        engine.entry_prices[sym] = price
-        engine.prices[sym]       = price
+    engine.prices          = {p.split("-")[0]: prices[p] for p in PAIRS}
     engine._save_state()
 
-    # ── Reinicia todos os slots (estratégias + manual) ───────────
-    # Slots das estratégias: posição inicial 1 cripto = 1 slot por par
-    # Usamos um slot "reset" para registrar a posição inicial
+    # ── Todos os slots zerados — sem posições artificiais ────────
     for s in all_strategies:
         for pair in PAIRS:
             strategy_slots[f"{s.name}:{pair}"] = _empty_slot()
-    # Slot manual zerado
     for pair in PAIRS:
         strategy_slots[f"manual:{pair}"] = _empty_slot()
-        # Posição inicial do reset vai pro primeiro slot por par (Donchian)
-        sym   = pair.split("-")[0]
-        price = prices[pair]
-        qty   = engine.holdings[sym]
-        first_key = f"{all_strategies[0].name}:{pair}"
-        strategy_slots[first_key] = {
-            "qty": qty, "entry": price, "peak": price,
-            "realized": 0.0, "unrealized": 0.0, "pyramids": 0
-        }
     _save_slots(strategy_slots)
     state["slots"] = strategy_slots
 
@@ -496,15 +476,9 @@ async def reset_portfolio(token: str = ""):
         "total_brl": TOTAL_BRL,
         "usd_brl":   round(usd_brl, 4),
         "total_usd": round(total_usd, 2),
-        "cash_usd":  round(alloc_usd, 2),
-        "cash_brl":  ALLOC_BRL,
-        "holdings":  {
-            p.split("-")[0]: {
-                "qty":       round(engine.holdings[p.split("-")[0]], 6),
-                "price_usd": prices[p],
-                "value_brl": round(alloc_usd * usd_brl, 2)
-            } for p in PAIRS
-        }
+        "cash_usd":  round(total_usd, 2),
+        "cash_brl":  TOTAL_BRL,
+        "slots":     "todos zerados — estratégias operam por sinal",
     }
     logger.info(f"✅ RESET COMPLETO — {summary}")
     return summary
