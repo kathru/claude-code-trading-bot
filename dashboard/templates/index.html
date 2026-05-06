@@ -803,11 +803,11 @@
             </div>
             <div class="text-xs mb-2">${posIndicator}</div>
             <p class="text-sm font-bold font-mono" style="color:${pnlColor}">${totalBrl >= 0 ? '+' : '-'}R$ ${fmtBRL(Math.abs(totalBrl))}</p>
-            <div class="flex justify-between text-[10px] text-gray-600 mt-1">
-              <span>realiz: ${realBrl >= 0 ? '+' : ''}R$ ${fmtBRL(realBrl)}</span>
-              <span>${buys}↑ ${sells}↓ (${trades} ops)</span>
+            <div class="flex justify-between text-[10px] mt-1">
+              <span style="color:#4ade80">realiz: ${realBrl >= 0 ? '+' : ''}R$ ${fmtBRL(realBrl)}</span>
+              <span class="text-gray-600">${buys}↑ ${sells}↓ (${trades} ops)</span>
             </div>
-            ${unrlUsd !== 0 ? `<p class="text-[10px] mt-0.5" style="color:${unrlBrl>=0?'#4ade80':'#f87171'}">não realiz: ${unrlBrl>=0?'+':'-'}R$ ${fmtBRL(Math.abs(unrlBrl))}</p>` : ''}
+            ${unrlUsd !== 0 ? `<p class="text-[10px] mt-0.5" style="color:#f97316">não realiz: ${unrlBrl>=0?'+':'-'}R$ ${fmtBRL(Math.abs(unrlBrl))}</p>` : ''}
           </div>`;
         }).join('');
       }
