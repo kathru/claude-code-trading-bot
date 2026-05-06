@@ -144,7 +144,7 @@ CANDLE_6H         = "SIX_HOUR"
 CANDLE_1D         = "ONE_DAY"        # Trend, VolGuard
 
 # ── Modelo de consenso ──────────────────────────────────────────
-TRADE_PCT          = 0.01    # 1% do saldo disponível por trade (dinâmico)
+TRADE_PCT          = 0.10    # 10% do saldo disponível por trade (dinâmico)
 CONSENSUS_BUY_MIN  = 2       # nº mínimo de estratégias para BUY
 CONSENSUS_SELL_MIN = 2       # nº mínimo de estratégias para SELL fechar posição
 # SL/TP/Trailing fecham posição independente do SELL score
