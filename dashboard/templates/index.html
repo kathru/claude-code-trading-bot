@@ -752,7 +752,9 @@
           const sp       = stratPnl[name] || {};
           const realUsd  = sp.realized || 0;
           const realBrl  = realUsd * usdBrl;
-          const trades   = sp.trades || 0;
+          const buys     = sp.buys  || 0;
+          const sells    = sp.sells || 0;
+          const trades   = sp.trades || (buys + sells);
 
           // P&L não realizado: soma dos slots desta estratégia em todos os pares
           const allSlots = s.slots || {};
@@ -780,7 +782,7 @@
             <p class="text-sm font-bold font-mono" style="color:${pnlColor}">${totalBrl >= 0 ? '+' : '-'}R$ ${fmtBRL(Math.abs(totalBrl))}</p>
             <div class="flex justify-between text-[10px] text-gray-600 mt-1">
               <span>realiz: ${realBrl >= 0 ? '+' : ''}R$ ${fmtBRL(realBrl)}</span>
-              <span>${trades} trade${trades !== 1 ? 's' : ''}</span>
+              <span>${buys}↑ ${sells}↓ (${trades} ops)</span>
             </div>
             ${unrlUsd !== 0 ? `<p class="text-[10px] mt-0.5" style="color:${unrlBrl>=0?'#4ade80':'#f87171'}">não realiz: ${unrlBrl>=0?'+':'-'}R$ ${fmtBRL(Math.abs(unrlBrl))}</p>` : ''}
           </div>`;

@@ -236,7 +236,8 @@ STRAT_PNL_FILE = os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "data", "strategy_pnl.json")
 
 def _load_strategy_pnl() -> dict:
-    pnl = {s.name: {"realized": 0.0, "trades": 0} for s in all_strategies}
+    pnl = {s.name: {"realized": 0.0, "trades": 0, "buys": 0, "sells": 0}
+           for s in all_strategies}
     try:
         if os.path.exists(STRAT_PNL_FILE):
             saved = json.load(open(STRAT_PNL_FILE))
@@ -258,10 +259,21 @@ def _save_strategy_pnl(pnl: dict):
 strategy_pnl = _load_strategy_pnl()
 
 def _attr_pnl(strat_name: str, pnl_usd: float):
-    """Atribui P&L realizado diretamente à estratégia."""
+    """Registra P&L realizado e contabiliza o sell na estratégia."""
     if strat_name in strategy_pnl:
         strategy_pnl[strat_name]["realized"] += pnl_usd
-        strategy_pnl[strat_name]["trades"]   += 1
+        strategy_pnl[strat_name]["sells"]    = strategy_pnl[strat_name].get("sells", 0) + 1
+        strategy_pnl[strat_name]["trades"]   = (strategy_pnl[strat_name].get("buys", 0)
+                                                + strategy_pnl[strat_name]["sells"])
+    _save_strategy_pnl(strategy_pnl)
+    state["strategy_pnl"] = strategy_pnl
+
+def _count_buy(strat_name: str):
+    """Contabiliza um BUY na estratégia."""
+    if strat_name in strategy_pnl:
+        strategy_pnl[strat_name]["buys"]   = strategy_pnl[strat_name].get("buys", 0) + 1
+        strategy_pnl[strat_name]["trades"] = (strategy_pnl[strat_name]["buys"]
+                                              + strategy_pnl[strat_name].get("sells", 0))
     _save_strategy_pnl(strategy_pnl)
     state["strategy_pnl"] = strategy_pnl
 
@@ -454,7 +466,7 @@ async def reset_portfolio(token: str = ""):
 
     # ── Reinicia P&L por estratégia ──────────────────────────────
     for name in strategy_pnl:
-        strategy_pnl[name] = {"realized": 0.0, "trades": 0}
+        strategy_pnl[name] = {"realized": 0.0, "trades": 0, "buys": 0, "sells": 0}
     _save_strategy_pnl(strategy_pnl)
     state["strategy_pnl"] = strategy_pnl
 
@@ -734,6 +746,7 @@ async def trading_loop():
                                           slot["pyramids"] = pdone + 1
                                           _record_trade("BUY", pair, add_qty, price, pyr_usd,
                                                         f"{strat.name}:pyramid{pdone+1}")
+                                          _count_buy(strat.name)
                                           logger.info(f"[{pair}][{strat.name}] 📈 PYRAMID #{pdone+1} "
                                                       f"(gain {gain_pct:.1f}%)")
 
@@ -753,6 +766,7 @@ async def trading_loop():
                                       slot["peak"]     = price
                                       slot["pyramids"] = 0
                                       _record_trade("BUY", pair, qty, price, trade_usd, strat.name)
+                                      _count_buy(strat.name)
                                       logger.info(f"[{pair}][{strat.name}] ✅ BUY 1% "
                                                   f"R${trade_usd*usd_brl:.0f} @ ${price:,.2f}")
                                       state["feed"].insert(0, {
