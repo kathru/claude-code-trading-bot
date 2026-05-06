@@ -144,7 +144,7 @@ CANDLE_6H         = "SIX_HOUR"
 CANDLE_1D         = "ONE_DAY"        # Trend, VolGuard
 
 # ── Execução por estratégia (independente, sem consenso) ──────────
-TRADE_PCT          = 0.05    # 5% do saldo disponível por trade (dinâmico)
+TRADE_PCT          = 0.03    # 3% do saldo disponível por trade (dinâmico)
 
 # ── Gestão de risco ──────────────────────────────────────────────
 INITIAL_SL_PCT        = 5.0  # SL: -5%
@@ -723,7 +723,11 @@ async def trading_loop():
                               pdone = slot.get("pyramids", 0)
                               if pdone < PYRAMID_MAX:
                                   pyr_usd = engine.balance_usd * TRADE_PCT * PYRAMID_SIZE_PCT
-                                  if engine.balance_usd >= pyr_usd * 1.006:
+                                  if engine.balance_usd < pyr_usd * 1.006:
+                                      # Se não tem o valor do pyramid, usa o saldo restante
+                                      pyr_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
+
+                                  if pyr_usd > 1.0:  # Mínimo de $1 para pyramid
                                       add_qty = pyr_usd / price
                                       if engine.buy(symbol, pyr_usd, price,
                                                     f"{strat.name}:pyramid{pdone+1}"):
@@ -745,8 +749,13 @@ async def trading_loop():
                           if cooldown > 0:
                               sl_cooldowns[key] = cooldown - 1
                           else:
+                              # Tenta 3% primeiro, se não houver usa o restante do saldo
                               trade_usd = engine.balance_usd * TRADE_PCT
-                              if engine.balance_usd >= trade_usd * 1.006:
+                              if engine.balance_usd < trade_usd * 1.006:
+                                  # Se não tem 3%, usa o saldo restante (menos margem de taxa)
+                                  trade_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
+
+                              if trade_usd > 1.0:  # Mínimo de $1 para trade
                                   qty = trade_usd / price
                                   if engine.buy(symbol, trade_usd, price, strat.name):
                                       slot["qty"]      = qty
@@ -755,18 +764,19 @@ async def trading_loop():
                                       slot["pyramids"] = 0
                                       _record_trade("BUY", pair, qty, price, trade_usd, strat.name)
                                       _count_buy(strat.name)
-                                      logger.info(f"[{pair}][{strat.name}] ✅ BUY {TRADE_PCT*100:.0f}% "
+                                      pct_used = (trade_usd / engine.initial_balance) * 100 if engine.initial_balance > 0 else 0
+                                      logger.info(f"[{pair}][{strat.name}] ✅ BUY {pct_used:.1f}% "
                                                   f"R${trade_usd*usd_brl:.0f} @ ${price:,.2f}")
                                       state["feed"].insert(0, {
                                           "time": now_str, "cycle": state["cycle"],
                                           "pair": pair, "strategy": strat.name,
                                           "signal": "BUY", "price": price,
                                           "executed": True,
-                                          "note": f"R${trade_usd*usd_brl:.0f} ({TRADE_PCT*100:.0f}% saldo)",
+                                          "note": f"R${trade_usd*usd_brl:.0f} ({pct_used:.1f}% do saldo)",
                                       })
                                       state["feed"] = state["feed"][:100]
                               else:
-                                  logger.info(f"[{pair}][{strat.name}] BUY negado — saldo insuficiente")
+                                  logger.info(f"[{pair}][{strat.name}] BUY negado — saldo insuficiente (< $1)")
 
                 # ── Slot manual: SL/TP/Trailing (fecha 100%) ──────────────────
                 ms = strategy_slots.get(f"manual:{pair}")
