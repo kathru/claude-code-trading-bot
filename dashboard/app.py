@@ -667,12 +667,13 @@ async def trading_loop():
                   pair_signals["buy_score"]  = buy_score
                   pair_signals["sell_score"] = sell_score
 
-                  # Feed: registra mudanças de sinal com score final completo
+                  # Feed: registra mudanças de sinal com valor e percentual
                   for strat in all_strategies:
                       signal  = signals_this_cycle[strat.name]
                       sig_key = f"{pair}:{strat.name}"
                       if signal != last_signals.get(sig_key):
                           last_signals[sig_key] = signal
+                          trade_usd = engine.balance_usd * TRADE_PCT
                           state["feed"].insert(0, {
                               "time":     now_str,
                               "cycle":    state["cycle"],
@@ -681,7 +682,7 @@ async def trading_loop():
                               "signal":   signal,
                               "price":    price,
                               "executed": False,
-                              "note":     f"↑{buy_score}/4  ↓{sell_score}/4",
+                              "note":     f"R${trade_usd*usd_brl:.0f} ({TRADE_PCT*100:.0f}% saldo)",
                           })
                           state["feed"] = state["feed"][:100]
 
