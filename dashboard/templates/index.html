@@ -807,6 +807,7 @@
               <span style="color:#4ade80">realiz: ${realBrl >= 0 ? '+' : ''}R$ ${fmtBRL(realBrl)}</span>
               <span class="text-gray-600">${buys}↑ ${sells}↓ (${trades} ops)</span>
             </div>
+            <p class="text-[9px] mt-1 text-blue-400">🎯 TP: ${s.tp_objective?.min}%-${s.tp_objective?.max}% (atual ${s.tp_objective?.current}%)</p>
             ${unrlUsd !== 0 ? `<p class="text-[10px] mt-0.5" style="color:#f97316">não realiz: ${unrlBrl>=0?'+':'-'}R$ ${fmtBRL(Math.abs(unrlBrl))}</p>` : ''}
           </div>`;
         }).join('');

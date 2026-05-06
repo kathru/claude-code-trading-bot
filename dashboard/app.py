@@ -98,14 +98,14 @@ _last_prices: dict = {}      # {pair: float}
 
 
 def _dynamic_tp(fg_value: int) -> float:
-    """TP dinâmico entre 3% e 8% inversamente proporcional ao Fear & Greed.
+    """TP dinâmico entre 3% e 5% inversamente proporcional ao Fear & Greed.
     Mercado com medo   → alvo maior (deixa winners correrem mais)
     Mercado ganancioso → alvo menor (realiza antes da euforia acabar)
     """
-    if   fg_value <= 25: return TAKE_PROFIT_MAX          # Medo extremo: +8%
-    elif fg_value <= 40: return round(TAKE_PROFIT_MIN + (TAKE_PROFIT_MAX - TAKE_PROFIT_MIN) * 0.67, 1)  # +6.5%
-    elif fg_value <= 60: return round((TAKE_PROFIT_MIN + TAKE_PROFIT_MAX) / 2, 1)  # Neutro: +5.5%
-    elif fg_value <= 74: return round(TAKE_PROFIT_MIN + (TAKE_PROFIT_MAX - TAKE_PROFIT_MIN) * 0.17, 1)  # +3.8%
+    if   fg_value <= 25: return TAKE_PROFIT_MAX          # Medo extremo: +5%
+    elif fg_value <= 40: return round(TAKE_PROFIT_MIN + (TAKE_PROFIT_MAX - TAKE_PROFIT_MIN) * 0.67, 1)  # +4.3%
+    elif fg_value <= 60: return round((TAKE_PROFIT_MIN + TAKE_PROFIT_MAX) / 2, 1)  # Neutro: +4%
+    elif fg_value <= 74: return round(TAKE_PROFIT_MIN + (TAKE_PROFIT_MAX - TAKE_PROFIT_MIN) * 0.17, 1)  # +3.3%
     else:                return TAKE_PROFIT_MIN           # Ganância extrema: +3%
 
 
@@ -149,7 +149,7 @@ TRADE_PCT          = 0.05    # 5% do portfolio total por trade (dinâmico)
 # ── Gestão de risco ──────────────────────────────────────────────
 INITIAL_SL_PCT        = 5.0  # SL: -5%
 TAKE_PROFIT_MIN       = 3.0  # TP mínimo: +3% (mercado em ganância)
-TAKE_PROFIT_MAX       = 8.0  # TP máximo: +8% (mercado em medo extremo)
+TAKE_PROFIT_MAX       = 5.0  # TP máximo: +5% (mercado em medo extremo)
 TRAILING_STOP_PCT     = 8.0  # trailing: -8% do pico
 TRAILING_ACTIVATE_PCT = 6.0  # trailing só ativa após +6%
 SL_COOLDOWN_CYCLES    = 1    # após SL, espera 1 ciclo antes de re-entrar (90s)
@@ -566,7 +566,8 @@ async def trading_loop():
         fg = await asyncio.get_event_loop().run_in_executor(None, _fetch_fear_greed)
         state["fear_greed"] = {"value": fg["value"], "label": fg["label"]}
         fg_value       = fg["value"]
-        current_tp_pct = _dynamic_tp(fg_value)   # 3%–8% dinâmico
+        current_tp_pct = _dynamic_tp(fg_value)   # 3%–5% dinâmico
+        state["tp_objective"] = {"min": TAKE_PROFIT_MIN, "max": TAKE_PROFIT_MAX, "current": current_tp_pct}
 
         for pair in PAIRS:
             symbol = pair.split("-")[0]
