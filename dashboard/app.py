@@ -155,7 +155,7 @@ TRAILING_ACTIVATE_PCT = 6.0  # trailing só ativa após +6%
 SL_COOLDOWN_CYCLES    = 1    # após SL, espera 1 ciclo antes de re-entrar (90s)
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
-PYRAMID_MAX          = 3     # máx. 3 adições (alavancagem até 3× a entrada)
+PYRAMID_MAX          = 5     # máx. 5 adições (alavancagem até 5× a entrada)
 PYRAMID_MIN_GAIN_PCT = 0.5   # só adiciona se ≥ +0.5% no lucro
 PYRAMID_SIZE_PCT     = 0.25  # cada pyramid = 25% do trade inicial
 
