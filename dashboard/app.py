@@ -159,7 +159,7 @@ CANDLE_6H         = "SIX_HOUR"
 CANDLE_1D         = "ONE_DAY"        # Trend, VolGuard
 
 # ── Execução por estratégia (independente, sem consenso) ──────────
-TRADE_PCT          = 0.15   # 15% do portfolio total por trade (dinâmico) — aumentado para 65% agressivo
+TRADE_PCT          = 0.10   # 10% do portfolio por trade — reduzido para diminuir taxas e risco
 
 
 def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float = None) -> float:
@@ -421,8 +421,10 @@ def _calculate_kpis() -> dict:
         qty      = t.get("qty", 0)
         entry    = _avg_entry_at_sell(all_trades_list, idx)
         if entry > 0 and qty > 0:
-            cost_usd = qty * entry
-            pnl      = sell_usd - cost_usd
+            # Custo inclui fee de compra (0.6%) + sell_usd já descontou fee de venda
+            buy_fee  = t.get("fee", qty * entry * 0.006)
+            cost_usd = qty * entry + buy_fee
+            pnl      = sell_usd - cost_usd   # líquido real após todos os fees
         else:
             pnl = 0.0
         trade_pnls.append(pnl)
@@ -433,21 +435,21 @@ def _calculate_kpis() -> dict:
     losses    = len(loss_pnls)
 
     avg_win  = sum(win_pnls)  / wins   if wins   > 0 else 0.0
-    avg_loss = sum(loss_pnls) / losses if losses > 0 else 0.0   # valor negativo
+    avg_loss = sum(loss_pnls) / losses if losses > 0 else 0.0
 
-    sum_wins   = sum(win_pnls)        if win_pnls  else 0.0
-    sum_losses = abs(sum(loss_pnls))  if loss_pnls else 0.0
+    sum_wins      = sum(win_pnls)       if win_pnls  else 0.0
+    sum_losses    = abs(sum(loss_pnls)) if loss_pnls else 0.0
     profit_factor = sum_wins / sum_losses if sum_losses > 0 else 0.0
 
     n = len(sell_trades)
     return {
         "total_trades":  len(all_trades),
         "sell_trades":   n,
-        "win_rate":      (wins / n * 100) if n > 0 else 0.0,
+        "win_rate":      (wins / n) if n > 0 else 0.0,   # decimal 0-1 (frontend multiplica por 100)
         "win_count":     wins,
         "loss_count":    losses,
         "avg_win":       avg_win,
-        "avg_loss":      avg_loss,          # negativo = perda média por trade
+        "avg_loss":      avg_loss,
         "profit_factor": profit_factor,
         "expected_value": (avg_win * wins + avg_loss * losses) / n if n > 0 else 0.0,
     }

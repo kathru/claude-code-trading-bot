@@ -760,8 +760,8 @@
     // Ganho / Perda médios
     const avgW = kpis.avg_win  || 0;
     const avgL = kpis.avg_loss || 0;
-    if (el('kpi-avg-win'))  el('kpi-avg-win').textContent  = hasTrades ? (avgW > 0 ? 'R$ ' + fmtBRL(avgW * usdBrl) : 'R$ 0,00') : '—';
-    if (el('kpi-avg-loss')) el('kpi-avg-loss').textContent = hasSells   ? 'Perda: R$ ' + fmtBRL(avgL * usdBrl)   : 'Perda: —';
+    if (el('kpi-avg-win'))  el('kpi-avg-win').textContent  = hasTrades ? (avgW > 0 ? '+R$ ' + fmtBRL(avgW * usdBrl) : 'R$ 0,00') : '—';
+    if (el('kpi-avg-loss')) el('kpi-avg-loss').textContent = hasSells   ? 'Perda: -R$ ' + fmtBRL(Math.abs(avgL) * usdBrl) : 'Perda: —';
 
     // TP Dinâmico
     if (el('kpi-tp') && tp.current != null) {
