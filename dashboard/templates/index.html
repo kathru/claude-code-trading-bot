@@ -850,7 +850,7 @@
       document.getElementById('total-fees-usd').textContent = 'US$ ' + fmt(feesUsd) + ' · 0,60%/trade';
 
       // Prices & Signals
-      ['BTC', 'ETH', 'SOL'].forEach(sym => {
+      ['BTC', 'ETH', 'SOL', 'AVAX', 'LINK', 'DOGE'].forEach(sym => {
         const pair = sym + '-USD';
         const price = (s.prices || {})[pair];
         const sig   = (s.signals || {})[pair];
