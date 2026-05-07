@@ -731,9 +731,14 @@
       const data = await res.json();
       if (!data.length) return;
 
-      const toTs = t => Math.floor(new Date(t).getTime() / 1000);
-      const candles = data.map(d => ({ time: toTs(d[0]), open: +d[3], high: +d[2], low: +d[1], close: +d[4] }))
-                          .sort((a, b) => a.time - b.time);
+      // API retorna objetos {time, open, high, low, close} com time como Unix timestamp
+      const candles = data.map(d => ({
+        time:  typeof d.time === 'number' ? d.time : Math.floor(new Date(d[0]).getTime() / 1000),
+        open:  +(d.open  ?? d[3]),
+        high:  +(d.high  ?? d[2]),
+        low:   +(d.low   ?? d[1]),
+        close: +(d.close ?? d[4]),
+      })).sort((a, b) => a.time - b.time);
 
       candleSeries.setData(candles);
       document.getElementById('candle-price').textContent = 'R$ ' + fmtBRL(candles[candles.length-1].close * usdBrl);
