@@ -425,10 +425,19 @@ state = {
     "prices":    {},
     "signals":   {},
     "slots":     strategy_slots,   # 12 slots independentes + 3 manuais
-    "portfolio": {"usd": engine.balance_usd, "total": engine.balance_usd,
-                  "pnl": 0.0, "pnl_pct": 0.0,
-                  "initial_balance": engine.initial_balance,
-                  "total_fees_usd": engine.total_fees_usd},
+    # FIX: campos BRL completos no state inicial — evita saldo US$ 10.000 na conexão WebSocket
+    "portfolio": {
+        "usd":                 round(engine.balance_usd, 2),
+        "total_usd":           round(engine.portfolio_value(), 2),
+        "total_brl":           round(engine.portfolio_value() * 5.70, 2),
+        "pnl_usd":             0.0,
+        "pnl_brl":             0.0,
+        "pnl_pct":             0.0,
+        "initial_balance_usd": round(engine.initial_balance, 2),
+        "initial_balance_brl": round(TOTAL_BRL_INITIAL, 2),
+        "holdings":            {k: round(v, 8) for k, v in engine.holdings.items()},
+        "total_fees_usd":      round(engine.total_fees_usd, 4),
+    },
     "trades":    _load_trades_from_engine(),
     "feed":      [],
     "history":   _load_history(),
@@ -1015,12 +1024,23 @@ async def trading_loop():
 
 @app.on_event("startup")
 async def startup():
+    # ── Fix Bug 2: Sincronizar initial_balance com cotação BRL atual ──────
+    usd_brl_now = _fetch_usd_brl()
+    correct_initial_usd = TOTAL_BRL_INITIAL / usd_brl_now
+    if abs(engine.initial_balance - correct_initial_usd) > 1.0:
+        logger.info(f"[STARTUP] Sincronizando initial_balance: {engine.initial_balance:.4f} → {correct_initial_usd:.4f} (R${TOTAL_BRL_INITIAL} @ {usd_brl_now:.4f})")
+        engine.initial_balance = correct_initial_usd
+        # Só ajusta balance_usd se não houver posições abertas (reset limpo)
+        if not engine.holdings:
+            engine.balance_usd = correct_initial_usd
+        engine._save_state()
+    state["usd_brl"] = usd_brl_now
+
     # Inicializa preços antes de iniciar trading loop
     logger.info(f"[STARTUP] Iniciando inicialização de preços para {PAIRS}")
     for pair in PAIRS:
         try:
             ticker = client.get_ticker(pair)
-            logger.info(f"[STARTUP] Resposta de ticker para {pair}: {ticker}")
             price = float(ticker.get("price", 0))
             if price:
                 state["prices"][pair] = {
@@ -1028,11 +1048,15 @@ async def startup():
                     "price_pct_chg": float(ticker.get("price_percentage_change_24h", 0)),
                     "volume_24h": float(ticker.get("volume_24h", 0)),
                 }
-                logger.info(f"[STARTUP] Preço de {pair} inicializado: R${price:.2f}")
+                engine.update_price(pair.split("-")[0], price)
+                logger.info(f"[STARTUP] {pair}: ${price:.2f}")
             else:
                 logger.warning(f"[STARTUP] Preço inválido para {pair}: {ticker.get('price')}")
         except Exception as e:
             logger.error(f"[STARTUP] Erro ao buscar {pair}: {type(e).__name__}: {e}")
 
-    logger.info(f"[STARTUP] state['prices'] após inicialização: {state['prices'].keys()}")
+    # ── Fix Bug 4: Atualizar portfolio state ANTES do primeiro ciclo ──────
+    _update_portfolio_state()
+    logger.info(f"[STARTUP] Portfolio inicializado — USD: ${engine.balance_usd:.2f} | Total: ${engine.portfolio_value():.2f} | initial_balance: ${engine.initial_balance:.2f}")
+    logger.info(f"[STARTUP] state['prices'] após inicialização: {list(state['prices'].keys())}")
     asyncio.create_task(trading_loop())
