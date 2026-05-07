@@ -223,7 +223,7 @@ all_strategies = [
     DonchianBreakout(period=20, rsi_min=45.0, vol_mult=1.0),  # RSI 45 (menos filtro) + volume normal (1.0 sem spike req)
     EMAPullback(fast=9, mid=21, slow=50, touch_tolerance_pct=0.3),  # 0.3 — toque real na EMA, evita falsos positivos
     MACDMomentum(fast=12, slow=26, signal=9, ema_filter=12),  # Reduzido para 12 — resposta rápida
-    StochBounce(k_period=14, d_period=3, oversold=20, overbought=80, ma_filter=15),  # Oversold 20 + ma_filter 15 — bounce cedo
+    StochBounce(k_period=14, d_period=3, oversold=25, overbought=80, ma_filter=50),  # oversold 25 + MA50 — trend real, não bloqueia em pequenas correções
     RSIDivergenceDetector(period=14, lookback_periods=5),  # Detector de divergência RSI — confirma reversões
 ]
 
