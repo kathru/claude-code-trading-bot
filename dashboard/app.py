@@ -390,22 +390,40 @@ def _calculate_kpis() -> dict:
             "expected_value": 0.0,
         }
 
-    # Calcula P&L por trade de SELL:
-    # Para cada SELL, compara o usd recebido com o custo médio das compras anteriores
-    # Usa entry_prices do engine para o custo médio de entrada
+    # Reconstrói custo médio de entrada por símbolo a partir do histórico de trades
+    # (entry_prices é deletado do engine quando a posição fecha)
+    def _avg_entry_at_sell(trades_history, sell_idx):
+        """Calcula preço médio de entrada no momento do SELL usando trades anteriores."""
+        sell = trades_history[sell_idx]
+        symbol = sell.get("pair", "").replace("-USD", "")
+        running_qty, running_cost = 0.0, 0.0
+        for t in trades_history[:sell_idx]:
+            if t.get("pair", "").replace("-USD", "") != symbol:
+                continue
+            if t.get("side") == "BUY":
+                q = t.get("qty", 0)
+                running_qty  += q
+                running_cost += q * t.get("price", 0)
+            elif t.get("side") == "SELL":
+                q = min(t.get("qty", 0), running_qty)
+                if running_qty > 1e-10:
+                    running_cost *= (running_qty - q) / running_qty
+                running_qty = max(0, running_qty - q)
+        return running_cost / running_qty if running_qty > 1e-10 else 0.0
+
+    # Calcula P&L por trade de SELL
+    all_trades_list = list(all_trades)
     trade_pnls = []
-    for t in sell_trades:
-        symbol    = t.get("pair", "").replace("-USD", "")
-        sell_usd  = t.get("usd", 0)   # USD recebido na venda (já descontada a taxa)
-        qty       = t.get("qty", 0)
-        fee       = t.get("fee", 0)
-        # entry_price salvo no engine no momento da compra
-        entry     = engine.entry_prices.get(symbol, 0)
+    for idx, t in enumerate(all_trades_list):
+        if t.get("side") != "SELL":
+            continue
+        sell_usd = t.get("usd", 0)
+        qty      = t.get("qty", 0)
+        entry    = _avg_entry_at_sell(all_trades_list, idx)
         if entry > 0 and qty > 0:
             cost_usd = qty * entry
-            pnl      = sell_usd - cost_usd   # positivo = lucro, negativo = prejuízo
+            pnl      = sell_usd - cost_usd
         else:
-            # Fallback: usa realized acumulado do strategy_pnl dividido pelo nº de sells
             pnl = 0.0
         trade_pnls.append(pnl)
 
