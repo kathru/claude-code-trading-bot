@@ -114,7 +114,7 @@
     <div class="card p-5">
       <div class="flex items-center justify-between mb-3">
         <h3 class="font-semibold text-white">Painel de estratégias</h3>
-        <span class="text-xs text-gray-500">P&L em trades · Portfolio R$ 4.000 (fixo)</span>
+        <span id="strategy-panel-subtitle" class="text-xs text-gray-500">P&L em trades · Portfolio R$ 4.000 (fixo)</span>
       </div>
       <div id="strategy-panel" class="grid grid-cols-2 lg:grid-cols-5 gap-3"></div>
     </div>
@@ -470,6 +470,13 @@
     pnlEl.className = 'text-lg font-bold leading-tight ' + (pnlBRL >= 0 ? 'text-green-400' : 'text-red-400');
     document.getElementById('pnl-pct').textContent = (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%';
     document.getElementById('pnl-pct').className = 'text-[10px] mt-0.5 ' + (pnlPct >= 0 ? 'text-green-500' : 'text-red-500');
+
+    const subtitleEl = document.getElementById('strategy-panel-subtitle');
+    if (subtitleEl) {
+      const pctSign  = pnlPct >= 0 ? '+' : '';
+      const pctColor = pnlPct >= 0 ? '#4ade80' : '#f87171';
+      subtitleEl.innerHTML = `P&L em trades · Portfolio R$ 4.000 (fixo) · <span style="color:${pctColor};font-weight:600">${pctSign}${pnlPct.toFixed(2)}%</span>`;
+    }
 
     document.getElementById('trade-count').textContent = (s.trades || []).length;
     document.getElementById('trade-badge').textContent = (s.trades || []).length + ' trades';
