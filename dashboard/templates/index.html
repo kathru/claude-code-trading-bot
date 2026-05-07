@@ -595,21 +595,7 @@
             <span class="text-gray-600">${buys}↑ ${sells}↓</span>
           </div>
           ${unrlUsd !== 0 ? `<p class="text-[10px] mt-0.5" style="color:#f97316">Não realizado: ${unrlBrl>=0?'+':'-'}R$ ${fmtBRL(Math.abs(unrlBrl))}</p>` : ''}
-          ${tpBrl > 0 ? `
-          <div class="mt-1.5 pt-1.5 border-t border-gray-700/60 space-y-0.5">
-            <div class="flex justify-between text-[10px]">
-              <span class="text-gray-500">TP objetivo</span>
-              <span style="color:#818cf8">+R$ ${fmtBRL(tpBrl)}</span>
-            </div>
-            <div class="flex justify-between text-[10px]">
-              <span class="text-gray-500">TP atual</span>
-              <span style="color:${unrlBrl >= 0 ? '#4ade80' : '#f97316'}">${unrlBrl >= 0 ? '+' : '-'}R$ ${fmtBRL(Math.abs(unrlBrl))}</span>
-            </div>
-            <div class="flex justify-between text-[10px]">
-              <span class="text-gray-500">Falta</span>
-              <span style="color:#818cf8">R$ ${fmtBRL(tpFalta)} <span class="text-gray-600">(${tpBrl > 0 ? ((tpFalta/tpBrl)*100).toFixed(0) : 0}%)</span></span>
-            </div>
-          </div>` : ''}
+          ${tpBrl > 0 ? `<p class="text-[10px] mt-0.5" style="color:#818cf8">TP: falta R$ ${fmtBRL(tpFalta)} (${tpBrl > 0 ? ((tpFalta/tpBrl)*100).toFixed(0) : 0}%)</p>` : ''}
         </div>`;
       }).join('');
     }
