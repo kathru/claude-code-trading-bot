@@ -390,15 +390,17 @@ def _calculate_kpis() -> dict:
             "expected_value": 0.0,
         }
 
-    # Reconstrói custo médio de entrada por símbolo a partir do histórico de trades
-    # (entry_prices é deletado do engine quando a posição fecha)
+    # Reconstrói custo médio de entrada por símbolo a partir de engine.trades
+    # engine.trades usa campo "symbol" (ex: "LINK") e tem "qty"
     def _avg_entry_at_sell(trades_history, sell_idx):
         """Calcula preço médio de entrada no momento do SELL usando trades anteriores."""
-        sell = trades_history[sell_idx]
-        symbol = sell.get("pair", "").replace("-USD", "")
+        sell   = trades_history[sell_idx]
+        # engine.trades usa "symbol" (ex:"LINK"), não "pair" (ex:"LINK-USD")
+        symbol = sell.get("symbol") or sell.get("pair", "").replace("-USD", "")
         running_qty, running_cost = 0.0, 0.0
         for t in trades_history[:sell_idx]:
-            if t.get("pair", "").replace("-USD", "") != symbol:
+            t_sym = t.get("symbol") or t.get("pair", "").replace("-USD", "")
+            if t_sym != symbol:
                 continue
             if t.get("side") == "BUY":
                 q = t.get("qty", 0)
@@ -411,7 +413,7 @@ def _calculate_kpis() -> dict:
                 running_qty = max(0, running_qty - q)
         return running_cost / running_qty if running_qty > 1e-10 else 0.0
 
-    # Calcula P&L por trade de SELL
+    # Calcula P&L por trade de SELL (engine.trades tem "qty")
     all_trades_list = list(all_trades)
     trade_pnls = []
     for idx, t in enumerate(all_trades_list):
@@ -421,10 +423,11 @@ def _calculate_kpis() -> dict:
         qty      = t.get("qty", 0)
         entry    = _avg_entry_at_sell(all_trades_list, idx)
         if entry > 0 and qty > 0:
-            # Custo inclui fee de compra (0.6%) + sell_usd já descontou fee de venda
-            buy_fee  = t.get("fee", qty * entry * 0.006)
+            # buy_fee: custo da compra (0.6% sobre o valor de compra)
+            # sell_usd já é líquido da taxa de venda
+            buy_fee  = qty * entry * TAKER_FEE
             cost_usd = qty * entry + buy_fee
-            pnl      = sell_usd - cost_usd   # líquido real após todos os fees
+            pnl      = sell_usd - cost_usd
         else:
             pnl = 0.0
         trade_pnls.append(pnl)
