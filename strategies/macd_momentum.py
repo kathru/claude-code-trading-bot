@@ -16,7 +16,7 @@ class MACDMomentum(BaseStrategy):
     """
 
     def __init__(self, fast: int = 12, slow: int = 26, signal: int = 9,
-                 ema_filter: int = 50):
+                 ema_filter: int = 20):
         super().__init__("MACD Momentum")
         self.fast       = fast
         self.slow       = slow

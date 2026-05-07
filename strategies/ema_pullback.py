@@ -11,18 +11,22 @@ class EMAPullback(BaseStrategy):
     BUY  → low da vela toca/quebra o EMA21 (pullback) E close >= EMA21
            (rejeição/recompra) E vela atual é verde.
     SELL → EMA9 cruza abaixo do EMA21 (perda de tendência curta).
+    SELL_HALF → Quando atingir +2.5% de lucro (meio-caminho até TP de 5%)
+                para proteger pyramides e fazer lock-in de lucro.
 
     Edge: padrão clássico de continuação de tendência.
     Win rate alto porque só age dentro de regime de alta.
+    Pyramiding protection: tira lucro parcial em subidas de +2.5%.
     """
 
     def __init__(self, fast: int = 9, mid: int = 21, slow: int = 50,
-                 touch_tolerance_pct: float = 0.4):
+                 touch_tolerance_pct: float = 0.4, tp_half: float = 2.5):
         super().__init__("EMA Pullback")
         self.fast = fast
         self.mid  = mid
         self.slow = slow
         self.tol  = touch_tolerance_pct / 100.0
+        self.tp_half = tp_half / 100.0  # 2.5% → 0.025
 
     def analyze(self, df: pd.DataFrame) -> str:
         if len(df) < self.slow + 5:

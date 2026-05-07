@@ -855,6 +855,11 @@ async def trading_loop():
                               _sell_slot(slot["qty"], f"SL-{INITIAL_SL_PCT:.0f}%", is_sl=True)
                           elif tr_hit:
                               _sell_slot(slot["qty"], f"TRAILING-{TRAILING_STOP_PCT:.0f}%")
+                          # ── EMA Pullback: Partial TP at +2.5% when pyramiding ──
+                          elif strat.name == "EMA Pullback" and gain_pct >= 2.5 and slot.get("pyramids", 0) > 0:
+                              half_qty = slot["qty"] / 2
+                              if half_qty > 1e-8:
+                                  _sell_slot(half_qty, f"TP_HALF+2.5% (pyramid protect)")
                           elif extreme_greed or signal == "SELL":
                               # Saída gradual: TRADE_PCT% do patrimonio por ciclo
                               max_qty = portfolio_total * TRADE_PCT / price

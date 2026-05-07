@@ -17,7 +17,7 @@ class DonchianBreakout(BaseStrategy):
     """
 
     def __init__(self, period: int = 20, rsi_period: int = 14,
-                 rsi_min: float = 55.0, vol_mult: float = 1.2):
+                 rsi_min: float = 55.0, vol_mult: float = 1.5):
         super().__init__("Donchian Breakout")
         self.period     = period
         self.rsi_period = rsi_period
