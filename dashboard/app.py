@@ -51,14 +51,22 @@ def _fetch_usd_brl() -> float:
     now = time.time()
     if now - _usd_brl_cache["ts"] < USD_BRL_TTL:
         return _usd_brl_cache["rate"]
-    try:
-        r = requests.get("https://api.frankfurter.app/latest?from=USD&to=BRL", timeout=5)
-        rate = float(r.json()["rates"]["BRL"])
-        _usd_brl_cache["rate"] = rate
-        _usd_brl_cache["ts"]   = now
-        return rate
-    except Exception:
-        return _usd_brl_cache["rate"]
+    # Tenta múltiplas APIs como fallback
+    apis = [
+        ("https://api.frankfurter.dev/v1/latest?from=USD&to=BRL", lambda d: float(d["rates"]["BRL"])),
+        ("https://open.er-api.com/v6/latest/USD", lambda d: float(d["rates"]["BRL"])),
+    ]
+    for url, parser in apis:
+        try:
+            r = requests.get(url, timeout=5)
+            rate = parser(r.json())
+            if 3.0 < rate < 10.0:   # sanity check
+                _usd_brl_cache["rate"] = rate
+                _usd_brl_cache["ts"]   = now
+                return rate
+        except Exception:
+            continue
+    return _usd_brl_cache["rate"]
 
 
 # ── Fear & Greed Index (alternative.me) ──────────────────────────
