@@ -176,7 +176,7 @@
           <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
           <span id="trend-BTC" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
         </div>
-        <div class="grid grid-cols-2 gap-1 mb-2">
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-1 mb-2">
           <div id="slot-BTC-Don" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
             <p class="opacity-60 mb-0.5">🚀 Donchian</p>
             <p class="text-[10px] font-bold">HOLD</p>
@@ -200,6 +200,12 @@
             <p class="text-[10px] font-bold">HOLD</p>
             <p class="text-gray-600 mt-0.5">sem posição</p>
             <p id="slot-BTC-Stoch-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+          <div id="slot-BTC-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">〰️ RSI Div</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-BTC-RSI-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
           </div>
         </div>
         <div id="holdings-BTC" class="mt-1 text-xs text-gray-500 hidden">
@@ -246,7 +252,7 @@
           <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
           <span id="trend-ETH" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
         </div>
-        <div class="grid grid-cols-2 gap-1 mb-2">
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-1 mb-2">
           <div id="slot-ETH-Don" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
             <p class="opacity-60 mb-0.5">🚀 Donchian</p>
             <p class="text-[10px] font-bold">HOLD</p>
@@ -270,6 +276,12 @@
             <p class="text-[10px] font-bold">HOLD</p>
             <p class="text-gray-600 mt-0.5">sem posição</p>
             <p id="slot-ETH-Stoch-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+          <div id="slot-ETH-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">〰️ RSI Div</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-ETH-RSI-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
           </div>
         </div>
         <div id="holdings-ETH" class="mt-1 text-xs text-gray-500 hidden">
@@ -316,7 +328,7 @@
           <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
           <span id="trend-SOL" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
         </div>
-        <div class="grid grid-cols-2 gap-1 mb-2">
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-1 mb-2">
           <div id="slot-SOL-Don" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
             <p class="opacity-60 mb-0.5">🚀 Donchian</p>
             <p class="text-[10px] font-bold">HOLD</p>
@@ -340,6 +352,12 @@
             <p class="text-[10px] font-bold">HOLD</p>
             <p class="text-gray-600 mt-0.5">sem posição</p>
             <p id="slot-SOL-Stoch-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+          <div id="slot-SOL-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">〰️ RSI Div</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-SOL-RSI-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
           </div>
         </div>
         <div id="holdings-SOL" class="mt-1 text-xs text-gray-500 hidden">
@@ -366,6 +384,234 @@
           </div>
         </div>
       </div>
+
+      <!-- AVAX -->
+      <div id="card-AVAX" class="card p-5">
+        <div class="flex items-start justify-between mb-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center text-xl">⬙</div>
+            <div>
+              <h2 class="font-bold text-white text-lg">Avalanche</h2>
+              <p class="text-xs text-gray-500">AVAX-USD</p>
+            </div>
+          </div>
+          <div class="text-right">
+            <p id="price-AVAX" class="text-2xl font-bold text-white font-mono">—</p>
+            <p id="chg-AVAX" class="text-sm text-gray-400">—</p>
+          </div>
+        </div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
+          <span id="trend-AVAX" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
+        </div>
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-1 mb-2">
+          <div id="slot-AVAX-Don" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">🚀 Donchian</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-AVAX-Don-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+          <div id="slot-AVAX-EMA" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">📈 EMA Pull</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-AVAX-EMA-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+          <div id="slot-AVAX-MACD" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">⚡ MACD Mom</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-AVAX-MACD-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+          <div id="slot-AVAX-Stoch" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">🎯 Stoch</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-AVAX-Stoch-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+          <div id="slot-AVAX-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">〰️ RSI Div</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-AVAX-RSI-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+        </div>
+        <div id="holdings-AVAX" class="mt-1 text-xs text-gray-500 hidden">
+          Posição: <span id="qty-AVAX" class="text-yellow-400 font-mono font-bold">0</span> AVAX
+        </div>
+        <div id="sltp-AVAX" class="mt-2 hidden">
+          <div class="grid grid-cols-3 gap-1.5 text-xs">
+            <div class="bg-gray-800/60 rounded px-2 py-1.5 text-center">
+              <p class="text-gray-500 mb-0.5">Entrada</p>
+              <p id="entry-AVAX" class="text-white font-mono font-bold">—</p>
+            </div>
+            <div class="bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5 text-center">
+              <p class="text-red-400 mb-0.5">SL</p>
+              <p id="sl-AVAX" class="text-red-300 font-mono font-bold">—</p>
+            </div>
+            <div class="bg-green-500/10 border border-green-500/20 rounded px-2 py-1.5 text-center">
+              <p class="text-green-400 mb-0.5">TP</p>
+              <p id="tp-AVAX" class="text-green-300 font-mono font-bold">—</p>
+            </div>
+          </div>
+          <div class="mt-1 flex items-center justify-between text-xs px-1">
+            <span class="text-gray-500">Variação desde entrada</span>
+            <span id="chg-entry-AVAX" class="font-mono font-bold">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- LINK -->
+      <div id="card-LINK" class="card p-5">
+        <div class="flex items-start justify-between mb-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-blue-400/20 flex items-center justify-center text-xl">🔗</div>
+            <div>
+              <h2 class="font-bold text-white text-lg">Chainlink</h2>
+              <p class="text-xs text-gray-500">LINK-USD</p>
+            </div>
+          </div>
+          <div class="text-right">
+            <p id="price-LINK" class="text-2xl font-bold text-white font-mono">—</p>
+            <p id="chg-LINK" class="text-sm text-gray-400">—</p>
+          </div>
+        </div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
+          <span id="trend-LINK" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
+        </div>
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-1 mb-2">
+          <div id="slot-LINK-Don" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">🚀 Donchian</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-LINK-Don-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+          <div id="slot-LINK-EMA" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">📈 EMA Pull</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-LINK-EMA-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+          <div id="slot-LINK-MACD" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">⚡ MACD Mom</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-LINK-MACD-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+          <div id="slot-LINK-Stoch" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">🎯 Stoch</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-LINK-Stoch-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+          <div id="slot-LINK-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">〰️ RSI Div</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-LINK-RSI-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+        </div>
+        <div id="holdings-LINK" class="mt-1 text-xs text-gray-500 hidden">
+          Posição: <span id="qty-LINK" class="text-blue-300 font-mono font-bold">0</span> LINK
+        </div>
+        <div id="sltp-LINK" class="mt-2 hidden">
+          <div class="grid grid-cols-3 gap-1.5 text-xs">
+            <div class="bg-gray-800/60 rounded px-2 py-1.5 text-center">
+              <p class="text-gray-500 mb-0.5">Entrada</p>
+              <p id="entry-LINK" class="text-white font-mono font-bold">—</p>
+            </div>
+            <div class="bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5 text-center">
+              <p class="text-red-400 mb-0.5">SL</p>
+              <p id="sl-LINK" class="text-red-300 font-mono font-bold">—</p>
+            </div>
+            <div class="bg-green-500/10 border border-green-500/20 rounded px-2 py-1.5 text-center">
+              <p class="text-green-400 mb-0.5">TP</p>
+              <p id="tp-LINK" class="text-green-300 font-mono font-bold">—</p>
+            </div>
+          </div>
+          <div class="mt-1 flex items-center justify-between text-xs px-1">
+            <span class="text-gray-500">Variação desde entrada</span>
+            <span id="chg-entry-LINK" class="font-mono font-bold">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- DOGE -->
+      <div id="card-DOGE" class="card p-5">
+        <div class="flex items-start justify-between mb-3">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-xl">🐕</div>
+            <div>
+              <h2 class="font-bold text-white text-lg">Dogecoin</h2>
+              <p class="text-xs text-gray-500">DOGE-USD</p>
+            </div>
+          </div>
+          <div class="text-right">
+            <p id="price-DOGE" class="text-2xl font-bold text-white font-mono">—</p>
+            <p id="chg-DOGE" class="text-sm text-gray-400">—</p>
+          </div>
+        </div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
+          <span id="trend-DOGE" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
+        </div>
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-1 mb-2">
+          <div id="slot-DOGE-Don" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">🚀 Donchian</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-DOGE-Don-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+          <div id="slot-DOGE-EMA" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">📈 EMA Pull</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-DOGE-EMA-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+          <div id="slot-DOGE-MACD" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">⚡ MACD Mom</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-DOGE-MACD-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+          <div id="slot-DOGE-Stoch" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">🎯 Stoch</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-DOGE-Stoch-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+          <div id="slot-DOGE-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
+            <p class="opacity-60 mb-0.5">〰️ RSI Div</p>
+            <p class="text-[10px] font-bold">HOLD</p>
+            <p class="text-gray-600 mt-0.5">sem posição</p>
+            <p id="slot-DOGE-RSI-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
+          </div>
+        </div>
+        <div id="holdings-DOGE" class="mt-1 text-xs text-gray-500 hidden">
+          Posição: <span id="qty-DOGE" class="text-amber-400 font-mono font-bold">0</span> DOGE
+        </div>
+        <div id="sltp-DOGE" class="mt-2 hidden">
+          <div class="grid grid-cols-3 gap-1.5 text-xs">
+            <div class="bg-gray-800/60 rounded px-2 py-1.5 text-center">
+              <p class="text-gray-500 mb-0.5">Entrada</p>
+              <p id="entry-DOGE" class="text-white font-mono font-bold">—</p>
+            </div>
+            <div class="bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5 text-center">
+              <p class="text-red-400 mb-0.5">SL</p>
+              <p id="sl-DOGE" class="text-red-300 font-mono font-bold">—</p>
+            </div>
+            <div class="bg-green-500/10 border border-green-500/20 rounded px-2 py-1.5 text-center">
+              <p class="text-green-400 mb-0.5">TP</p>
+              <p id="tp-DOGE" class="text-green-300 font-mono font-bold">—</p>
+            </div>
+          </div>
+          <div class="mt-1 flex items-center justify-between text-xs px-1">
+            <span class="text-gray-500">Variação desde entrada</span>
+            <span id="chg-entry-DOGE" class="font-mono font-bold">—</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Candlestick Chart -->
@@ -381,6 +627,9 @@
             <button onclick="setCandlePair('BTC-USD')" data-pair="BTC-USD" class="candle-pair-btn active px-3 py-1 rounded text-xs font-semibold transition-colors">BTC</button>
             <button onclick="setCandlePair('ETH-USD')" data-pair="ETH-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold transition-colors">ETH</button>
             <button onclick="setCandlePair('SOL-USD')" data-pair="SOL-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold transition-colors">SOL</button>
+            <button onclick="setCandlePair('AVAX-USD')" data-pair="AVAX-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold transition-colors">AVAX</button>
+            <button onclick="setCandlePair('LINK-USD')" data-pair="LINK-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold transition-colors">LINK</button>
+            <button onclick="setCandlePair('DOGE-USD')" data-pair="DOGE-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold transition-colors">DOGE</button>
           </div>
           <span class="text-gray-700 shrink-0">|</span>
           <!-- Timeframe -->
@@ -402,6 +651,7 @@
         <span><span style="color:rgba(249,115,22,0.8)" class="font-semibold">- -</span> Donchian 20 <span class="text-gray-600">(Breakout)</span></span>
         <span><span style="color:#3b82f6" class="font-semibold">▮</span> MACD <span class="text-gray-600">(Momentum)</span></span>
         <span><span style="color:#4ade80" class="font-semibold">—</span> Stoch %K <span class="text-gray-600">(Bounce)</span></span>
+        <span><span style="color:#a78bfa" class="font-semibold">~</span> RSI Divergence <span class="text-gray-600">(Confirm)</span></span>
         <span id="candle-info" class="ml-auto font-mono"></span>
       </div>
     </div>
@@ -625,13 +875,14 @@
             trendEl.className = signalClass(t) + ' text-xs font-bold px-3 py-0.5 rounded-full';
           }
 
-          // ── Slots independentes das 4 estratégias ──────────────────
+          // ── Slots independentes das 5 estratégias ──────────────────
           const slots    = s.slots || {};
           const slotDefs = [
-            { name: 'Donchian Breakout', id: 'Don' },
-            { name: 'EMA Pullback',      id: 'EMA'  },
-            { name: 'MACD Momentum',     id: 'MACD' },
-            { name: 'Stoch Bounce',      id: 'Stoch'},
+            { name: 'Donchian Breakout',     id: 'Don'  },
+            { name: 'EMA Pullback',          id: 'EMA'  },
+            { name: 'MACD Momentum',         id: 'MACD' },
+            { name: 'Stoch Bounce',          id: 'Stoch'},
+            { name: 'RSI Divergence Detect', id: 'RSI'  },
           ];
           slotDefs.forEach(sd => {
             const el  = document.getElementById(`slot-${sym}-${sd.id}`);
@@ -754,8 +1005,8 @@
       ).join('');
 
       // ── Painel de estratégias — P&L por estratégia ───────────────
-      const stratNames  = ['Donchian Breakout','EMA Pullback','MACD Momentum','Stoch Bounce'];
-      const stratIcons  = {'Donchian Breakout':'🚀','EMA Pullback':'📈','MACD Momentum':'⚡','Stoch Bounce':'🎯'};
+      const stratNames  = ['Donchian Breakout','EMA Pullback','MACD Momentum','Stoch Bounce','RSI Divergence Detect'];
+      const stratIcons  = {'Donchian Breakout':'🚀','EMA Pullback':'📈','MACD Momentum':'⚡','Stoch Bounce':'🎯','RSI Divergence Detect':'〰️'};
       const stratPnl    = s.strategy_pnl    || {};
       const panel = document.getElementById('strategy-panel');
       if (panel) {
@@ -815,12 +1066,13 @@
       function tradeReason(strategy, side) {
         if (!strategy || strategy === 'manual') return '👤 Manual';
         const sMap = {
-          'Donchian Breakout': 'Donchian 🚀',
-          'EMA Pullback':      'EMA Pull 📈',
-          'MACD Momentum':     'MACD Mom ⚡',
-          'Stoch Bounce':      'Stoch Bounce 🎯',
-          'consenso':          'Consenso',
-          'vol_guard':         'Vol.Guard',
+          'Donchian Breakout':     'Donchian 🚀',
+          'EMA Pullback':          'EMA Pull 📈',
+          'MACD Momentum':         'MACD Mom ⚡',
+          'Stoch Bounce':          'Stoch Bounce 🎯',
+          'RSI Divergence Detect': 'RSI Div 〰️',
+          'consenso':              'Consenso',
+          'vol_guard':             'Vol.Guard',
           'Pyramid':           'Pyramid 📈',
           'Fear&Greed':        'Fear&Greed 😱',
           'reset':             'Reset inicial',

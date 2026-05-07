@@ -17,12 +17,13 @@ from dotenv import load_dotenv
 from exchange.coinbase import CoinbaseClient
 from paper_trading.engine import PaperTradingEngine, TAKER_FEE
 # ── Suite agressiva v2 (alvo +65%): trend-following + momentum ─────
-from strategies.donchian_breakout import DonchianBreakout
-from strategies.ema_pullback     import EMAPullback
-from strategies.macd_momentum    import MACDMomentum
-from strategies.stoch_bounce     import StochBounce
-from strategies.volatility_guard import VolatilityGuard
-from strategies.trend_filter     import TrendFilter
+from strategies.donchian_breakout      import DonchianBreakout
+from strategies.ema_pullback           import EMAPullback
+from strategies.macd_momentum          import MACDMomentum
+from strategies.stoch_bounce           import StochBounce
+from strategies.rsi_divergence_detector import RSIDivergenceDetector
+from strategies.volatility_guard       import VolatilityGuard
+from strategies.trend_filter           import TrendFilter
 # Estratégias antigas preservadas para referência:
 # from strategies.rsi_divergence import RSIDivergence
 # from strategies.support_resistance import SupportResistance
@@ -205,12 +206,13 @@ FG_TTL         = 3600 # cache de 1 hora (índice atualiza 1×/dia)
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
 
-# ── 4 estratégias agressivas independentes ──────────────────────
+# ── 5 estratégias agressivas independentes ──────────────────────
 all_strategies = [
     DonchianBreakout(period=20, rsi_min=55.0, vol_mult=1.2),
     EMAPullback(fast=9, mid=21, slow=50, touch_tolerance_pct=0.2),  # Reduzido de 0.5 para 0.2 — menos false signals
     MACDMomentum(fast=12, slow=26, signal=9, ema_filter=30),  # Reduzido de 50 para 30 — aumenta sinais sem perder qualidade
     StochBounce(k_period=14, d_period=3, oversold=25, overbought=80, ma_filter=200),
+    RSIDivergenceDetector(period=14, lookback_periods=5),  # Detector de divergência RSI — confirma reversões
 ]
 
 # Mapa de candles por estratégia
