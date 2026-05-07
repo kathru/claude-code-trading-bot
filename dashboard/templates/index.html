@@ -738,30 +738,34 @@
     const setKpi = (id, val, suffix = '') => { const e = el(id); if (e) e.textContent = val + suffix; };
 
     const hasTrades = (kpis.total_trades || 0) > 0;
-    const hasSells  = (kpis.sell_trades || kpis.loss_count || 0) > 0;
+    const hasSells  = (kpis.sell_trades  || 0) > 0;
+    const hasWins   = (kpis.win_count    || 0) > 0;
+    const hasLosses = (kpis.loss_count   || 0) > 0;
 
     // Total Trades
     setKpi('kpi-total-trades', kpis.total_trades ?? 0);
 
-    // Win Rate — mostra 0% quando há trades, — quando sem dados
-    const wr = kpis.win_rate;
+    // Win Rate
+    const wr = kpis.win_rate || 0;
     if (el('kpi-win-rate')) {
-      el('kpi-win-rate').textContent = hasTrades ? (wr * 100).toFixed(1) + '%' : '—';
-      el('kpi-win-rate').style.color = wr >= 0.55 ? '#4ade80' : wr >= 0.45 ? '#fb923c' : hasTrades ? '#f87171' : '';
+      el('kpi-win-rate').textContent = hasSells
+        ? (wr * 100).toFixed(1) + '% (' + (kpis.win_count||0) + '/' + (kpis.sell_trades||0) + ')'
+        : '—';
+      el('kpi-win-rate').style.color = wr >= 0.55 ? '#4ade80' : wr >= 0.45 ? '#fb923c' : hasSells ? '#f87171' : '';
     }
 
-    // Profit Factor — mostra 0.00 quando há trades
-    const pf = kpis.profit_factor;
+    // Profit Factor
+    const pf = kpis.profit_factor || 0;
     if (el('kpi-profit-factor')) {
-      el('kpi-profit-factor').textContent = hasTrades ? pf.toFixed(2) : '—';
-      el('kpi-profit-factor').style.color = pf >= 1.5 ? '#4ade80' : pf >= 1.0 ? '#fb923c' : hasTrades ? '#f87171' : '';
+      el('kpi-profit-factor').textContent = hasSells ? (pf > 0 ? pf.toFixed(2) : '0.00') : '—';
+      el('kpi-profit-factor').style.color = pf >= 1.5 ? '#4ade80' : pf >= 1.0 ? '#fb923c' : hasSells ? '#f87171' : '';
     }
 
     // Ganho / Perda médios
     const avgW = kpis.avg_win  || 0;
     const avgL = kpis.avg_loss || 0;
-    if (el('kpi-avg-win'))  el('kpi-avg-win').textContent  = hasTrades ? (avgW > 0 ? '+R$ ' + fmtBRL(avgW * usdBrl) : 'R$ 0,00') : '—';
-    if (el('kpi-avg-loss')) el('kpi-avg-loss').textContent = hasSells   ? 'Perda: -R$ ' + fmtBRL(Math.abs(avgL) * usdBrl) : 'Perda: —';
+    if (el('kpi-avg-win'))  el('kpi-avg-win').textContent  = hasWins   ? '+R$ ' + fmtBRL(avgW * usdBrl) : (hasSells ? 'Sem ganhos' : '—');
+    if (el('kpi-avg-loss')) el('kpi-avg-loss').textContent = hasLosses ? 'Perda: -R$ ' + fmtBRL(Math.abs(avgL) * usdBrl) : (hasSells ? 'Sem perdas' : '—');
 
     // TP Dinâmico
     if (el('kpi-tp') && tp.current != null) {
