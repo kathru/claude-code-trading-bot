@@ -737,29 +737,39 @@
     const el = id => document.getElementById(id);
     const setKpi = (id, val, suffix = '') => { const e = el(id); if (e) e.textContent = val + suffix; };
 
-    setKpi('kpi-total-trades', kpis.total_trades ?? '—');
+    const hasTrades = (kpis.total_trades || 0) > 0;
+    const hasSells  = (kpis.sell_trades || kpis.loss_count || 0) > 0;
 
+    // Total Trades
+    setKpi('kpi-total-trades', kpis.total_trades ?? 0);
+
+    // Win Rate — mostra 0% quando há trades, — quando sem dados
     const wr = kpis.win_rate;
     if (el('kpi-win-rate')) {
-      el('kpi-win-rate').textContent = wr != null && wr > 0 ? (wr * 100).toFixed(1) + '%' : '—';
-      el('kpi-win-rate').style.color = wr >= 0.55 ? '#4ade80' : wr > 0 ? '#fb923c' : '';
+      el('kpi-win-rate').textContent = hasTrades ? (wr * 100).toFixed(1) + '%' : '—';
+      el('kpi-win-rate').style.color = wr >= 0.55 ? '#4ade80' : wr >= 0.45 ? '#fb923c' : hasTrades ? '#f87171' : '';
     }
 
+    // Profit Factor — mostra 0.00 quando há trades
     const pf = kpis.profit_factor;
     if (el('kpi-profit-factor')) {
-      el('kpi-profit-factor').textContent = pf != null && pf > 0 ? pf.toFixed(2) : '—';
-      el('kpi-profit-factor').style.color = pf >= 1.5 ? '#4ade80' : pf >= 1.0 ? '#fb923c' : pf > 0 ? '#f87171' : '';
+      el('kpi-profit-factor').textContent = hasTrades ? pf.toFixed(2) : '—';
+      el('kpi-profit-factor').style.color = pf >= 1.5 ? '#4ade80' : pf >= 1.0 ? '#fb923c' : hasTrades ? '#f87171' : '';
     }
 
-    const avgW = kpis.avg_win, avgL = kpis.avg_loss;
-    setKpi('kpi-avg-win',  avgW != null && avgW > 0 ? 'R$ ' + fmtBRL(avgW * usdBrl) : '—');
-    if (el('kpi-avg-loss')) el('kpi-avg-loss').textContent = avgL != null && avgL > 0 ? 'Perda: R$ ' + fmtBRL(avgL * usdBrl) : 'Perda: —';
+    // Ganho / Perda médios
+    const avgW = kpis.avg_win  || 0;
+    const avgL = kpis.avg_loss || 0;
+    if (el('kpi-avg-win'))  el('kpi-avg-win').textContent  = hasTrades ? (avgW > 0 ? 'R$ ' + fmtBRL(avgW * usdBrl) : 'R$ 0,00') : '—';
+    if (el('kpi-avg-loss')) el('kpi-avg-loss').textContent = hasSells   ? 'Perda: R$ ' + fmtBRL(avgL * usdBrl)   : 'Perda: —';
 
+    // TP Dinâmico
     if (el('kpi-tp') && tp.current != null) {
-      el('kpi-tp').textContent = tp.current.toFixed(1) + '%';
+      el('kpi-tp').textContent      = tp.current.toFixed(1) + '%';
       el('kpi-tp-range').textContent = `Min ${tp.min}% · Max ${tp.max}%`;
     }
 
+    // Tamanho Trade
     if (el('kpi-trade-pct') && s.trade_pct != null) {
       el('kpi-trade-pct').textContent = (s.trade_pct * 100).toFixed(0) + '%';
     }
