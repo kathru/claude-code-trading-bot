@@ -745,21 +745,11 @@
     // Total Trades
     setKpi('kpi-total-trades', kpis.total_trades ?? 0);
 
-    // Win Rate — baseado em posições FECHADAS (sells), não total de trades
-    const wr      = kpis.win_rate    || 0;
-    const nSells  = kpis.sell_trades || 0;
-    const nBuys   = (kpis.total_trades || 0) - nSells;
+    // Win Rate
+    const wr = kpis.win_rate || 0;
     if (el('kpi-win-rate')) {
-      el('kpi-win-rate').textContent = hasSells
-        ? (wr * 100).toFixed(1) + '%'
-        : '—';
+      el('kpi-win-rate').textContent = hasSells ? (wr * 100).toFixed(1) + '%' : '—';
       el('kpi-win-rate').style.color = wr >= 0.55 ? '#4ade80' : wr >= 0.45 ? '#fb923c' : hasSells ? '#f87171' : '';
-    }
-    // Subtítulo dinâmico com contexto
-    const wrSubEl = document.querySelector('#kpi-win-rate + p');
-    if (wrSubEl && hasSells) {
-      wrSubEl.innerHTML = `${kpis.win_count||0} wins / ${nSells} fechados`
-        + (nBuys > 0 ? ` <span class="text-gray-700">· ${nBuys} abertos</span>` : '');
     }
 
     // Profit Factor
@@ -769,16 +759,11 @@
       el('kpi-profit-factor').style.color = pf >= 1.5 ? '#4ade80' : pf >= 1.0 ? '#fb923c' : hasSells ? '#f87171' : '';
     }
 
-    // Ganho / Perda médios — por operação fechada (sell), c/ fees incluídos
+    // Ganho / Perda médios
     const avgW = kpis.avg_win  || 0;
     const avgL = kpis.avg_loss || 0;
     if (el('kpi-avg-win'))  el('kpi-avg-win').textContent  = hasWins   ? '+R$ ' + fmtBRL(avgW * usdBrl) : (hasSells ? 'Sem ganhos' : '—');
     if (el('kpi-avg-loss')) el('kpi-avg-loss').textContent = hasLosses ? '-R$ ' + fmtBRL(Math.abs(avgL) * usdBrl) : (hasSells ? 'Sem perdas' : '—');
-    // Subtítulo: esclarece que é por operação fechada com fees
-    const avgSubEl = document.querySelector('#kpi-avg-loss + p');
-    if (avgSubEl) avgSubEl.textContent = hasSells
-      ? `por venda fechada · c/ fees (${nSells} ops)`
-      : 'por venda fechada · c/ fees';
 
     // TP Dinâmico
     if (el('kpi-tp') && tp.current != null) {
