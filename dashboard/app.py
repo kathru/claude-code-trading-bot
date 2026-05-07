@@ -147,7 +147,7 @@ CANDLE_6H         = "SIX_HOUR"
 CANDLE_1D         = "ONE_DAY"        # Trend, VolGuard
 
 # ── Execução por estratégia (independente, sem consenso) ──────────
-TRADE_PCT          = 0.075   # 7.5% do portfolio total por trade (dinâmico) — aumentado para aproveitar capital
+TRADE_PCT          = 0.12   # 12% do portfolio total por trade (dinâmico) — aumentado para agressividade
 
 
 def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float = None) -> float:
@@ -186,21 +186,21 @@ def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float =
 
 
 # ── Gestão de risco ──────────────────────────────────────────────
-INITIAL_SL_PCT        = 5.0  # SL: -5%
-TAKE_PROFIT_MIN       = 3.0  # TP mínimo: +3% (mercado em ganância)
-TAKE_PROFIT_MAX       = 5.0  # TP máximo: +5% (mercado em medo extremo)
+INITIAL_SL_PCT        = 8.0  # SL: -8% (menos whipsaws)
+TAKE_PROFIT_MIN       = 5.0  # TP mínimo: +5% (mercado em ganância)
+TAKE_PROFIT_MAX       = 8.0  # TP máximo: +8% (mercado em medo extremo — deixa rodar mais)
 TRAILING_STOP_PCT     = 8.0  # trailing: -8% do pico
 TRAILING_ACTIVATE_PCT = 6.0  # trailing só ativa após +6%
-SL_COOLDOWN_CYCLES    = 1    # após SL, espera 1 ciclo antes de re-entrar (180s)
+SL_COOLDOWN_CYCLES    = 0    # após SL, re-entra IMEDIATAMENTE (sem cooldown defensivo)
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
 PYRAMID_MAX          = 5     # máx. 5 adições (alavancagem até 5× a entrada)
-PYRAMID_MIN_GAIN_PCT = 0.5   # só adiciona se ≥ +0.5% no lucro
+PYRAMID_MIN_GAIN_PCT = 0.15  # só adiciona se ≥ +0.15% no lucro (pyramida mais cedo)
 PYRAMID_SIZE_PCT     = 0.25  # cada pyramid = 25% do trade inicial
 
 # ── Fear & Greed ─────────────────────────────────────────────────
 FG_FEAR_MAX    = 25   # Medo Extremo: entrada direta, sem restrições
-FG_GREED_MIN   = 75   # Ganância Extrema: fecha posições, bloqueia novas entradas
+FG_GREED_MIN   = 85   # Ganância Extrema: permite entradas agressivas até 85 (menos defensivo)
 FG_TTL         = 3600 # cache de 1 hora (índice atualiza 1×/dia)
 
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
@@ -208,10 +208,10 @@ engine = PaperTradingEngine(initial_balance_usd=10000.0)
 
 # ── 5 estratégias agressivas independentes ──────────────────────
 all_strategies = [
-    DonchianBreakout(period=20, rsi_min=55.0, vol_mult=1.2),
+    DonchianBreakout(period=20, rsi_min=50.0, vol_mult=1.2),  # RSI reduzido para 50 — menos filtro
     EMAPullback(fast=9, mid=21, slow=50, touch_tolerance_pct=0.2),  # Reduzido de 0.5 para 0.2 — menos false signals
-    MACDMomentum(fast=12, slow=26, signal=9, ema_filter=30),  # Reduzido de 50 para 30 — aumenta sinais sem perder qualidade
-    StochBounce(k_period=14, d_period=3, oversold=25, overbought=80, ma_filter=200),
+    MACDMomentum(fast=12, slow=26, signal=9, ema_filter=18),  # Reduzido para 18 — muito mais sinais, menos restrições
+    StochBounce(k_period=14, d_period=3, oversold=25, overbought=80, ma_filter=30),  # Reduzido de 200 para 30 — libera sinais
     RSIDivergenceDetector(period=14, lookback_periods=5),  # Detector de divergência RSI — confirma reversões
 ]
 
@@ -225,7 +225,7 @@ STRAT_CANDLES = {
 }
 
 # Guard de risco global — só dispara em crashes reais
-vol_guard    = VolatilityGuard(threshold_pct=12.0, consecutive_days=3)
+vol_guard    = VolatilityGuard(threshold_pct=18.0, consecutive_days=3)  # Menos deletagens, mais tolerante
 trend_filter = TrendFilter(period=50)   # EMA50 1H — alinhado com EMA Pullback e MACD Momentum
 
 # ── Cooldown anti-whipsaw após SL (por slot) ─────────────────────
