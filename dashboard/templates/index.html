@@ -618,7 +618,7 @@
       tradesList.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Nenhum trade ainda...</p>';
     } else {
       const totalBRL = (s.portfolio || {}).total_brl || 0;
-      tradesList.innerHTML = [...trades].reverse().map(t => {
+      tradesList.innerHTML = trades.map(t => {
         const isBuy   = t.side === 'BUY';
         const valBRL  = (t.usd || 0) * usdBrl;
         const feesBRL = (t.fee || 0) * usdBrl;
@@ -682,7 +682,7 @@
         'Donchian Breakout': 'DONCH', 'EMA Pullback': 'EMA',
         'MACD Momentum': 'MACD', 'Stoch Bounce': 'STOCH', 'RSI Divergence': 'RSI',
       };
-      feedList.innerHTML = [...feed].reverse().slice(0, 60).map(f => {
+      feedList.innerHTML = feed.slice(0, 60).map(f => {
         const sig      = f.signal || f.decision || 'HOLD';
         const isB      = sig === 'BUY', isS = sig === 'SELL';
         const borderCls = isB ? 'border-l-2 border-green-500' : isS ? 'border-l-2 border-red-500' : 'border-l-2 border-gray-700';
