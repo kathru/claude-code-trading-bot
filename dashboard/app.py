@@ -217,10 +217,11 @@ all_strategies = [
 
 # Mapa de candles por estratégia
 STRAT_CANDLES = {
-    "Donchian Breakout": CANDLE_30M,
-    "EMA Pullback":      CANDLE_1H,
-    "MACD Momentum":     CANDLE_1H,
-    "Stoch Bounce":      CANDLE_30M,
+    "Donchian Breakout":     CANDLE_30M,
+    "EMA Pullback":          CANDLE_1H,
+    "MACD Momentum":         CANDLE_1H,
+    "Stoch Bounce":          CANDLE_30M,
+    "RSI Divergence Detect": CANDLE_30M,
 }
 
 # Guard de risco global — só dispara em crashes reais
@@ -780,10 +781,11 @@ async def trading_loop():
                       logger.warning(f"[{pair}] Candles 30M timeout - usando cache")
                       candles_30m = _candle_cache.get(f"{pair}:{CANDLE_30M}", {}).get("data", [])
                   candle_map  = {
-                      "Donchian Breakout": candles_30m,
-                      "EMA Pullback":      candles_1h,
-                      "MACD Momentum":     candles_1h,
-                      "Stoch Bounce":      candles_30m,
+                      "Donchian Breakout":     candles_30m,
+                      "EMA Pullback":          candles_1h,
+                      "MACD Momentum":         candles_1h,
+                      "Stoch Bounce":          candles_30m,
+                      "RSI Divergence Detect": candles_30m,
                   }
                   signals_this_cycle = {}
 
