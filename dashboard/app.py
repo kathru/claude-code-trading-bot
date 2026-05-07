@@ -373,42 +373,65 @@ def _update_portfolio_state():
 
 
 def _calculate_kpis() -> dict:
-    """Calcula métricas de performance do sistema"""
-    trades_with_result = [t for t in engine.trades if t.get("side") == "SELL"]
-    if not trades_with_result:
+    """Calcula métricas de performance usando strategy_pnl e preços de entrada/saída."""
+    all_trades  = engine.trades
+    sell_trades = [t for t in all_trades if t.get("side") == "SELL"]
+
+    if not sell_trades:
         return {
-            "total_trades": len(engine.trades),
-            "win_rate": 0.0,
-            "avg_win": 0.0,
-            "avg_loss": 0.0,
+            "total_trades": len(all_trades),
+            "sell_trades":  0,
+            "win_rate":     0.0,
+            "win_count":    0,
+            "loss_count":   0,
+            "avg_win":      0.0,
+            "avg_loss":     0.0,
             "profit_factor": 0.0,
             "expected_value": 0.0,
         }
 
-    wins = sum(1 for t in trades_with_result if t.get("pnl", 0) > 0)
-    losses = len(trades_with_result) - wins
+    # Calcula P&L por trade de SELL:
+    # Para cada SELL, compara o usd recebido com o custo médio das compras anteriores
+    # Usa entry_prices do engine para o custo médio de entrada
+    trade_pnls = []
+    for t in sell_trades:
+        symbol    = t.get("pair", "").replace("-USD", "")
+        sell_usd  = t.get("usd", 0)   # USD recebido na venda (já descontada a taxa)
+        qty       = t.get("qty", 0)
+        fee       = t.get("fee", 0)
+        # entry_price salvo no engine no momento da compra
+        entry     = engine.entry_prices.get(symbol, 0)
+        if entry > 0 and qty > 0:
+            cost_usd = qty * entry
+            pnl      = sell_usd - cost_usd   # positivo = lucro, negativo = prejuízo
+        else:
+            # Fallback: usa realized acumulado do strategy_pnl dividido pelo nº de sells
+            pnl = 0.0
+        trade_pnls.append(pnl)
 
-    win_trades = [t.get("pnl", 0) for t in trades_with_result if t.get("pnl", 0) > 0]
-    loss_trades = [t.get("pnl", 0) for t in trades_with_result if t.get("pnl", 0) < 0]
+    win_pnls  = [p for p in trade_pnls if p > 0]
+    loss_pnls = [p for p in trade_pnls if p <= 0]
+    wins      = len(win_pnls)
+    losses    = len(loss_pnls)
 
-    avg_win = sum(win_trades) / len(win_trades) if win_trades else 0.0
-    avg_loss = sum(loss_trades) / len(loss_trades) if loss_trades else 0.0
+    avg_win  = sum(win_pnls)  / wins   if wins   > 0 else 0.0
+    avg_loss = sum(loss_pnls) / losses if losses > 0 else 0.0   # valor negativo
 
-    sum_wins = sum(win_trades) if win_trades else 0.0
-    sum_losses = abs(sum(loss_trades)) if loss_trades else 0.0
-
+    sum_wins   = sum(win_pnls)        if win_pnls  else 0.0
+    sum_losses = abs(sum(loss_pnls))  if loss_pnls else 0.0
     profit_factor = sum_wins / sum_losses if sum_losses > 0 else 0.0
 
+    n = len(sell_trades)
     return {
-        "total_trades": len(engine.trades),
-        "sell_trades": len(trades_with_result),
-        "win_rate": (wins / len(trades_with_result) * 100) if trades_with_result else 0.0,
-        "win_count": wins,
-        "loss_count": losses,
-        "avg_win": avg_win,
-        "avg_loss": avg_loss,
+        "total_trades":  len(all_trades),
+        "sell_trades":   n,
+        "win_rate":      (wins / n * 100) if n > 0 else 0.0,
+        "win_count":     wins,
+        "loss_count":    losses,
+        "avg_win":       avg_win,
+        "avg_loss":      avg_loss,          # negativo = perda média por trade
         "profit_factor": profit_factor,
-        "expected_value": (avg_win * (wins / len(trades_with_result))) + (avg_loss * (losses / len(trades_with_result))),
+        "expected_value": (avg_win * wins + avg_loss * losses) / n if n > 0 else 0.0,
     }
 
 
