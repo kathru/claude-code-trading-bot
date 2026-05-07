@@ -473,9 +473,9 @@
 
     const subtitleEl = document.getElementById('strategy-panel-subtitle');
     if (subtitleEl) {
-      const pctSign  = pnlPct >= 0 ? '+' : '';
-      const pctColor = pnlPct >= 0 ? '#4ade80' : '#f87171';
-      subtitleEl.innerHTML = `P&L em trades · Portfolio R$ 4.000 (fixo) · <span style="color:${pctColor};font-weight:600">${pctSign}${pnlPct.toFixed(2)}%</span>`;
+      const tp = s.tp_objective || {};
+      const tpStr = tp.current != null ? ` · <span style="color:#818cf8;font-weight:600">TP: ${tp.current.toFixed(1)}%</span>` : '';
+      subtitleEl.innerHTML = `P&L em trades · Portfolio R$ 4.000 (fixo)${tpStr}`;
     }
 
     document.getElementById('trade-count').textContent = (s.trades || []).length;
