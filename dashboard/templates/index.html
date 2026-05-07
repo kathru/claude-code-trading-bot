@@ -605,14 +605,25 @@
     if (feed.length === 0) {
       feedList.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Aguardando sinais...</p>';
     } else {
-      feedList.innerHTML = [...feed].reverse().slice(0, 50).map(f => {
-        const isB = f.decision === 'BUY', isS = f.decision === 'SELL';
-        const dot = isB ? 'bg-green-400' : isS ? 'bg-red-400' : 'bg-gray-600';
-        return `<div class="flex items-center gap-2 py-1 border-b border-gray-800/50">
-          <span class="w-1.5 h-1.5 rounded-full ${dot} shrink-0"></span>
-          <span class="text-gray-400 text-xs font-mono shrink-0">${(f.time||'').substring(11,19)}</span>
-          <span class="text-white text-xs font-medium truncate">${f.pair||''}</span>
-          <span class="ml-auto text-xs font-bold shrink-0 ${isB?'text-green-400':isS?'text-red-400':'text-gray-500'}">${f.decision||'HOLD'}</span>
+      const stratShort = {
+        'Donchian Breakout': 'DONCH', 'EMA Pullback': 'EMA',
+        'MACD Momentum': 'MACD', 'Stoch Bounce': 'STOCH', 'RSI Divergence': 'RSI',
+      };
+      feedList.innerHTML = [...feed].reverse().slice(0, 60).map(f => {
+        const sig  = f.signal || f.decision || 'HOLD';
+        const isB  = sig === 'BUY', isS = sig === 'SELL';
+        const sigCls = isB ? 'bg-green-500/20 text-green-400' : isS ? 'bg-red-500/20 text-red-400' : 'bg-gray-700/50 text-gray-500';
+        const strat  = stratShort[f.strategy] || f.strategy || '—';
+        const price  = f.price ? 'R$ ' + fmtBRL(f.price * usdBrl) : '';
+        const execBadge = f.executed ? '<span class="text-[9px] bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded font-bold">EXEC</span>' : '';
+        const time   = (f.time || '').length > 8 ? f.time.substring(11, 19) : (f.time || '');
+        return `<div class="flex items-center gap-2 py-1.5 border-b border-gray-800/40">
+          <span class="text-gray-600 text-[10px] font-mono shrink-0 w-12">${time}</span>
+          <span class="text-gray-300 text-xs font-semibold shrink-0 w-16">${f.pair ? f.pair.replace('-USD','') : '—'}</span>
+          <span class="text-gray-500 text-[10px] shrink-0 w-12">${strat}</span>
+          <span class="text-gray-400 text-[10px] shrink-0 hidden sm:block">${price}</span>
+          ${execBadge}
+          <span class="ml-auto text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${sigCls}">${sig}</span>
         </div>`;
       }).join('');
     }
