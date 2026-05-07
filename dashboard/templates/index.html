@@ -911,7 +911,7 @@
       const pnlEl = document.getElementById('pnl-value');
       const pctEl = document.getElementById('pnl-pct');
       // ⚠️ IMPORTANTE: pnlBRL já vem do backend (não é pnlUSD × cotação)
-      pnlEl.textContent = (pnlBRL >= 0 ? '+' : '') + 'R$ ' + fmtBRL(Math.abs(pnlBRL));
+      pnlEl.textContent = (pnlBRL >= 0 ? '+' : '-') + 'R$ ' + fmtBRL(Math.abs(pnlBRL));
       pnlEl.className = 'text-2xl font-bold ' + (pnlBRL >= 0 ? 'text-green-400' : 'text-red-400');
       pctEl.textContent = (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%';
       pctEl.className = 'text-sm mt-1 ' + (pct >= 0 ? 'text-green-500' : 'text-red-500');
@@ -1937,7 +1937,8 @@
       if (e.key === 'Escape') closeTradeModal();
     });
 
-    async function confirmTrade() {
+    function confirmTrade() {
+      (async () => {
       const input      = document.getElementById('modal-input');
       const confirmBtn = document.getElementById('modal-confirm');
       const val        = parseFloat(input.value);
@@ -1963,50 +1964,51 @@
         confirmBtn.disabled    = false;
         confirmBtn.textContent = 'Confirmar';
       }
+      })();
     }
     // ─────────────────────────────────────────────────────────────────────────
 
     // Claude usage
-    async function refreshClaudeUsage() {
+    function refreshClaudeUsage() {
       const usedEl   = document.getElementById('claude-tokens-used');
       const statusEl = document.getElementById('claude-tokens-status');
-      try {
-        const r = await fetch('/api/claude-usage');
-        const d = await r.json();
+      if (!usedEl || !statusEl) return;
+      (async () => {
+        try {
+          const r = await fetch('/api/claude-usage');
+          if (!r.ok) return;
+          const d = await r.json();
 
-        if (!d.configured) {
-          usedEl.textContent   = 'N/A';
-          usedEl.style.color   = '#6b7280';
-          statusEl.textContent = 'sem chave';
-          return;
-        }
-        if (!d.key_valid) {
-          usedEl.textContent   = '✗ inválida';
-          usedEl.style.color   = '#f87171';
-          statusEl.textContent = 'verifique a chave';
-          return;
-        }
+          if (!d.configured) {
+            usedEl.textContent   = 'N/A';
+            usedEl.style.color   = '#6b7280';
+            statusEl.textContent = 'sem chave';
+            return;
+          }
+          if (!d.key_valid) {
+            usedEl.textContent   = '✗ inválida';
+            usedEl.style.color   = '#f87171';
+            statusEl.textContent = 'verifique a chave';
+            return;
+          }
 
-        // Dados reais de uso disponíveis
-        if (d.total_tokens !== undefined) {
-          const total = d.total_tokens;
-          const fmt   = n => n >= 1000000 ? (n/1000000).toFixed(1)+'M'
-                           : n >= 1000    ? (n/1000).toFixed(1)+'k'
-                           : n.toString();
-          usedEl.textContent  = fmt(total);
-          usedEl.style.color  = total > 1000000 ? '#f97316' : '#a78bfa';
-          statusEl.innerHTML  = `↑${fmt(d.input_tokens)} ↓${fmt(d.output_tokens)} · `
-            + `<a href="${d.console_url}" target="_blank" style="color:#6366f1">console ↗</a>`;
-        } else {
-          // Chave válida mas endpoint de uso não disponível — mostra link direto
-          usedEl.textContent  = '✓ ativa';
-          usedEl.style.color  = '#4ade80';
-          statusEl.innerHTML  = `<a href="${d.console_url}" target="_blank"
-            style="color:#818cf8;text-decoration:underline">ver uso ↗</a>`;
-        }
-      } catch(e) {
-        document.getElementById('claude-tokens-used').textContent = '—';
-      }
+          if (d.total_tokens !== undefined) {
+            const total = d.total_tokens;
+            const fmt   = n => n >= 1000000 ? (n/1000000).toFixed(1)+'M'
+                             : n >= 1000    ? (n/1000).toFixed(1)+'k'
+                             : n.toString();
+            usedEl.textContent  = fmt(total);
+            usedEl.style.color  = total > 1000000 ? '#f97316' : '#a78bfa';
+            statusEl.innerHTML  = `↑${fmt(d.input_tokens)} ↓${fmt(d.output_tokens)} · `
+              + `<a href="${d.console_url}" target="_blank" style="color:#6366f1">console ↗</a>`;
+          } else {
+            usedEl.textContent  = '✓ ativa';
+            usedEl.style.color  = '#4ade80';
+            statusEl.innerHTML  = `<a href="${d.console_url}" target="_blank"
+              style="color:#818cf8;text-decoration:underline">ver uso ↗</a>`;
+          }
+        } catch(e) { /* silently fail */ }
+      })();
     }
     refreshClaudeUsage();
     setInterval(refreshClaudeUsage, 300000);
@@ -2015,10 +2017,22 @@
     function connect() {
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const ws = new WebSocket(`${proto}://${location.host}/ws`);
-      ws.onmessage = e => updateState(JSON.parse(e.data));
+      ws.onmessage = e => {
+        try {
+          if (typeof updateState === 'function') {
+            updateState(JSON.parse(e.data));
+          }
+        } catch(err) {
+          console.error('[WS] Erro ao processar mensagem:', err);
+        }
+      };
       ws.onclose = () => setTimeout(connect, 3000);
     }
-    connect();
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', connect);
+    } else {
+      connect();
+    }
   </script>
 
   <!-- ─── Trade Modal ─────────────────────────────────────────────────── -->
