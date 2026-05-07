@@ -206,8 +206,8 @@ TRAILING_ACTIVATE_PCT = 4.0  # trailing ativa após +4% (proteção mais cedo)
 SL_COOLDOWN_CYCLES    = 0    # após SL, re-entra IMEDIATAMENTE (sem cooldown defensivo)
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
-PYRAMID_MAX          = 5     # máx. 5 adições (alavancagem até 5× a entrada)
-PYRAMID_MIN_GAIN_PCT = 0.10  # só adiciona se ≥ +0.10% no lucro (pyramida ainda mais cedo)
+PYRAMID_MAX          = 2     # máx. 2 adições — evita acumulação excessiva em tendência contrária
+PYRAMID_MIN_GAIN_PCT = 1.0   # só adiciona se ≥ +1.0% no lucro — confirma tendência antes de escalar
 PYRAMID_SIZE_PCT     = 0.25  # cada pyramid = 25% do trade inicial
 
 # ── Fear & Greed ─────────────────────────────────────────────────
@@ -221,7 +221,7 @@ engine = PaperTradingEngine(initial_balance_usd=10000.0)
 # ── 5 estratégias AGRESSIVAS 65/35 independentes ──────────────────────
 all_strategies = [
     DonchianBreakout(period=20, rsi_min=45.0, vol_mult=1.0),  # RSI 45 (menos filtro) + volume normal (1.0 sem spike req)
-    EMAPullback(fast=9, mid=21, slow=50, touch_tolerance_pct=0.1),  # 0.1 — muito sensível a toque
+    EMAPullback(fast=9, mid=21, slow=50, touch_tolerance_pct=0.3),  # 0.3 — toque real na EMA, evita falsos positivos
     MACDMomentum(fast=12, slow=26, signal=9, ema_filter=12),  # Reduzido para 12 — resposta rápida
     StochBounce(k_period=14, d_period=3, oversold=20, overbought=80, ma_filter=15),  # Oversold 20 + ma_filter 15 — bounce cedo
     RSIDivergenceDetector(period=14, lookback_periods=5),  # Detector de divergência RSI — confirma reversões
@@ -938,10 +938,16 @@ async def trading_loop():
                               else:
                                   slot["qty"] = rem
 
+                          # ── SL mais apertado para posições com pyramid ──────────
+                          # Se fez pyramid e o preço voltou abaixo da entrada (-1.5%), sai antes
+                          pyramid_sl_hit = (slot.get("pyramids", 0) > 0 and gain_pct <= -1.5)
+
                           if tp_hit:
                               _sell_slot(slot["qty"], f"TP+{current_tp_pct:.0f}%")
                           elif sl_hit:
                               _sell_slot(slot["qty"], f"SL-{INITIAL_SL_PCT:.0f}%", is_sl=True)
+                          elif pyramid_sl_hit:
+                              _sell_slot(slot["qty"], f"SL-pyramid-1.5%", is_sl=True)
                           elif tr_hit:
                               _sell_slot(slot["qty"], f"TRAILING-{TRAILING_STOP_PCT:.0f}%")
                           # ── EMA Pullback: Partial TP at +2.5% when pyramiding ──
