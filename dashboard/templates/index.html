@@ -561,14 +561,19 @@
         const realBrl = realUsd * usdBrl;
         const buys    = sp.buys  || 0;
         const sells   = sp.sells || 0;
-        let unrlUsd = 0;
+        let unrlUsd = 0, tpUsd = 0;
         CRYPTOS.forEach(c => {
           const sl = allSlots[`${st.name}:${c.pair}`] || {};
           unrlUsd += (sl.unrealized || 0);
+          if ((sl.qty || 0) > 0 && (sl.entry || 0) > 0) {
+            tpUsd += sl.entry * sl.qty * (tpPct / 100);
+          }
         });
-        const unrlBrl  = unrlUsd * usdBrl;
+        const unrlBrl   = unrlUsd * usdBrl;
+        const tpBrl     = tpUsd * usdBrl;
+        const tpFalta   = Math.max(0, tpBrl - realBrl);
         const totalBrl2 = realBrl + unrlBrl;
-        const pnlColor = totalBrl2 >= 0 ? '#4ade80' : '#f87171';
+        const pnlColor  = totalBrl2 >= 0 ? '#4ade80' : '#f87171';
         return `<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
           <div class="flex items-center gap-1.5 mb-2">
             <span>${st.icon}</span>
@@ -576,10 +581,11 @@
           </div>
           <p class="text-sm font-bold font-mono" style="color:${pnlColor}">${totalBrl2 >= 0 ? '+' : '-'}R$ ${fmtBRL(Math.abs(totalBrl2))}</p>
           <div class="flex justify-between text-[10px] mt-1">
-            <span style="color:#4ade80">real: ${realBrl >= 0 ? '+' : ''}R$ ${fmtBRL(realBrl)}</span>
+            <span style="color:#4ade80">Realizado: ${realBrl >= 0 ? '+' : ''}R$ ${fmtBRL(realBrl)}</span>
             <span class="text-gray-600">${buys}↑ ${sells}↓</span>
           </div>
-          ${unrlUsd !== 0 ? `<p class="text-[10px] mt-0.5" style="color:#f97316">n/r: ${unrlBrl>=0?'+':'-'}R$ ${fmtBRL(Math.abs(unrlBrl))}</p>` : ''}
+          ${unrlUsd !== 0 ? `<p class="text-[10px] mt-0.5" style="color:#f97316">Não realizado: ${unrlBrl>=0?'+':'-'}R$ ${fmtBRL(Math.abs(unrlBrl))}</p>` : ''}
+          ${tpBrl > 0 ? `<p class="text-[10px] mt-0.5" style="color:#818cf8">TP: falta R$ ${fmtBRL(tpFalta)} (${tpBrl > 0 ? ((tpFalta/tpBrl)*100).toFixed(0) : 0}%)</p>` : ''}
         </div>`;
       }).join('');
     }
