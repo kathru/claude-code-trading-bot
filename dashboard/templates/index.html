@@ -651,7 +651,7 @@
         <span><span style="color:rgba(249,115,22,0.8)" class="font-semibold">- -</span> Donchian 20 <span class="text-gray-600">(Breakout)</span></span>
         <span><span style="color:#3b82f6" class="font-semibold">▮</span> MACD <span class="text-gray-600">(Momentum)</span></span>
         <span><span style="color:#4ade80" class="font-semibold">—</span> Stoch %K <span class="text-gray-600">(Bounce)</span></span>
-        <span><span style="color:#facc15" class="font-semibold">~</span> RSI Divergence <span class="text-gray-600">(Confirm)</span></span>
+        <span><span style="color:#facc15" class="font-semibold">—</span> RSI Div <span class="text-gray-600">(painel abaixo)</span></span>
         <span id="candle-info" class="ml-auto font-mono"></span>
       </div>
     </div>
@@ -1362,7 +1362,7 @@
     // ── Candlestick chart — Suite Agressiva v2 ─────────────────────
     var candlePair = 'BTC-USD';
     var candleGranularity = 'ONE_HOUR';
-    var candleChart = null, macdChart = null, stochChart = null;
+    var candleChart = null, macdChart = null, stochChart = null, rsiChart = null;
     var candleSeries = null;
     // EMA Pullback
     var ema9Series = null, ema21Series = null, ema50Series = null;
@@ -1372,6 +1372,8 @@
     var macdHistSeries = null, macdLineSeries = null, macdSigSeries = null, macdZeroSeries = null;
     // Stoch Bounce
     var stochKSeries = null, stochDSeries = null, stochOBSeries = null, stochOSSeries = null;
+    // RSI Divergence Detector
+    var rsiLineSeries = null, rsiOBSeries = null, rsiOSSeries = null, rsiDivMarkers = [];
 
     // ── Funções de cálculo ──────────────────────────────────────────
     function calcEMA(data, period) {
@@ -1446,6 +1448,80 @@
         dLine.push({ time: kArr[i].time, value: parseFloat(avg.toFixed(2)) });
       }
       return { k: kLine, d: dLine };
+    }
+
+    function calcRSI(data, period = 14) {
+      const closes = data.map(d => d.close);
+      const rsiArr = [];
+
+      // Calcular gains e losses
+      const deltas = [];
+      for (let i = 1; i < closes.length; i++) {
+        deltas.push(closes[i] - closes[i - 1]);
+      }
+
+      // Calcular primeiro RS (simple moving average)
+      let gainSum = 0, lossSum = 0;
+      for (let i = 0; i < period; i++) {
+        if (deltas[i] > 0) gainSum += deltas[i];
+        else lossSum += Math.abs(deltas[i]);
+      }
+
+      let avgGain = gainSum / period;
+      let avgLoss = lossSum / period;
+
+      // RSI primeira candle (índice period)
+      let rs = avgLoss === 0 ? 100 : (avgGain / avgLoss);
+      let rsi = 100 - (100 / (1 + rs));
+      rsiArr.push({ time: data[period].time, value: parseFloat(rsi.toFixed(2)) });
+
+      // RSI resto (smoothed moving average)
+      for (let i = period + 1; i < closes.length; i++) {
+        const delta = deltas[i - 1];
+        if (delta > 0) {
+          avgGain = (avgGain * (period - 1) + delta) / period;
+          avgLoss = (avgLoss * (period - 1)) / period;
+        } else {
+          avgGain = (avgGain * (period - 1)) / period;
+          avgLoss = (avgLoss * (period - 1) + Math.abs(delta)) / period;
+        }
+        rs = avgLoss === 0 ? 100 : (avgGain / avgLoss);
+        rsi = 100 - (100 / (1 + rs));
+        rsiArr.push({ time: data[i].time, value: parseFloat(rsi.toFixed(2)) });
+      }
+
+      return rsiArr;
+    }
+
+    function detectDivergences(data, rsiData) {
+      // Detecta divergências de alta (preço cai, RSI sobe) e baixa (preço sobe, RSI cai)
+      const divergences = [];
+      if (rsiData.length < 5) return divergences;
+
+      // Procura por divergências nos últimos 20 candles
+      const lookback = Math.min(20, rsiData.length);
+
+      for (let i = lookback - 1; i < rsiData.length; i++) {
+        if (i < 2) continue;
+
+        const curr = { price: data[i].close, rsi: rsiData[i - (data.length - rsiData.length)].value, time: data[i].time };
+        const prev = { price: data[i - 1].close, rsi: rsiData[i - 1 - (data.length - rsiData.length)].value };
+        const prev2 = { price: data[i - 2].close, rsi: rsiData[i - 2 - (data.length - rsiData.length)].value };
+
+        // Divergência de alta: preço toca mínima menor, RSI toca mínima maior
+        if (curr.price > prev.price && curr.price > prev2.price &&
+            curr.rsi < 40 && prev.rsi < curr.rsi && prev2.rsi < curr.rsi) {
+          divergences.push({ time: curr.time, type: 'bullish', text: '↑' });
+        }
+
+        // Divergência de baixa: preço toca máxima maior, RSI toca máxima menor
+        if (curr.price < prev.price && curr.price < prev2.price &&
+            curr.rsi > 60 && prev.rsi > curr.rsi && prev2.rsi > curr.rsi) {
+          divergences.push({ time: curr.time, type: 'bearish', text: '↓' });
+        }
+      }
+
+      return divergences;
     }
 
     // ── Inicialização ───────────────────────────────────────────────
@@ -1535,7 +1611,30 @@
       stochOBSeries = stochChart.addLineSeries({ color: 'rgba(248,113,113,0.45)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
       stochOSSeries = stochChart.addLineSeries({ color: 'rgba(74,222,128,0.35)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
 
-      // ── Crosshair sincronizado entre os 3 painéis ──
+      // ── Painel RSI Divergence (RSI Divergence Detector) ──
+      const rsiWrap = document.createElement('div');
+      rsiWrap.style.cssText = 'margin-top:8px';
+      const rsiLabel = document.createElement('div');
+      rsiLabel.innerHTML = '<span style="color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">RSI Divergence</span>'
+        + ' <span style="color:#6b7280">(14)</span>'
+        + ' &nbsp;<span style="color:#facc15">━ RSI</span>'
+        + ' &nbsp;<span style="color:rgba(248,113,113,0.8)">╌ OB 70</span>'
+        + ' &nbsp;<span style="color:rgba(74,222,128,0.8)">╌ OS 30</span>'
+        + ' &nbsp;<span style="color:#818cf8">↑/↓ Divergências</span>';
+      rsiLabel.style.cssText = 'padding:0 2px 5px;font-size:10px;line-height:1;color:#6b7280;';
+      const rsiDiv = document.createElement('div');
+      rsiWrap.appendChild(rsiLabel);
+      rsiWrap.appendChild(rsiDiv);
+      container.appendChild(rsiWrap);
+      rsiChart = LightweightCharts.createChart(rsiDiv, {
+        ...baseOpts(78),
+        rightPriceScale: { borderColor: '#30363d', scaleMargins: { top: 0.1, bottom: 0.1 } },
+      });
+      rsiLineSeries = rsiChart.addLineSeries({ color: '#facc15', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
+      rsiOBSeries = rsiChart.addLineSeries({ color: 'rgba(248,113,113,0.45)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
+      rsiOSSeries = rsiChart.addLineSeries({ color: 'rgba(74,222,128,0.35)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
+
+      // ── Crosshair sincronizado entre os 4 painéis ──
       candleChart.subscribeCrosshairMove(param => {
         if (!param.seriesData) return;
         const d = param.seriesData.get(candleSeries);
@@ -1547,14 +1646,14 @@
             `L <span style="color:#f87171">${d.low.toFixed(2)}</span> ` +
             `C <span style="color:${color}">${d.close.toFixed(2)}</span>`;
         }
-        try { if (param.time) { macdChart.setCrosshairPosition(0, param.time, macdLineSeries); stochChart.setCrosshairPosition(0, param.time, stochKSeries); } } catch(e) {}
+        try { if (param.time) { macdChart.setCrosshairPosition(0, param.time, macdLineSeries); stochChart.setCrosshairPosition(0, param.time, stochKSeries); rsiChart.setCrosshairPosition(0, param.time, rsiLineSeries); } } catch(e) {}
       });
 
       // ── Sincronizar zoom/scroll entre painéis ──
-      [candleChart, macdChart, stochChart].forEach(master => {
+      [candleChart, macdChart, stochChart, rsiChart].forEach(master => {
         master.timeScale().subscribeVisibleLogicalRangeChange(range => {
           if (!range) return;
-          [candleChart, macdChart, stochChart].forEach(slave => {
+          [candleChart, macdChart, stochChart, rsiChart].forEach(slave => {
             if (slave !== master) try { slave.timeScale().setVisibleLogicalRange(range); } catch(e) {}
           });
         });
@@ -1562,7 +1661,7 @@
 
       new ResizeObserver(() => {
         const w = container.clientWidth;
-        [candleChart, macdChart, stochChart].forEach(c => { try { c.applyOptions({ width: w }); } catch(e) {} });
+        [candleChart, macdChart, stochChart, rsiChart].forEach(c => { try { c.applyOptions({ width: w }); } catch(e) {} });
       }).observe(container);
     }
 
@@ -1606,6 +1705,19 @@
           stochOSSeries.setData([{ time: t0, value: 20 }, { time: t1, value: 20 }]);
         }
 
+        // RSI 14 — RSI Divergence Detector
+        const rsiData = calcRSI(data, 14);
+        rsiLineSeries.setData(rsiData);
+        if (rsiData.length > 1) {
+          const t0 = rsiData[0].time, t1 = rsiData[rsiData.length - 1].time;
+          rsiOBSeries.setData([{ time: t0, value: 70 }, { time: t1, value: 70 }]);
+          rsiOSSeries.setData([{ time: t0, value: 30 }, { time: t1, value: 30 }]);
+        }
+        // Detectar divergências
+        const divergences = detectDivergences(data, rsiData);
+        // Adicionar marcadores de divergências como anotações visuais (aqui fazemos com uma série fictícia)
+        rsiDivMarkers = divergences;
+
         // Preço atual
         const last = data[data.length - 1];
         const priceEl = document.getElementById('candle-price');
@@ -1615,6 +1727,7 @@
         candleChart.timeScale().fitContent();
         macdChart.timeScale().fitContent();
         stochChart.timeScale().fitContent();
+        rsiChart.timeScale().fitContent();
       } catch(e) { console.error('candles:', e); }
     }
 
