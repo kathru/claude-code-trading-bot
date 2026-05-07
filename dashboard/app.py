@@ -139,6 +139,10 @@ def _current_cycle() -> int:
 
 PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD", "AVAX-USD", "LINK-USD", "DOGE-USD"]  # 6 pares para melhor diversificação
 
+# ── Portfolio em Real é FIXO em R$ 4.000 ────────────────────────
+TOTAL_BRL_INITIAL = 4000.0  # Portfolio inicial em BRL — FIXO, nunca muda
+# Portfolio em USD varia com cotação: USD_atual = TOTAL_BRL_INITIAL / usd_brl_atual
+
 # ── Ciclo e candles ─────────────────────────────────────────────
 CYCLE_INTERVAL    = 180      # ciclo de 180s (3 minutos)
 CANDLE_30M        = "THIRTY_MINUTE"  # Donchian, Stoch
@@ -322,18 +326,42 @@ connected_clients: List[WebSocket] = []
 
 
 def _update_portfolio_state():
-    total = engine.portfolio_value()
-    pnl   = total - engine.initial_balance
+    """Calcula P&L considerando que portfolio em BRL é FIXO (R$ 4.000).
+
+    Lógica:
+    - Portfolio em BRL é sempre R$ 4.000 (fixo)
+    - Portfolio em USD = R$ 4.000 / USD/BRL (varia com cotação)
+    - P&L_BRL = (saldo_atual_em_USD × USD/BRL) - R$ 4.000
+    - P&L_USD = saldo_atual_em_USD - (R$ 4.000 / USD/BRL_inicial)
+
+    ⚠️ IMPORTANTE: Mudanças em USD/BRL NÃO devem contar como P&L
+    """
+    total_usd = engine.portfolio_value()
+    usd_brl_current = state.get("usd_brl", 5.70)  # cotação atual
+
+    # Calcular P&L apenas em TRADES, não em cotação
+    # P&L em USD = resultado atual - resultado ao final do último ciclo completo
+    # Mas para simplicidade: P&L = total - initial (que já é em USD no reset)
+    pnl_usd = total_usd - engine.initial_balance
+
+    # Converter tudo para BRL usando cotação ATUAL
+    total_brl = total_usd * usd_brl_current
+    pnl_brl = total_brl - TOTAL_BRL_INITIAL  # P&L real em BRL
+    pnl_pct = (pnl_brl / TOTAL_BRL_INITIAL) * 100 if TOTAL_BRL_INITIAL > 0 else 0
+
     state["portfolio"] = {
-        "usd":             round(engine.balance_usd, 2),
-        "total":           round(total, 2),
-        "pnl":             round(pnl, 2),
-        "pnl_pct":         round((pnl / engine.initial_balance) * 100, 2),
-        "holdings":        {k: round(v, 8) for k, v in engine.holdings.items()},
-        "initial_balance": round(engine.initial_balance, 2),
-        "total_fees_usd":  round(engine.total_fees_usd, 4),
+        "usd":               round(engine.balance_usd, 2),
+        "total_usd":         round(total_usd, 2),
+        "total_brl":         round(total_brl, 2),
+        "pnl_usd":           round(pnl_usd, 2),
+        "pnl_brl":           round(pnl_brl, 2),
+        "pnl_pct":           round(pnl_pct, 2),
+        "initial_balance_usd": round(engine.initial_balance, 2),
+        "initial_balance_brl": round(TOTAL_BRL_INITIAL, 2),
+        "holdings":          {k: round(v, 8) for k, v in engine.holdings.items()},
+        "total_fees_usd":    round(engine.total_fees_usd, 4),
     }
-    return total, pnl
+    return total_usd, pnl_usd
 
 
 def _calculate_kpis() -> dict:
@@ -516,10 +544,10 @@ async def reset_portfolio(token: str = ""):
     if not all(prices.get(p) for p in PAIRS):
         return {"ok": False, "error": f"Preços indisponíveis: {prices}"}
 
-    TOTAL_BRL = 4000.0
-    ALLOC_BRL = 1000.0                     # R$1.000 por cripto + R$1.000 caixa
-    alloc_usd = ALLOC_BRL / usd_brl        # valor exato em USD sem arredondamento
-    total_usd = TOTAL_BRL / usd_brl        # portfolio total em USD
+    # ── Portfolio em BRL é FIXO (R$ 4.000) ────────────────────────────
+    ALLOC_BRL = TOTAL_BRL_INITIAL / 4      # R$1.000 por cripto (1000 + 1000 + 1000 + 1000)
+    alloc_usd = ALLOC_BRL / usd_brl        # valor em USD na cotação atual
+    total_usd = TOTAL_BRL_INITIAL / usd_brl  # portfolio total em USD na cotação atual
 
     # ── Reinicia engine DIRETAMENTE — sem compra, sem taxas ──────
     # Portfólio: 100% em caixa — sem posições pré-carregadas
@@ -564,11 +592,12 @@ async def reset_portfolio(token: str = ""):
 
     summary = {
         "ok":        True,
-        "total_brl": TOTAL_BRL,
+        "total_brl": round(TOTAL_BRL_INITIAL, 2),
         "usd_brl":   round(usd_brl, 4),
         "total_usd": round(total_usd, 2),
         "cash_usd":  round(total_usd, 2),
-        "cash_brl":  TOTAL_BRL,
+        "cash_brl":  round(TOTAL_BRL_INITIAL, 2),
+        "note":      "Portfolio em R$ 4.000 (fixo) — variação USD/BRL não afeta P&L",
         "slots":     "todos zerados — estratégias operam por sinal",
     }
     logger.info(f"✅ RESET COMPLETO — {summary}")

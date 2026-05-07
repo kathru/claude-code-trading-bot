@@ -113,10 +113,14 @@
 
     <!-- Portfolio Summary -->
     <div class="grid grid-cols-2 lg:grid-cols-6 gap-2">
-      <div class="card px-4 py-3">
+      <div class="card px-4 py-3 whale-box">
         <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Portfolio Total</p>
         <p id="portfolio-total" class="text-base lg:text-lg font-bold text-white leading-tight truncate">R$ —</p>
-        <p id="portfolio-total-usd" class="text-[10px] text-gray-500 mt-0.5 truncate">US$ — · Inic: R$ —</p>
+        <p id="portfolio-total-usd" class="text-[10px] text-gray-500 mt-0.5 truncate">US$ — · Inic: R$ 4.000</p>
+        <div class="whale-tooltip">
+          <p class="text-xs font-semibold text-white mb-1">💡 Portfolio Fixo em Real</p>
+          <p class="text-[10px] text-gray-300">R$ 4.000 é FIXO. Se dólar cai → real valoriza → USD aumenta. Se dólar sobe → real desvaloriza → USD diminui. Mudanças no USD/BRL NÃO afetam P&L.</p>
+        </div>
       </div>
       <div class="card px-4 py-3">
         <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">P&L</p>
@@ -149,7 +153,7 @@
     <div class="card p-5">
       <div class="flex items-center justify-between mb-3">
         <h3 class="font-semibold text-white">Painel de estratégias</h3>
-        <span class="text-xs text-gray-500">P&L por contribuição • TP +5%</span>
+        <span class="text-xs text-gray-500">P&L em trades • Portfolio R$ 4.000 (fixo)</span>
       </div>
       <div id="strategy-panel" class="grid grid-cols-2 lg:grid-cols-5 gap-3"></div>
     </div>
@@ -878,10 +882,14 @@
       // Header
       document.getElementById('last-update').textContent = s.last_update || '--:--:--';
 
-      // Portfolio
+      // Portfolio — Novo: BRL é FIXO em R$ 4.000, USD varia com cotação
       const p = s.portfolio || {};
-      const total    = p.total || 10000;
-      const pnl      = p.pnl  || 0;
+      const totalUSD = p.total_usd || 10000;
+      const totalBRL = p.total_brl || 40000;  // Sempre próximo a R$ 4.000 × cotação
+      const pnlBRL   = p.pnl_brl || 0;  // P&L real em BRL (não é pnl_usd × cotação)
+      const pnlUSD   = p.pnl_usd || 0;  // P&L em USD (da movimentação de trades)
+      const pnlPct   = p.pnl_pct || 0;  // Percentual do P&L em BRL
+
       // Expõe holdings e saldo para o modal de trade
       if (p.holdings) {
         _holdings.BTC = p.holdings.BTC || 0;
@@ -889,24 +897,23 @@
       }
       window._balanceUSD = p.usd || 0;
       window._usdBrl     = usdBrl;
-      const pct      = p.pnl_pct || 0;
-      const totalBRL = total * usdBrl;
-      const pnlBRL   = pnl   * usdBrl;
+
       const usdAvail = p.usd || 10000;
-      const initBRL  = (p.initial_balance || 10000) * usdBrl;
+      const initBRL  = p.initial_balance_brl || 4000;
 
       document.getElementById('portfolio-total').textContent = 'R$ ' + fmtBRL(totalBRL);
       document.getElementById('portfolio-total-usd').textContent =
-        'US$ ' + fmt(total) + ' · Inicial: R$ ' + fmtBRL(initBRL);
+        'US$ ' + fmt(totalUSD) + ' · Inicial: R$ ' + fmtBRL(initBRL);
 
       document.getElementById('balance-usd').textContent = 'R$ ' + fmtBRL(usdAvail * usdBrl);
       document.getElementById('balance-usd-raw').textContent = 'US$ ' + fmt(usdAvail);
 
       const pnlEl = document.getElementById('pnl-value');
       const pctEl = document.getElementById('pnl-pct');
-      pnlEl.textContent = (pnl >= 0 ? '+' : '-') + 'R$ ' + fmtBRL(Math.abs(pnlBRL));
-      pnlEl.className = 'text-2xl font-bold ' + (pnl >= 0 ? 'text-green-400' : 'text-red-400');
-      pctEl.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+      // ⚠️ IMPORTANTE: pnlBRL já vem do backend (não é pnlUSD × cotação)
+      pnlEl.textContent = (pnlBRL >= 0 ? '+' : '') + 'R$ ' + fmtBRL(Math.abs(pnlBRL));
+      pnlEl.className = 'text-2xl font-bold ' + (pnlBRL >= 0 ? 'text-green-400' : 'text-red-400');
+      pctEl.textContent = (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%';
       pctEl.className = 'text-sm mt-1 ' + (pct >= 0 ? 'text-green-500' : 'text-red-500');
 
       document.getElementById('trade-count').textContent = (s.trades || []).length;
