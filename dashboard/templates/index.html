@@ -995,6 +995,9 @@
       if (holdings.BTC && prices['BTC-USD']) { labels.push('BTC'); values.push(holdings.BTC * prices['BTC-USD'].price * usdBrl); colors.push('#f97316'); }
       if (holdings.ETH && prices['ETH-USD']) { labels.push('ETH'); values.push(holdings.ETH * prices['ETH-USD'].price * usdBrl); colors.push('#3b82f6'); }
       if (holdings.SOL && prices['SOL-USD']) { labels.push('SOL'); values.push(holdings.SOL * prices['SOL-USD'].price * usdBrl); colors.push('#a855f7'); }
+      if (holdings.AVAX && prices['AVAX-USD']) { labels.push('AVAX'); values.push(holdings.AVAX * prices['AVAX-USD'].price * usdBrl); colors.push('#eab308'); }
+      if (holdings.LINK && prices['LINK-USD']) { labels.push('LINK'); values.push(holdings.LINK * prices['LINK-USD'].price * usdBrl); colors.push('#60a5fa'); }
+      if (holdings.DOGE && prices['DOGE-USD']) { labels.push('DOGE'); values.push(holdings.DOGE * prices['DOGE-USD'].price * usdBrl); colors.push('#f59e0b'); }
       allocationChart.data.labels = labels;
       allocationChart.data.datasets[0].data = values;
       allocationChart.data.datasets[0].backgroundColor = colors;
