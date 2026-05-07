@@ -610,29 +610,33 @@
         'MACD Momentum': 'MACD', 'Stoch Bounce': 'STOCH', 'RSI Divergence': 'RSI',
       };
       feedList.innerHTML = [...feed].reverse().slice(0, 60).map(f => {
-        const sig    = f.signal || f.decision || 'HOLD';
-        const isB    = sig === 'BUY', isS = sig === 'SELL';
-        const sigCls = isB ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                     : isS ? 'bg-red-500/20 text-red-400 border border-red-500/30'
-                     :       'bg-gray-700/40 text-gray-500 border border-gray-700';
-        const strat  = stratShort[f.strategy] || f.strategy || '—';
-        const pair   = f.pair ? f.pair.replace('-USD', '') : '—';
-        const price  = f.price ? 'R$ ' + fmtBRL(f.price * usdBrl) : '—';
-        const time   = (f.time || '').length > 8 ? f.time.substring(11, 19) : (f.time || '');
-        const exec   = f.executed
-          ? '<span class="text-[9px] font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 px-1.5 py-0.5 rounded">EXEC</span>'
-          : '';
-        return `<div class="flex items-center justify-between gap-3 py-1.5 border-b border-gray-800/40">
+        const sig      = f.signal || f.decision || 'HOLD';
+        const isB      = sig === 'BUY', isS = sig === 'SELL';
+        const borderCls = isB ? 'border-l-2 border-green-500' : isS ? 'border-l-2 border-red-500' : 'border-l-2 border-gray-700';
+        const sigCls    = isB ? 'bg-green-500/20 text-green-400' : isS ? 'bg-red-500/20 text-red-400' : 'bg-gray-700/40 text-gray-500';
+        const strat     = stratShort[f.strategy] || f.strategy || '—';
+        const stratFull = f.strategy || '—';
+        const pair      = f.pair || '—';
+        const pairShort = pair.replace('-USD', '');
+        const price     = f.price ? 'R$ ' + fmtBRL(f.price * usdBrl) : '—';
+        const note      = f.note || '';
+        const time      = (f.time || '').length > 8 ? f.time.substring(11, 19) : (f.time || '');
+        const cycle     = f.cycle ? ` · #${f.cycle}` : '';
+        // Badge: se executado mostra checkmark + nota, senão só nota
+        const noteBadge = note
+          ? `<span class="text-[9px] px-1.5 py-0.5 rounded font-medium ${f.executed ? 'bg-green-500/15 text-green-400 border border-green-500/20' : 'bg-gray-700/60 text-gray-400 border border-gray-700'}">${f.executed ? '✓ ' : ''}${note}</span>`
+          : (f.executed ? '<span class="text-[9px] px-1.5 py-0.5 rounded font-medium bg-indigo-500/15 text-indigo-400 border border-indigo-500/20">✓ EXEC</span>' : '');
+        return `<div class="flex items-center justify-between gap-3 py-2 pl-2 ${borderCls}">
           <div class="flex items-center gap-2 min-w-0">
             <span class="text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${sigCls}">${sig}</span>
             <div class="min-w-0">
-              <p class="text-white text-xs font-semibold leading-none">${pair}</p>
-              <p class="text-gray-500 text-[10px] mt-0.5">${strat}</p>
+              <p class="text-white text-xs font-semibold leading-none">${pairShort}</p>
+              <p class="text-gray-500 text-[10px] mt-0.5 truncate">${stratFull}</p>
             </div>
           </div>
           <div class="text-right shrink-0">
-            <div class="flex items-center justify-end gap-1.5">${exec}<span class="text-gray-300 text-xs font-mono">${price}</span></div>
-            <p class="text-gray-600 text-[10px] font-mono mt-0.5">${time}</p>
+            <div class="flex items-center justify-end gap-1.5 mb-0.5">${noteBadge}<span class="text-gray-300 text-xs font-mono font-semibold">${price}</span></div>
+            <p class="text-gray-600 text-[10px] font-mono">${time}${cycle}</p>
           </div>
         </div>`;
       }).join('');
