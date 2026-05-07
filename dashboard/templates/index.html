@@ -11,22 +11,15 @@
   <script>
     tailwind.config = {
       darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            dark: { 900: '#0d1117', 800: '#161b22', 700: '#21262d', 600: '#30363d' },
-            brand: { 500: '#6366f1', 400: '#818cf8' },
-          }
-        }
-      }
+      theme: { extend: { colors: {
+        dark: { 900: '#0d1117', 800: '#161b22', 700: '#21262d', 600: '#30363d' }
+      }}}
     }
   </script>
   <style>
     body { background: #0d1117; font-family: 'Inter', system-ui, sans-serif; }
     .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; }
-    .glow-green { box-shadow: 0 0 20px rgba(34,197,94,0.15); }
-    .glow-red   { box-shadow: 0 0 20px rgba(239,68,68,0.15); }
-    .pulse-dot  { animation: pulse 2s infinite; }
+    .pulse-dot { animation: pulse 2s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
     .signal-buy  { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
     .signal-sell { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
@@ -39,56 +32,32 @@
     .period-btn { background: transparent; color: #6b7280; border: 1px solid #30363d; }
     .period-btn:hover { color: #d1d5db; border-color: #6b7280; }
     .period-btn.active { background: #21262d; color: #e5e7eb; border-color: #6b7280; }
-    /* Whale tooltip */
-    .whale-box { position: relative; cursor: help; }
-    .whale-tooltip {
-      display: none; position: absolute; z-index: 50;
-      bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
-      width: 260px; background: #1c2128; border: 1px solid #30363d;
-      border-radius: 10px; padding: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-    }
-    .whale-box:hover .whale-tooltip { display: block; }
-    .whale-tooltip::after {
-      content: ''; position: absolute; top: 100%; left: 50%;
-      transform: translateX(-50%); border: 6px solid transparent;
-      border-top-color: #30363d;
-    }
-
     .candle-pair-btn { background: transparent; color: #6b7280; border: 1px solid #30363d; }
     .candle-pair-btn:hover { color: #d1d5db; border-color: #6b7280; }
     .candle-pair-btn.active { background: #f97316; color: #fff; border-color: #f97316; }
     .candle-tf-btn { background: transparent; color: #6b7280; border: 1px solid #30363d; }
     .candle-tf-btn:hover { color: #d1d5db; border-color: #6b7280; }
     .candle-tf-btn.active { background: #21262d; color: #e5e7eb; border-color: #6b7280; }
-    /* Ocultar scrollbar nos carrosséis de botões */
     .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
     .scrollbar-none::-webkit-scrollbar { display: none; }
-    /* Mobile: ajuste de tamanho de fonte nos cards de preço */
-    @media (max-width: 767px) {
-      #price-BTC, #price-ETH { font-size: 1.25rem; }
-      #chg-BTC, #chg-ETH { font-size: 0.65rem; }
-    }
   </style>
 </head>
 <body class="min-h-screen text-gray-100">
 
-  <!-- Header -->
-  <header class="border-b border-gray-800 px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between sticky top-0 z-50" style="background:#0d1117cc;backdrop-filter:blur(12px)">
-    <div class="flex items-center gap-2 sm:gap-3 min-w-0">
-      <img src="/static/favicon.svg" class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg shrink-0" alt="Claude">
-      <div class="min-w-0">
-        <h1 class="font-bold text-white text-sm sm:text-lg leading-none truncate">
-          <span class="hidden sm:inline">Claude Code Trading Bot</span>
-          <span class="sm:hidden">CC Trading Bot</span>
-        </h1>
-        <p class="text-[10px] sm:text-xs text-gray-500 hidden xs:block">Coinbase · Paper Mode</p>
+  <!-- ── Header ── -->
+  <header class="border-b border-gray-800 px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-50"
+          style="background:#0d1117cc;backdrop-filter:blur(12px)">
+    <div class="flex items-center gap-3">
+      <img src="/static/favicon.svg" class="w-8 h-8 rounded-lg" alt="Claude">
+      <div>
+        <h1 class="font-bold text-white text-lg leading-none">Claude Code Trading Bot</h1>
+        <p class="text-xs text-gray-500">Coinbase · Paper Mode</p>
       </div>
     </div>
-    <div class="flex items-center gap-3 sm:gap-6">
-      <!-- Cotação: visível em mobile também, compacto -->
+    <div class="flex items-center gap-4 sm:gap-6">
       <div class="text-right">
-        <p class="text-[10px] text-gray-500 hidden sm:block">USD / BRL</p>
-        <p id="usd-brl-rate" class="text-xs sm:text-sm text-yellow-400 font-mono font-bold">R$ —</p>
+        <p class="text-[10px] text-gray-500">USD / BRL</p>
+        <p id="usd-brl-rate" class="text-sm text-yellow-400 font-mono font-bold">R$ —</p>
       </div>
       <div class="text-right hidden sm:block">
         <p class="text-xs text-gray-500">Última atualização</p>
@@ -98,587 +67,116 @@
         <p class="text-xs text-gray-500">Próximo ciclo <span id="header-cycle-count" class="text-gray-600">#—</span></p>
         <p id="header-cycle-timer" class="text-sm text-indigo-400 font-mono font-bold">--</p>
       </div>
-      <!-- Timer compacto visível só no mobile -->
-      <div class="text-right sm:hidden">
-        <p id="header-cycle-timer-mobile" class="text-xs text-indigo-400 font-mono font-bold">--</p>
-      </div>
-      <div class="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/30">
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/30">
         <span class="w-2 h-2 rounded-full bg-green-500 pulse-dot"></span>
-        <span class="text-green-400 text-xs sm:text-sm font-medium">Ativo</span>
+        <span class="text-green-400 text-sm font-medium">Ativo</span>
       </div>
     </div>
   </header>
 
   <main class="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
 
-    <!-- Portfolio Summary -->
+    <!-- ── Portfolio Summary ── -->
     <div class="grid grid-cols-2 lg:grid-cols-6 gap-2">
-      <div class="card px-4 py-3 whale-box">
+      <div class="card px-4 py-3">
         <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Portfolio Total</p>
-        <p id="portfolio-total" class="text-base lg:text-lg font-bold text-white leading-tight truncate">R$ —</p>
-        <p id="portfolio-total-usd" class="text-[10px] text-gray-500 mt-0.5 truncate">US$ — · Inic: R$ 4.000</p>
-        <div class="whale-tooltip">
-          <p class="text-xs font-semibold text-white mb-1">💡 Portfolio Fixo em Real</p>
-          <p class="text-[10px] text-gray-300">R$ 4.000 é FIXO. Se dólar cai → real valoriza → USD aumenta. Se dólar sobe → real desvaloriza → USD diminui. Mudanças no USD/BRL NÃO afetam P&L.</p>
-        </div>
+        <p id="portfolio-total" class="text-lg font-bold text-white leading-tight">R$ —</p>
+        <p id="portfolio-total-usd" class="text-[10px] text-gray-500 mt-0.5">US$ — · Inic: R$ 4.000</p>
       </div>
       <div class="card px-4 py-3">
         <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">P&L</p>
-        <p id="pnl-value" class="text-base lg:text-lg font-bold text-gray-400 leading-tight truncate">R$ 0,00</p>
+        <p id="pnl-value" class="text-lg font-bold text-gray-400 leading-tight">R$ 0,00</p>
         <p id="pnl-pct" class="text-[10px] text-gray-500 mt-0.5">+0.00%</p>
       </div>
       <div class="card px-4 py-3">
         <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Saldo Disponível</p>
-        <p id="balance-usd" class="text-base lg:text-lg font-bold text-white leading-tight truncate">R$ —</p>
-        <p id="balance-usd-raw" class="text-[10px] text-gray-500 mt-0.5">US$ —</p>
+        <p id="balance-brl" class="text-lg font-bold text-white leading-tight">R$ —</p>
+        <p id="balance-usd" class="text-[10px] text-gray-500 mt-0.5">US$ —</p>
       </div>
       <div class="card px-4 py-3">
         <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Trades</p>
-        <p id="trade-count" class="text-base lg:text-lg font-bold text-white leading-tight">0</p>
+        <p id="trade-count" class="text-lg font-bold text-white leading-tight">0</p>
         <p class="text-[10px] text-gray-500 mt-0.5">Paper trades</p>
       </div>
       <div class="card px-4 py-3 col-span-2 lg:col-span-1">
         <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Taxas Pagas</p>
-        <p id="total-fees" class="text-base lg:text-lg font-bold text-orange-400 leading-tight truncate">R$ 0,00</p>
-        <p id="total-fees-usd" class="text-[10px] text-gray-500 mt-0.5 truncate">0,60%/trade</p>
+        <p id="total-fees" class="text-lg font-bold text-orange-400 leading-tight">R$ 0,00</p>
+        <p id="total-fees-usd" class="text-[10px] text-gray-500 mt-0.5">0,60%/trade</p>
       </div>
-      <div class="card px-4 py-3 col-span-2 lg:col-span-1" id="fg-card">
+      <div class="card px-4 py-3 col-span-2 lg:col-span-1">
         <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Fear &amp; Greed</p>
-        <p id="fg-value" class="text-base lg:text-lg font-bold leading-tight">—</p>
-        <p id="fg-label" class="text-[10px] text-gray-500 mt-0.5 truncate">—</p>
+        <p id="fg-value" class="text-lg font-bold leading-tight text-gray-300">—</p>
+        <p id="fg-label" class="text-[10px] text-gray-500 mt-0.5">—</p>
       </div>
     </div>
 
-    <!-- Painel de Estratégias -->
+    <!-- ── Painel de Estratégias ── -->
     <div class="card p-5">
       <div class="flex items-center justify-between mb-3">
         <h3 class="font-semibold text-white">Painel de estratégias</h3>
-        <span class="text-xs text-gray-500">P&L em trades • Portfolio R$ 4.000 (fixo)</span>
+        <span class="text-xs text-gray-500">P&L em trades · Portfolio R$ 4.000 (fixo)</span>
       </div>
       <div id="strategy-panel" class="grid grid-cols-2 lg:grid-cols-5 gap-3"></div>
     </div>
 
-    <!-- Price Cards — 1 col mobile / 3 col desktop -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <!-- ── Cards de Criptos ── -->
+    <div id="crypto-grid" class="grid grid-cols-1 lg:grid-cols-3 gap-4"></div>
 
-      <!-- BTC -->
-      <div id="card-BTC" class="card p-5">
-        <div class="flex items-start justify-between mb-3">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center text-xl">₿</div>
-            <div>
-              <h2 class="font-bold text-white text-lg">Bitcoin</h2>
-              <p class="text-xs text-gray-500">BTC-USD</p>
-            </div>
-          </div>
-          <div class="text-right">
-            <p id="price-BTC" class="text-2xl font-bold text-white font-mono">—</p>
-            <p id="chg-BTC" class="text-sm text-gray-400">—</p>
-          </div>
-        </div>
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
-          <span id="trend-BTC" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
-        </div>
-        <div class="grid grid-cols-2 lg:grid-cols-5 gap-1 mb-2">
-          <div id="slot-BTC-Don" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">🚀 DONCH</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-BTC-Don-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-BTC-EMA" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">📈 EMA</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-BTC-EMA-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-BTC-MACD" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">⚡ MACD</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-BTC-MACD-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-BTC-Stoch" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">🎯 STOCH</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-BTC-Stoch-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-BTC-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">〰️ RSI</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-BTC-RSI-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-        </div>
-        <div id="holdings-BTC" class="mt-1 text-xs text-gray-500 hidden">
-          Posição: <span id="qty-BTC" class="text-orange-400 font-mono font-bold">0</span> BTC
-        </div>
-        <div id="sltp-BTC" class="mt-2 hidden">
-          <div class="grid grid-cols-3 gap-1.5 text-xs">
-            <div class="bg-gray-800/60 rounded px-2 py-1.5 text-center">
-              <p class="text-gray-500 mb-0.5">Entrada</p>
-              <p id="entry-BTC" class="text-white font-mono font-bold">—</p>
-            </div>
-            <div class="bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5 text-center">
-              <p class="text-red-400 mb-0.5">SL</p>
-              <p id="sl-BTC" class="text-red-300 font-mono font-bold">—</p>
-            </div>
-            <div class="bg-green-500/10 border border-green-500/20 rounded px-2 py-1.5 text-center">
-              <p class="text-green-400 mb-0.5">TP</p>
-              <p id="tp-BTC" class="text-green-300 font-mono font-bold">—</p>
-            </div>
-          </div>
-          <div class="mt-1 flex items-center justify-between text-xs px-1">
-            <span class="text-gray-500">Variação desde entrada</span>
-            <span id="chg-entry-BTC" class="font-mono font-bold">—</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- ETH -->
-      <div id="card-ETH" class="card p-5">
-        <div class="flex items-start justify-between mb-3">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-xl">Ξ</div>
-            <div>
-              <h2 class="font-bold text-white text-lg">Ethereum</h2>
-              <p class="text-xs text-gray-500">ETH-USD</p>
-            </div>
-          </div>
-          <div class="text-right">
-            <p id="price-ETH" class="text-2xl font-bold text-white font-mono">—</p>
-            <p id="chg-ETH" class="text-sm text-gray-400">—</p>
-          </div>
-        </div>
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
-          <span id="trend-ETH" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
-        </div>
-        <div class="grid grid-cols-2 lg:grid-cols-5 gap-1 mb-2">
-          <div id="slot-ETH-Don" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">🚀 DONCH</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-ETH-Don-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-ETH-EMA" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">📈 EMA</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-ETH-EMA-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-ETH-MACD" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">⚡ MACD</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-ETH-MACD-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-ETH-Stoch" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">🎯 STOCH</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-ETH-Stoch-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-ETH-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">〰️ RSI</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-ETH-RSI-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-        </div>
-        <div id="holdings-ETH" class="mt-1 text-xs text-gray-500 hidden">
-          Posição: <span id="qty-ETH" class="text-blue-400 font-mono font-bold">0</span> ETH
-        </div>
-        <div id="sltp-ETH" class="mt-2 hidden">
-          <div class="grid grid-cols-3 gap-1.5 text-xs">
-            <div class="bg-gray-800/60 rounded px-2 py-1.5 text-center">
-              <p class="text-gray-500 mb-0.5">Entrada</p>
-              <p id="entry-ETH" class="text-white font-mono font-bold">—</p>
-            </div>
-            <div class="bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5 text-center">
-              <p class="text-red-400 mb-0.5">SL</p>
-              <p id="sl-ETH" class="text-red-300 font-mono font-bold">—</p>
-            </div>
-            <div class="bg-green-500/10 border border-green-500/20 rounded px-2 py-1.5 text-center">
-              <p class="text-green-400 mb-0.5">TP</p>
-              <p id="tp-ETH" class="text-green-300 font-mono font-bold">—</p>
-            </div>
-          </div>
-          <div class="mt-1 flex items-center justify-between text-xs px-1">
-            <span class="text-gray-500">Variação desde entrada</span>
-            <span id="chg-entry-ETH" class="font-mono font-bold">—</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- SOL -->
-      <div id="card-SOL" class="card p-5">
-        <div class="flex items-start justify-between mb-3">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center text-xl">◎</div>
-            <div>
-              <h2 class="font-bold text-white text-lg">Solana</h2>
-              <p class="text-xs text-gray-500">SOL-USD</p>
-            </div>
-          </div>
-          <div class="text-right">
-            <p id="price-SOL" class="text-2xl font-bold text-white font-mono">—</p>
-            <p id="chg-SOL" class="text-sm text-gray-400">—</p>
-          </div>
-        </div>
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
-          <span id="trend-SOL" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
-        </div>
-        <div class="grid grid-cols-2 lg:grid-cols-5 gap-1 mb-2">
-          <div id="slot-SOL-Don" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">🚀 DONCH</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-SOL-Don-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-SOL-EMA" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">📈 EMA</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-SOL-EMA-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-SOL-MACD" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">⚡ MACD</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-SOL-MACD-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-SOL-Stoch" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">🎯 STOCH</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-SOL-Stoch-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-SOL-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">〰️ RSI</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-SOL-RSI-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-        </div>
-        <div id="holdings-SOL" class="mt-1 text-xs text-gray-500 hidden">
-          Posição: <span id="qty-SOL" class="text-purple-400 font-mono font-bold">0</span> SOL
-        </div>
-        <div id="sltp-SOL" class="mt-2 hidden">
-          <div class="grid grid-cols-3 gap-1.5 text-xs">
-            <div class="bg-gray-800/60 rounded px-2 py-1.5 text-center">
-              <p class="text-gray-500 mb-0.5">Entrada</p>
-              <p id="entry-SOL" class="text-white font-mono font-bold">—</p>
-            </div>
-            <div class="bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5 text-center">
-              <p class="text-red-400 mb-0.5">SL</p>
-              <p id="sl-SOL" class="text-red-300 font-mono font-bold">—</p>
-            </div>
-            <div class="bg-green-500/10 border border-green-500/20 rounded px-2 py-1.5 text-center">
-              <p class="text-green-400 mb-0.5">TP</p>
-              <p id="tp-SOL" class="text-green-300 font-mono font-bold">—</p>
-            </div>
-          </div>
-          <div class="mt-1 flex items-center justify-between text-xs px-1">
-            <span class="text-gray-500">Variação desde entrada</span>
-            <span id="chg-entry-SOL" class="font-mono font-bold">—</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- AVAX -->
-      <div id="card-AVAX" class="card p-5">
-        <div class="flex items-start justify-between mb-3">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center text-xl">⬙</div>
-            <div>
-              <h2 class="font-bold text-white text-lg">Avalanche</h2>
-              <p class="text-xs text-gray-500">AVAX-USD</p>
-            </div>
-          </div>
-          <div class="text-right">
-            <p id="price-AVAX" class="text-2xl font-bold text-white font-mono">—</p>
-            <p id="chg-AVAX" class="text-sm text-gray-400">—</p>
-          </div>
-        </div>
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
-          <span id="trend-AVAX" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
-        </div>
-        <div class="grid grid-cols-2 lg:grid-cols-5 gap-1 mb-2">
-          <div id="slot-AVAX-Don" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">🚀 DONCH</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-AVAX-Don-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-AVAX-EMA" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">📈 EMA</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-AVAX-EMA-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-AVAX-MACD" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">⚡ MACD</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-AVAX-MACD-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-AVAX-Stoch" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">🎯 STOCH</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-AVAX-Stoch-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-AVAX-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">〰️ RSI</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-AVAX-RSI-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-        </div>
-        <div id="holdings-AVAX" class="mt-1 text-xs text-gray-500 hidden">
-          Posição: <span id="qty-AVAX" class="text-yellow-400 font-mono font-bold">0</span> AVAX
-        </div>
-        <div id="sltp-AVAX" class="mt-2 hidden">
-          <div class="grid grid-cols-3 gap-1.5 text-xs">
-            <div class="bg-gray-800/60 rounded px-2 py-1.5 text-center">
-              <p class="text-gray-500 mb-0.5">Entrada</p>
-              <p id="entry-AVAX" class="text-white font-mono font-bold">—</p>
-            </div>
-            <div class="bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5 text-center">
-              <p class="text-red-400 mb-0.5">SL</p>
-              <p id="sl-AVAX" class="text-red-300 font-mono font-bold">—</p>
-            </div>
-            <div class="bg-green-500/10 border border-green-500/20 rounded px-2 py-1.5 text-center">
-              <p class="text-green-400 mb-0.5">TP</p>
-              <p id="tp-AVAX" class="text-green-300 font-mono font-bold">—</p>
-            </div>
-          </div>
-          <div class="mt-1 flex items-center justify-between text-xs px-1">
-            <span class="text-gray-500">Variação desde entrada</span>
-            <span id="chg-entry-AVAX" class="font-mono font-bold">—</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- LINK -->
-      <div id="card-LINK" class="card p-5">
-        <div class="flex items-start justify-between mb-3">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-blue-400/20 flex items-center justify-center text-xl">🔗</div>
-            <div>
-              <h2 class="font-bold text-white text-lg">Chainlink</h2>
-              <p class="text-xs text-gray-500">LINK-USD</p>
-            </div>
-          </div>
-          <div class="text-right">
-            <p id="price-LINK" class="text-2xl font-bold text-white font-mono">—</p>
-            <p id="chg-LINK" class="text-sm text-gray-400">—</p>
-          </div>
-        </div>
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
-          <span id="trend-LINK" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
-        </div>
-        <div class="grid grid-cols-2 lg:grid-cols-5 gap-1 mb-2">
-          <div id="slot-LINK-Don" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">🚀 DONCH</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-LINK-Don-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-LINK-EMA" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">📈 EMA</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-LINK-EMA-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-LINK-MACD" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">⚡ MACD</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-LINK-MACD-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-LINK-Stoch" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">🎯 STOCH</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-LINK-Stoch-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-LINK-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">〰️ RSI</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-LINK-RSI-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-        </div>
-        <div id="holdings-LINK" class="mt-1 text-xs text-gray-500 hidden">
-          Posição: <span id="qty-LINK" class="text-blue-300 font-mono font-bold">0</span> LINK
-        </div>
-        <div id="sltp-LINK" class="mt-2 hidden">
-          <div class="grid grid-cols-3 gap-1.5 text-xs">
-            <div class="bg-gray-800/60 rounded px-2 py-1.5 text-center">
-              <p class="text-gray-500 mb-0.5">Entrada</p>
-              <p id="entry-LINK" class="text-white font-mono font-bold">—</p>
-            </div>
-            <div class="bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5 text-center">
-              <p class="text-red-400 mb-0.5">SL</p>
-              <p id="sl-LINK" class="text-red-300 font-mono font-bold">—</p>
-            </div>
-            <div class="bg-green-500/10 border border-green-500/20 rounded px-2 py-1.5 text-center">
-              <p class="text-green-400 mb-0.5">TP</p>
-              <p id="tp-LINK" class="text-green-300 font-mono font-bold">—</p>
-            </div>
-          </div>
-          <div class="mt-1 flex items-center justify-between text-xs px-1">
-            <span class="text-gray-500">Variação desde entrada</span>
-            <span id="chg-entry-LINK" class="font-mono font-bold">—</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- DOGE -->
-      <div id="card-DOGE" class="card p-5">
-        <div class="flex items-start justify-between mb-3">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center text-xl">🐕</div>
-            <div>
-              <h2 class="font-bold text-white text-lg">Dogecoin</h2>
-              <p class="text-xs text-gray-500">DOGE-USD</p>
-            </div>
-          </div>
-          <div class="text-right">
-            <p id="price-DOGE" class="text-2xl font-bold text-white font-mono">—</p>
-            <p id="chg-DOGE" class="text-sm text-gray-400">—</p>
-          </div>
-        </div>
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
-          <span id="trend-DOGE" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
-        </div>
-        <div class="grid grid-cols-2 lg:grid-cols-5 gap-1 mb-2">
-          <div id="slot-DOGE-Don" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">🚀 DONCH</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-DOGE-Don-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-DOGE-EMA" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">📈 EMA</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-DOGE-EMA-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-DOGE-MACD" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">⚡ MACD</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-DOGE-MACD-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-DOGE-Stoch" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">🎯 STOCH</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-DOGE-Stoch-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-          <div id="slot-DOGE-RSI" class="signal-hold rounded-lg px-2 py-1.5 text-center text-[9px]">
-            <p class="opacity-60 mb-0.5">〰️ RSI</p>
-            <p class="text-[10px] font-bold">HOLD</p>
-            <p class="text-gray-600 mt-0.5">sem posição</p>
-            <p id="slot-DOGE-RSI-info" class="text-gray-500 text-[8px] mt-1 hidden"></p>
-          </div>
-        </div>
-        <div id="holdings-DOGE" class="mt-1 text-xs text-gray-500 hidden">
-          Posição: <span id="qty-DOGE" class="text-amber-400 font-mono font-bold">0</span> DOGE
-        </div>
-        <div id="sltp-DOGE" class="mt-2 hidden">
-          <div class="grid grid-cols-3 gap-1.5 text-xs">
-            <div class="bg-gray-800/60 rounded px-2 py-1.5 text-center">
-              <p class="text-gray-500 mb-0.5">Entrada</p>
-              <p id="entry-DOGE" class="text-white font-mono font-bold">—</p>
-            </div>
-            <div class="bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5 text-center">
-              <p class="text-red-400 mb-0.5">SL</p>
-              <p id="sl-DOGE" class="text-red-300 font-mono font-bold">—</p>
-            </div>
-            <div class="bg-green-500/10 border border-green-500/20 rounded px-2 py-1.5 text-center">
-              <p class="text-green-400 mb-0.5">TP</p>
-              <p id="tp-DOGE" class="text-green-300 font-mono font-bold">—</p>
-            </div>
-          </div>
-          <div class="mt-1 flex items-center justify-between text-xs px-1">
-            <span class="text-gray-500">Variação desde entrada</span>
-            <span id="chg-entry-DOGE" class="font-mono font-bold">—</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Candlestick Chart -->
+    <!-- ── Gráfico de Candles ── -->
     <div class="card p-5">
       <div class="mb-4">
-        <div class="flex items-center justify-between mb-2">
-          <h3 class="font-semibold text-white">Gráficos de monitoramento</h3>
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-white">Gráfico de Monitoramento</h3>
           <span id="candle-price" class="font-mono text-white text-sm font-bold">—</span>
         </div>
         <div class="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-none">
-          <!-- Par -->
           <div class="flex gap-1 shrink-0">
-            <button onclick="setCandlePair('BTC-USD')" data-pair="BTC-USD" class="candle-pair-btn active px-3 py-1 rounded text-xs font-semibold transition-colors">BTC</button>
-            <button onclick="setCandlePair('ETH-USD')" data-pair="ETH-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold transition-colors">ETH</button>
-            <button onclick="setCandlePair('SOL-USD')" data-pair="SOL-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold transition-colors">SOL</button>
-            <button onclick="setCandlePair('AVAX-USD')" data-pair="AVAX-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold transition-colors">AVAX</button>
-            <button onclick="setCandlePair('LINK-USD')" data-pair="LINK-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold transition-colors">LINK</button>
-            <button onclick="setCandlePair('DOGE-USD')" data-pair="DOGE-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold transition-colors">DOGE</button>
+            <button onclick="setCandlePair('BTC-USD')" data-pair="BTC-USD" class="candle-pair-btn active px-3 py-1 rounded text-xs font-semibold">BTC</button>
+            <button onclick="setCandlePair('ETH-USD')" data-pair="ETH-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold">ETH</button>
+            <button onclick="setCandlePair('SOL-USD')" data-pair="SOL-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold">SOL</button>
+            <button onclick="setCandlePair('AVAX-USD')" data-pair="AVAX-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold">AVAX</button>
+            <button onclick="setCandlePair('LINK-USD')" data-pair="LINK-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold">LINK</button>
+            <button onclick="setCandlePair('DOGE-USD')" data-pair="DOGE-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold">DOGE</button>
           </div>
           <span class="text-gray-700 shrink-0">|</span>
-          <!-- Timeframe -->
           <div class="flex gap-1 shrink-0">
-            <button onclick="setCandleTF('ONE_MINUTE',  1)"    data-tf="ONE_MINUTE"    class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1m</button>
-            <button onclick="setCandleTF('FIVE_MINUTE', 5)"    data-tf="FIVE_MINUTE"   class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">5m</button>
-            <button onclick="setCandleTF('FIFTEEN_MINUTE',15)" data-tf="FIFTEEN_MINUTE" class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">15m</button>
-            <button onclick="setCandleTF('ONE_HOUR',   60)"    data-tf="ONE_HOUR"      class="candle-tf-btn active px-2.5 py-1 rounded text-xs font-semibold transition-colors">1h</button>
-            <button onclick="setCandleTF('SIX_HOUR',   360)"   data-tf="SIX_HOUR"     class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">6h</button>
-            <button onclick="setCandleTF('ONE_DAY',   1440)"   data-tf="ONE_DAY"       class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold transition-colors">1d</button>
+            <button onclick="setCandleTF('ONE_MINUTE',1)"     data-tf="ONE_MINUTE"     class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold">1m</button>
+            <button onclick="setCandleTF('FIVE_MINUTE',5)"    data-tf="FIVE_MINUTE"    class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold">5m</button>
+            <button onclick="setCandleTF('FIFTEEN_MINUTE',15)" data-tf="FIFTEEN_MINUTE" class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold">15m</button>
+            <button onclick="setCandleTF('ONE_HOUR',60)"      data-tf="ONE_HOUR"       class="candle-tf-btn active px-2.5 py-1 rounded text-xs font-semibold">1h</button>
+            <button onclick="setCandleTF('SIX_HOUR',360)"     data-tf="SIX_HOUR"       class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold">6h</button>
+            <button onclick="setCandleTF('ONE_DAY',1440)"     data-tf="ONE_DAY"        class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold">1d</button>
           </div>
         </div>
       </div>
       <div id="candle-chart" style="overflow:hidden;"></div>
       <div class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-500">
-        <span><span style="color:#06b6d4" class="font-semibold">—</span> EMA9</span>
-        <span><span style="color:#818cf8" class="font-semibold">—</span> EMA21 <span class="text-gray-600">(EMA Pullback)</span></span>
-        <span><span style="color:#c084fc" class="font-semibold">—</span> EMA50</span>
-        <span><span style="color:rgba(249,115,22,0.8)" class="font-semibold">- -</span> Donchian 20 <span class="text-gray-600">(Breakout)</span></span>
-        <span><span style="color:#3b82f6" class="font-semibold">▮</span> MACD <span class="text-gray-600">(Momentum)</span></span>
-        <span><span style="color:#4ade80" class="font-semibold">—</span> Stoch %K <span class="text-gray-600">(Bounce)</span></span>
-        <span><span style="color:#facc15" class="font-semibold">—</span> RSI Div <span class="text-gray-600">(painel abaixo)</span></span>
-        <span id="candle-info" class="ml-auto font-mono"></span>
+        <span><span style="color:#06b6d4">—</span> EMA9</span>
+        <span><span style="color:#818cf8">—</span> EMA21</span>
+        <span><span style="color:#c084fc">—</span> EMA50</span>
+        <span><span style="color:rgba(249,115,22,0.8)">- -</span> Donchian 20</span>
+        <span><span style="color:#3b82f6">▮</span> MACD</span>
+        <span><span style="color:#4ade80">—</span> Stoch %K</span>
+        <span><span style="color:#facc15">—</span> RSI</span>
       </div>
     </div>
 
-    <!-- Charts -->
+    <!-- ── Evolução + Distribuição ── -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <div class="card p-5 lg:col-span-2">
-        <div class="mb-4">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="font-semibold text-white">Evolução do Portfolio</h3>
-          </div>
-          <div class="flex gap-1 overflow-x-auto pb-1 scrollbar-none" id="period-selector">
-            <button onclick="setPeriod('1m')"  data-period="1m"  class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold transition-colors">1m</button>
-            <button onclick="setPeriod('5m')"  data-period="5m"  class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold transition-colors">5m</button>
-            <button onclick="setPeriod('15m')" data-period="15m" class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold transition-colors">15m</button>
-            <button onclick="setPeriod('1h')"  data-period="1h"  class="period-btn active shrink-0 px-2.5 py-1 rounded text-xs font-semibold transition-colors">1h</button>
-            <button onclick="setPeriod('6h')"  data-period="6h"  class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold transition-colors">6h</button>
-            <button onclick="setPeriod('1d')"  data-period="1d"  class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold transition-colors">1d</button>
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-white">Evolução do Portfolio</h3>
+          <div class="flex gap-1 overflow-x-auto scrollbar-none" id="period-selector">
+            <button onclick="setPeriod('1m')"  data-period="1m"  class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold">1m</button>
+            <button onclick="setPeriod('5m')"  data-period="5m"  class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold">5m</button>
+            <button onclick="setPeriod('15m')" data-period="15m" class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold">15m</button>
+            <button onclick="setPeriod('1h')"  data-period="1h"  class="period-btn active shrink-0 px-2.5 py-1 rounded text-xs font-semibold">1h</button>
+            <button onclick="setPeriod('6h')"  data-period="6h"  class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold">6h</button>
+            <button onclick="setPeriod('1d')"  data-period="1d"  class="period-btn shrink-0 px-2.5 py-1 rounded text-xs font-semibold">1d</button>
           </div>
         </div>
         <canvas id="portfolioChart" height="120"></canvas>
       </div>
-
       <div class="card p-5">
         <h3 class="font-semibold text-white mb-4">Distribuição</h3>
         <canvas id="allocationChart" height="180"></canvas>
@@ -686,9 +184,8 @@
       </div>
     </div>
 
-    <!-- Trades + Feed -->
+    <!-- ── Histórico de Trades + Feed ── -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
       <div class="card p-5">
         <div class="flex items-center justify-between mb-4">
           <h3 class="font-semibold text-white">Histórico de Trades</h3>
@@ -698,7 +195,6 @@
           <p class="text-gray-500 text-sm text-center py-8">Nenhum trade ainda...</p>
         </div>
       </div>
-
       <div class="card p-5">
         <div class="flex items-center justify-between mb-4">
           <div>
@@ -711,1365 +207,709 @@
               ao vivo
             </span>
             <span class="text-gray-600">·</span>
-            <span class="text-gray-400">próximo ciclo <span id="cycle-timer" class="font-mono text-indigo-400 font-semibold">--</span><span id="cycle-executing" style="display:none" class="font-mono text-orange-400 font-semibold"></span></span>
+            <span class="text-gray-400">próximo ciclo
+              <span id="cycle-timer" class="font-mono text-indigo-400 font-semibold">--</span>
+              <span id="cycle-executing" style="display:none" class="font-mono text-orange-400 font-semibold"></span>
+            </span>
           </span>
         </div>
         <div id="feed-list" class="space-y-1.5 max-h-80 overflow-y-auto pr-1">
           <p class="text-gray-500 text-sm text-center py-8">Aguardando sinais...</p>
         </div>
       </div>
-
-    </div>
-
-    <!-- Painel de KPIs -->
-    <div class="card p-5">
-      <div class="flex items-center justify-between mb-4">
-        <div>
-          <h3 class="font-semibold text-white">📊 KPIs em Tempo Real</h3>
-          <p class="text-[10px] text-gray-600 mt-0.5">Métricas de Performance (24-48h)</p>
-        </div>
-        <span class="text-xs text-gray-500">Atualizado a cada ciclo</span>
-      </div>
-      <div class="grid grid-cols-8 gap-3">
-          <!-- KPI 1: P&L Portfolio -->
-          <div class="bg-dark-700 rounded-lg p-3 border border-dark-600">
-            <p class="text-[10px] text-gray-500 uppercase tracking-wide">P&L Portfolio</p>
-            <p id="kpi-pnl" class="text-lg font-bold text-gray-300 mt-1">—</p>
-            <p class="text-[9px] text-gray-600 mt-0.5">vs +1% BTC</p>
-          </div>
-
-          <!-- KPI 2: Win Rate -->
-          <div class="bg-dark-700 rounded-lg p-3 border border-dark-600">
-            <p class="text-[10px] text-gray-500 uppercase tracking-wide">Win Rate</p>
-            <p id="kpi-win-rate" class="text-lg font-bold text-gray-300 mt-1">—</p>
-            <p class="text-[9px] text-gray-600 mt-0.5">Meta: 55%+</p>
-          </div>
-
-          <!-- KPI 3: Sharpe Ratio -->
-          <div class="bg-dark-700 rounded-lg p-3 border border-dark-600">
-            <p class="text-[10px] text-gray-500 uppercase tracking-wide">Sharpe Ratio</p>
-            <p id="kpi-sharpe" class="text-lg font-bold text-gray-300 mt-1">—</p>
-            <p class="text-[9px] text-gray-600 mt-0.5">Meta: -0.5+</p>
-          </div>
-
-          <!-- KPI 4: MACD Sinais/dia -->
-          <div class="bg-dark-700 rounded-lg p-3 border border-dark-600">
-            <p class="text-[10px] text-gray-500 uppercase tracking-wide">MACD Sinais</p>
-            <p id="kpi-macd-signals" class="text-lg font-bold text-gray-300 mt-1">—</p>
-            <p class="text-[9px] text-gray-600 mt-0.5">Meta: 3-4/dia</p>
-          </div>
-
-          <!-- KPI 5: Donchian False BR -->
-          <div class="bg-dark-700 rounded-lg p-3 border border-dark-600">
-            <p class="text-[10px] text-gray-500 uppercase tracking-wide">Donchian False BR</p>
-            <p id="kpi-donchian-false" class="text-lg font-bold text-gray-300 mt-1">—</p>
-            <p class="text-[9px] text-gray-600 mt-0.5">Meta: 0</p>
-          </div>
-
-          <!-- KPI 6: EMA TP_HALF Eventos -->
-          <div class="bg-dark-700 rounded-lg p-3 border border-dark-600">
-            <p class="text-[10px] text-gray-500 uppercase tracking-wide">EMA TP_HALF</p>
-            <p id="kpi-ema-tp-half" class="text-lg font-bold text-gray-300 mt-1">—</p>
-            <p class="text-[9px] text-gray-600 mt-0.5">Meta: 2-3/dia</p>
-          </div>
-
-          <!-- KPI 7: Capital Deployed -->
-          <div class="bg-dark-700 rounded-lg p-3 border border-dark-600">
-            <p class="text-[10px] text-gray-500 uppercase tracking-wide">Capital Deployed</p>
-            <p id="kpi-capital-deployed" class="text-lg font-bold text-gray-300 mt-1">—</p>
-            <p class="text-[9px] text-gray-600 mt-0.5">Meta: 50%+</p>
-          </div>
-
-          <!-- KPI 8: Tempo Online -->
-          <div class="bg-dark-700 rounded-lg p-3 border border-dark-600">
-            <p class="text-[10px] text-gray-500 uppercase tracking-wide">Uptime</p>
-            <p id="kpi-uptime" class="text-lg font-bold text-green-400 mt-1">—</p>
-            <p class="text-[9px] text-gray-600 mt-0.5">Meta: 100%</p>
-          </div>
-        </div>
-      </div>
     </div>
 
   </main>
 
+  <!-- ── Modal de Trade ── -->
+  <div id="trade-modal" class="fixed inset-0 z-[9999] hidden items-center justify-center" style="display:none">
+    <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" onclick="closeTradeModal()"></div>
+    <div class="relative card p-6 w-full max-w-sm mx-4 z-10 shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="modal-title" class="text-lg font-bold text-white">Comprar BTC</h3>
+        <button onclick="closeTradeModal()" class="text-gray-500 hover:text-gray-300 text-xl leading-none">&times;</button>
+      </div>
+      <p id="modal-subtitle" class="text-xs text-gray-500 mb-4 -mt-2">—</p>
+      <div class="mb-5">
+        <label class="text-xs text-gray-400 block mb-1.5 font-medium">Valor (R$)</label>
+        <input id="modal-input" type="number" step="0.01" min="0"
+          class="w-full bg-gray-800/80 border border-gray-600 rounded-lg px-3 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-indigo-500"
+          placeholder="0.00"
+          onkeydown="if(event.key==='Enter') confirmTrade()">
+      </div>
+      <div class="flex gap-3">
+        <button onclick="closeTradeModal()"
+          class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-gray-700/80 text-gray-300 border border-gray-600 hover:bg-gray-600/80">
+          Cancelar
+        </button>
+        <button id="modal-confirm" onclick="confirmTrade()"
+          class="flex-1 py-2.5 rounded-lg text-sm font-bold bg-green-500/25 text-green-400 border border-green-500/40 hover:bg-green-500/35">
+          Confirmar
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    // Chart.js — Portfolio
-    const pCtx = document.getElementById('portfolioChart').getContext('2d');
-    const portfolioChart = new Chart(pCtx, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [{
-          label: 'Portfolio ($)',
-          data: [],
-          borderColor: '#6366f1',
-          backgroundColor: 'rgba(99,102,241,0.08)',
-          fill: true,
-          tension: 0.4,
-          pointRadius: 0,
-          borderWidth: 2,
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: '#21262d' } },
-          y: { ticks: { color: '#6b7280', font: { size: 10 }, callback: v => 'R$'+(v*usdBrl).toLocaleString('pt-BR',{maximumFractionDigits:0}) }, grid: { color: '#21262d' } }
-        }
-      }
-    });
+  // ─── Configurações de criptos ────────────────────────────────────────────
+  const CRYPTOS = [
+    { sym: 'BTC',  name: 'Bitcoin',   pair: 'BTC-USD', icon: '₿',  color: 'text-orange-400', bg: 'bg-orange-500/20' },
+    { sym: 'ETH',  name: 'Ethereum',  pair: 'ETH-USD', icon: 'Ξ',  color: 'text-blue-400',   bg: 'bg-blue-500/20'   },
+    { sym: 'SOL',  name: 'Solana',    pair: 'SOL-USD', icon: '◎',  color: 'text-purple-400', bg: 'bg-purple-500/20' },
+    { sym: 'AVAX', name: 'Avalanche', pair: 'AVAX-USD',icon: '◈',  color: 'text-yellow-400', bg: 'bg-yellow-500/20' },
+    { sym: 'LINK', name: 'Chainlink', pair: 'LINK-USD',icon: '⬡',  color: 'text-blue-300',   bg: 'bg-blue-400/20'   },
+    { sym: 'DOGE', name: 'Dogecoin',  pair: 'DOGE-USD',icon: 'Ð',  color: 'text-amber-400',  bg: 'bg-amber-500/20'  },
+  ];
 
-    // Chart.js — Allocation
-    const aCtx = document.getElementById('allocationChart').getContext('2d');
-    const allocationChart = new Chart(aCtx, {
-      type: 'doughnut',
-      data: {
-        labels: ['USD'],
-        datasets: [{ data: [100], backgroundColor: ['#6366f1','#f97316','#3b82f6'], borderWidth: 0, hoverOffset: 4 }]
-      },
-      options: {
-        responsive: true,
-        cutout: '70%',
-        plugins: { legend: { display: false } }
-      }
-    });
+  const STRATEGIES = [
+    { name: 'Donchian Breakout', id: 'Don',   icon: '🚀' },
+    { name: 'EMA Pullback',      id: 'EMA',   icon: '📈' },
+    { name: 'MACD Momentum',     id: 'MACD',  icon: '⚡' },
+    { name: 'Stoch Bounce',      id: 'Stoch', icon: '🎯' },
+    { name: 'RSI Divergence',    id: 'RSI',   icon: '〰️' },
+  ];
 
-    function signalClass(s) {
-      if (s === 'BUY')  return 'signal-buy';
-      if (s === 'SELL') return 'signal-sell';
-      return 'signal-hold';
+  // ─── Gera cards de cripto dinamicamente ─────────────────────────────────
+  document.getElementById('crypto-grid').innerHTML = CRYPTOS.map(c => `
+    <div id="card-${c.sym}" class="card p-5">
+      <div class="flex items-start justify-between mb-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full ${c.bg} flex items-center justify-center text-xl">${c.icon}</div>
+          <div>
+            <h2 class="font-bold text-white text-lg">${c.name}</h2>
+            <p class="text-xs text-gray-500">${c.pair}</p>
+          </div>
+        </div>
+        <div class="text-right">
+          <p id="price-${c.sym}" class="text-2xl font-bold text-white font-mono">—</p>
+          <p id="chg-${c.sym}" class="text-sm text-gray-400">—</p>
+        </div>
+      </div>
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
+        <span id="trend-${c.sym}" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
+      </div>
+      <div class="grid grid-cols-5 gap-1 mb-2">
+        ${STRATEGIES.map(s => `
+        <div id="slot-${c.sym}-${s.id}" class="signal-hold rounded-lg px-1 py-1.5 text-center text-[9px]">
+          <p class="opacity-60 mb-0.5">${s.icon} ${s.id}</p>
+          <p class="slot-signal text-[10px] font-bold">HOLD</p>
+          <p class="slot-pos text-gray-600 mt-0.5">sem posição</p>
+        </div>`).join('')}
+      </div>
+      <div id="holdings-${c.sym}" class="mt-1 text-xs text-gray-500 hidden">
+        Posição: <span id="qty-${c.sym}" class="${c.color} font-mono font-bold">0</span> ${c.sym}
+      </div>
+      <div id="sltp-${c.sym}" class="mt-2 hidden">
+        <div class="grid grid-cols-3 gap-1.5 text-xs">
+          <div class="bg-gray-800/60 rounded px-2 py-1.5 text-center">
+            <p class="text-gray-500 mb-0.5">Entrada</p>
+            <p id="entry-${c.sym}" class="text-white font-mono font-bold">—</p>
+          </div>
+          <div class="bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5 text-center">
+            <p class="text-red-400 mb-0.5">SL</p>
+            <p id="sl-${c.sym}" class="text-red-300 font-mono font-bold">—</p>
+          </div>
+          <div class="bg-green-500/10 border border-green-500/20 rounded px-2 py-1.5 text-center">
+            <p class="text-green-400 mb-0.5">TP</p>
+            <p id="tp-${c.sym}" class="text-green-300 font-mono font-bold">—</p>
+          </div>
+        </div>
+        <div class="mt-1 flex items-center justify-between text-xs px-1">
+          <span class="text-gray-500">Variação desde entrada</span>
+          <span id="chg-entry-${c.sym}" class="font-mono font-bold">—</span>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-3">
+        <button onclick="openTradeModal('buy','${c.pair}')"
+          class="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-green-500/15 text-green-400 border border-green-500/30 hover:bg-green-500/25">
+          Comprar
+        </button>
+        <button onclick="openTradeModal('sell','${c.pair}')"
+          class="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25">
+          Vender
+        </button>
+      </div>
+    </div>`).join('');
+
+  // ─── Formatação ─────────────────────────────────────────────────────────
+  const fmt    = n => (n||0).toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  const fmtBRL = n => (n||0).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  const signalClass = s => s === 'BUY' ? 'signal-buy' : s === 'SELL' ? 'signal-sell' : 'signal-hold';
+
+  // ─── Estado global ───────────────────────────────────────────────────────
+  let usdBrl = 5.70;
+  let fullHistory = [];
+  let currentPeriod = '1h';
+  let _modalSide = '', _modalPair = '';
+  let _holdings = {};
+  let _balanceUSD = 0;
+
+  // ─── Chart.js — Portfolio ─────────────────────────────────────────────
+  const portfolioChart = new Chart(
+    document.getElementById('portfolioChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        data: [], borderColor: '#6366f1',
+        backgroundColor: 'rgba(99,102,241,0.08)',
+        fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#6b7280', font: { size: 10 } }, grid: { color: '#21262d' } },
+        y: { ticks: { color: '#6b7280', font: { size: 10 },
+               callback: v => 'R$' + (v * usdBrl).toLocaleString('pt-BR', { maximumFractionDigits: 0 })
+             }, grid: { color: '#21262d' } }
+      }
+    }
+  });
+
+  // ─── Chart.js — Allocation ───────────────────────────────────────────
+  const allocationChart = new Chart(
+    document.getElementById('allocationChart').getContext('2d'), {
+    type: 'doughnut',
+    data: { labels: ['USD'], datasets: [{ data: [100], backgroundColor: ['#6366f1'], borderWidth: 0, hoverOffset: 4 }] },
+    options: { responsive: true, cutout: '70%', plugins: { legend: { display: false } } }
+  });
+
+  // ─── updateState — principal função de atualização ───────────────────
+  function updateState(s) {
+    // Countdown sync
+    if (s.cycle_start_ts) _cycleStartTs = s.cycle_start_ts;
+    if (s.cycle_interval)  _cycleInterval = s.cycle_interval;
+    _synced = true;
+
+    // USD/BRL
+    if (s.usd_brl) {
+      usdBrl = s.usd_brl;
+      document.getElementById('usd-brl-rate').textContent = 'R$ ' + fmtBRL(usdBrl);
     }
 
-    function fmt(n) { return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-    function fmtBRL(n) { return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-    var usdBrl = 5.70;   // atualizado via WebSocket
+    // Header
+    if (s.last_update) document.getElementById('last-update').textContent = s.last_update;
 
-    function updateState(s) {
-      resetCountdown(s);
-      if (candleSeries) loadCandles();
+    // Ciclo
+    if (s.cycle) {
+      const n = s.cycle;
+      document.getElementById('header-cycle-count').textContent = '#' + n;
+      document.getElementById('feed-cycle-label').textContent = 'ciclo #' + n;
+    }
 
-      // Declarações únicas de variáveis usadas em múltiplas seções
-      const posDetail  = s.positions_detail || {};
+    // Fear & Greed
+    if (s.fear_greed) {
+      const fgV = s.fear_greed.value || 50;
+      const fgEl = document.getElementById('fg-value');
+      fgEl.textContent = fgV;
+      fgEl.style.color = fgV <= 25 ? '#4ade80' : fgV <= 40 ? '#86efac' : fgV <= 60 ? '#9ca3af' : fgV <= 75 ? '#fb923c' : '#f87171';
+      document.getElementById('fg-label').textContent = s.fear_greed.label || 'Neutral';
+    }
 
-      // Cotação USD/BRL e valor de trade
-      if (s.usd_brl) {
-        usdBrl = s.usd_brl;
-        document.getElementById('usd-brl-rate').textContent = 'R$ ' + fmtBRL(usdBrl);
+    // Portfolio
+    const p = s.portfolio || {};
+    const totalBRL = p.total_brl || 0;
+    const totalUSD = p.total_usd || 0;
+    const pnlBRL   = p.pnl_brl  || 0;
+    const pnlPct   = p.pnl_pct  || 0;
+    const usdAvail = p.usd      || 0;
+    const initBRL  = p.initial_balance_brl || 4000;
+
+    _holdings   = p.holdings  || {};
+    _balanceUSD = usdAvail;
+
+    document.getElementById('portfolio-total').textContent = 'R$ ' + fmtBRL(totalBRL);
+    document.getElementById('portfolio-total-usd').textContent = 'US$ ' + fmt(totalUSD) + ' · Inic: R$ ' + fmtBRL(initBRL);
+    document.getElementById('balance-brl').textContent = 'R$ ' + fmtBRL(usdAvail * usdBrl);
+    document.getElementById('balance-usd').textContent = 'US$ ' + fmt(usdAvail);
+
+    const pnlEl = document.getElementById('pnl-value');
+    pnlEl.textContent = (pnlBRL >= 0 ? '+' : '-') + 'R$ ' + fmtBRL(Math.abs(pnlBRL));
+    pnlEl.className = 'text-lg font-bold leading-tight ' + (pnlBRL >= 0 ? 'text-green-400' : 'text-red-400');
+    document.getElementById('pnl-pct').textContent = (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%';
+    document.getElementById('pnl-pct').className = 'text-[10px] mt-0.5 ' + (pnlPct >= 0 ? 'text-green-500' : 'text-red-500');
+
+    document.getElementById('trade-count').textContent = (s.trades || []).length;
+    document.getElementById('trade-badge').textContent = (s.trades || []).length + ' trades';
+
+    const feesUsd = p.total_fees_usd || 0;
+    document.getElementById('total-fees').textContent = 'R$ ' + fmtBRL(feesUsd * usdBrl);
+    document.getElementById('total-fees-usd').textContent = 'US$ ' + fmt(feesUsd) + ' · 0,60%/trade';
+
+    // ── Preços e sinais dos cards de cripto ──────────────────────────────
+    CRYPTOS.forEach(c => {
+      const price = (s.prices || {})[c.pair];
+      const sig   = (s.signals || {})[c.pair];
+
+      if (price && price.price) {
+        document.getElementById('price-' + c.sym).textContent = 'R$ ' + fmtBRL(price.price * usdBrl);
+        const chg = price.price_pct_chg || 0;
+        const chgEl = document.getElementById('chg-' + c.sym);
+        chgEl.textContent = 'US$ ' + fmt(price.price) + ' · ' + (chg >= 0 ? '▲ +' : '▼ ') + chg.toFixed(2) + '%';
+        chgEl.className = 'text-sm ' + (chg >= 0 ? 'text-green-400' : 'text-red-400');
       }
-      if (s.trade_amount_brl) {
-        window._tradeMaxBRL = s.trade_amount_brl;  // R$500 trade consenso
-      }
 
-      // Fear & Greed
-      if (s.fear_greed) {
-        const fg  = s.fear_greed;
-        const fgV = fg.value || 50;
-        const fgL = fg.label || 'Neutral';
-        const fgEl = document.getElementById('fg-value');
-        const fgLEl = document.getElementById('fg-label');
-        if (fgEl) {
-          fgEl.textContent = fgV;
-          fgEl.style.color = fgV <= 25 ? '#4ade80'
-                           : fgV <= 40 ? '#86efac'
-                           : fgV <= 60 ? '#9ca3af'
-                           : fgV <= 75 ? '#fb923c'
-                           :             '#f87171';
-        }
-        if (fgLEl) fgLEl.textContent = fgL;
-      }
-
-      // Header
-      document.getElementById('last-update').textContent = s.last_update || '--:--:--';
-
-      // Portfolio — Novo: BRL é FIXO em R$ 4.000, USD varia com cotação
-      const p = s.portfolio || {};
-      const totalUSD = p.total_usd || 10000;
-      const totalBRL = p.total_brl || 40000;  // Sempre próximo a R$ 4.000 × cotação
-      const pnlBRL   = p.pnl_brl || 0;  // P&L real em BRL (não é pnl_usd × cotação)
-      const pnlUSD   = p.pnl_usd || 0;  // P&L em USD (da movimentação de trades)
-      const pnlPct   = p.pnl_pct || 0;  // Percentual do P&L em BRL
-
-      // Expõe holdings e saldo para o modal de trade
-      if (p.holdings) {
-        _holdings.BTC = p.holdings.BTC || 0;
-        _holdings.ETH = p.holdings.ETH || 0;
-      }
-      window._balanceUSD = p.usd || 0;
-      window._usdBrl     = usdBrl;
-
-      const usdAvail = p.usd || 10000;
-      const initBRL  = p.initial_balance_brl || 4000;
-
-      document.getElementById('portfolio-total').textContent = 'R$ ' + fmtBRL(totalBRL);
-      document.getElementById('portfolio-total-usd').textContent =
-        'US$ ' + fmt(totalUSD) + ' · Inicial: R$ ' + fmtBRL(initBRL);
-
-      document.getElementById('balance-usd').textContent = 'R$ ' + fmtBRL(usdAvail * usdBrl);
-      document.getElementById('balance-usd-raw').textContent = 'US$ ' + fmt(usdAvail);
-
-      const pnlEl = document.getElementById('pnl-value');
-      const pctEl = document.getElementById('pnl-pct');
-      // ⚠️ IMPORTANTE: pnlBRL já vem do backend (não é pnlUSD × cotação)
-      pnlEl.textContent = (pnlBRL >= 0 ? '+' : '-') + 'R$ ' + fmtBRL(Math.abs(pnlBRL));
-      pnlEl.className = 'text-2xl font-bold ' + (pnlBRL >= 0 ? 'text-green-400' : 'text-red-400');
-      pctEl.textContent = (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%';
-      pctEl.className = 'text-sm mt-1 ' + (pct >= 0 ? 'text-green-500' : 'text-red-500');
-
-      document.getElementById('trade-count').textContent = (s.trades || []).length;
-      document.getElementById('trade-badge').textContent = (s.trades || []).length + ' trades';
-
-      // Taxas pagas
-      const feesUsd = p.total_fees_usd || 0;
-      const feesBRL = feesUsd * usdBrl;
-      document.getElementById('total-fees').textContent = 'R$ ' + fmtBRL(feesBRL);
-      document.getElementById('total-fees-usd').textContent = 'US$ ' + fmt(feesUsd) + ' · 0,60%/trade';
-
-      // Prices & Signals
-      ['BTC', 'ETH', 'SOL', 'AVAX', 'LINK', 'DOGE'].forEach(sym => {
-        const pair = sym + '-USD';
-        const price = (s.prices || {})[pair];
-        const sig   = (s.signals || {})[pair];
-
-        if (price) {
-          const priceBRL = price.price * usdBrl;
-          document.getElementById('price-' + sym).textContent = 'R$ ' + fmtBRL(priceBRL);
-          const chg = price.price_pct_chg || 0;
-          const chgEl = document.getElementById('chg-' + sym);
-          chgEl.textContent = 'US$ ' + fmt(price.price) + ' · ' + (chg >= 0 ? '▲ +' : '▼ ') + chg.toFixed(2) + '%';
-          chgEl.className = 'text-xs ' + (chg >= 0 ? 'text-green-400' : 'text-red-400');
+      if (sig) {
+        const trendEl = document.getElementById('trend-' + c.sym);
+        if (trendEl) {
+          const t = sig.trend || 'HOLD';
+          trendEl.textContent = t === 'BUY' ? '↑ EMA ALINHADA' : t === 'SELL' ? '↓ EMA CRUZADA' : '— NEUTRO';
+          trendEl.className = signalClass(t) + ' text-xs font-bold px-3 py-0.5 rounded-full';
         }
 
-        if (sig && sig.strategies) {
-          const strats = sig.strategies;
-
-          // Tendência
-          const trendEl = document.getElementById('trend-' + sym);
-          if (trendEl && sig.trend) {
-            const t = sig.trend;
-            trendEl.textContent = t === 'BUY' ? '↑ EMA ALINHADA' : t === 'SELL' ? '↓ EMA CRUZADA' : '— NEUTRO';
-            trendEl.className = signalClass(t) + ' text-xs font-bold px-3 py-0.5 rounded-full';
+        // Slots por estratégia
+        const slots = s.slots || {};
+        STRATEGIES.forEach(st => {
+          const el = document.getElementById(`slot-${c.sym}-${st.id}`);
+          if (!el) return;
+          const sigVal = (sig.strategies || {})[st.name] || 'HOLD';
+          const slot   = slots[`${st.name}:${c.pair}`] || {};
+          const ps     = el.querySelectorAll('p');
+          el.className = signalClass(sigVal) + ' rounded-lg px-1 py-1.5 text-center text-[9px]';
+          if (ps[1]) ps[1].textContent = sigVal;
+          if (ps[2]) {
+            if ((slot.qty || 0) > 0 && price && slot.entry) {
+              const chg2 = (price.price - slot.entry) / slot.entry * 100;
+              ps[2].textContent = `● ${chg2 >= 0 ? '+' : ''}${chg2.toFixed(1)}%`;
+              ps[2].style.color = chg2 >= 0 ? '#4ade80' : '#f87171';
+            } else {
+              ps[2].textContent = 'sem posição';
+              ps[2].style.color = '#4b5563';
+            }
           }
+        });
 
-          // ── Slots independentes das 5 estratégias ──────────────────
-          const slots    = s.slots || {};
-          const slotDefs = [
-            { name: 'Donchian Breakout',     id: 'Don'  },
-            { name: 'EMA Pullback',          id: 'EMA'  },
-            { name: 'MACD Momentum',         id: 'MACD' },
-            { name: 'Stoch Bounce',          id: 'Stoch'},
-            { name: 'RSI Divergence Detect', id: 'RSI'  },
-          ];
-          slotDefs.forEach(sd => {
-            const el  = document.getElementById(`slot-${sym}-${sd.id}`);
-            if (!el) return;
-            const sig2 = (strats[sd.name] || 'HOLD');
-            const slot = slots[`${sd.name}:${pair}`] || {};
-            const ps   = el.querySelectorAll('p');
-            el.className = signalClass(sig2) + ' rounded-lg px-2 py-1.5 text-center text-[9px]';
-            if (ps[1]) ps[1].textContent = sig2;
-            if (ps[2]) {
-              if ((slot.qty || 0) > 0 && price && price.price && slot.entry) {
-                const chg2 = (price.price - slot.entry) / slot.entry * 100;
-                ps[2].textContent = `● ${chg2 >= 0 ? '+' : ''}${chg2.toFixed(1)}%`;
-                ps[2].style.color = chg2 >= 0 ? '#4ade80' : '#f87171';
-              } else {
-                ps[2].textContent = 'sem posição';
-                ps[2].style.color = '#4b5563';
-              }
-            }
-            // Slot info: qty, P&L, pyramids
-            const infoEl = document.getElementById(`slot-${sym}-${sd.id}-info`);
-            if (infoEl && (slot.qty || 0) > 0) {
-              const qtyStr = slot.qty.toFixed(8).replace(/\.?0+$/, '');
-              const pnlRealizado = slot.realized ? (slot.realized >= 0 ? '+' : '') + slot.realized.toFixed(2) : '0.00';
-              const pyramidStr = slot.pyramids ? ` | ▲×${slot.pyramids}` : '';
-              infoEl.textContent = `${qtyStr} ${pair === 'BTC-USD' ? '₿' : pair === 'ETH-USD' ? 'Ξ' : '◎'} | P&L: $${pnlRealizado}${pyramidStr}`;
-              infoEl.classList.remove('hidden');
-            } else if (infoEl) {
-              infoEl.classList.add('hidden');
-            }
-          });
-
-          // Stop Loss / Take Profit (baseado em entry_price do engine)
-          const sltpEl = document.getElementById('sltp-' + sym);
-          if (sltpEl && sig.entry_price) {
+        // SL / TP
+        const sltpEl = document.getElementById('sltp-' + c.sym);
+        if (sltpEl) {
+          if (sig.entry_price) {
             sltpEl.classList.remove('hidden');
-            document.getElementById('entry-' + sym).textContent = 'R$ ' + fmtBRL(sig.entry_price * usdBrl);
-            document.getElementById('sl-' + sym).textContent    = 'R$ ' + fmtBRL(sig.sl_level * usdBrl);
-            document.getElementById('tp-' + sym).textContent    = 'R$ ' + fmtBRL(sig.tp_level * usdBrl);
-            const chgPct = sig.change_pct;
-            const chgEl  = document.getElementById('chg-entry-' + sym);
-            chgEl.textContent = (chgPct >= 0 ? '+' : '') + chgPct.toFixed(2) + '%';
-            chgEl.style.color = chgPct >= 0 ? '#4ade80' : '#f87171';
-          } else if (sltpEl) {
+            document.getElementById('entry-' + c.sym).textContent = 'R$ ' + fmtBRL(sig.entry_price * usdBrl);
+            document.getElementById('sl-' + c.sym).textContent    = 'R$ ' + fmtBRL((sig.sl_level || 0) * usdBrl);
+            document.getElementById('tp-' + c.sym).textContent    = 'R$ ' + fmtBRL((sig.tp_level || 0) * usdBrl);
+            const chgEl2 = document.getElementById('chg-entry-' + c.sym);
+            if (chgEl2) {
+              const chgPct = sig.change_pct || 0;
+              chgEl2.textContent = (chgPct >= 0 ? '+' : '') + chgPct.toFixed(2) + '%';
+              chgEl2.style.color = chgPct >= 0 ? '#4ade80' : '#f87171';
+            }
+          } else {
             sltpEl.classList.add('hidden');
           }
-
-          // Whale volumes + tooltip
-          const whaleBid  = sig.whale_bid  || 0;
-          const whaleAsk  = sig.whale_ask  || 0;
-          const whaleBids = sig.whale_bids || [];
-          const whaleAsks = sig.whale_asks || [];
-          const whaleEl   = document.getElementById('whale-' + sym);
-
-          if (whaleEl) {
-            if (whaleBid > 0 || whaleAsk > 0) {
-              whaleEl.classList.remove('hidden');
-              document.getElementById('whale-bid-' + sym).textContent = '$' + whaleBid.toLocaleString();
-              document.getElementById('whale-ask-' + sym).textContent = '$' + whaleAsk.toLocaleString();
-
-              const renderList = (items, elId, color) => {
-                const el = document.getElementById(elId);
-                if (!el) return;
-                if (!items.length) {
-                  el.innerHTML = '<p class="text-gray-600 text-center">Nenhuma detectada</p>';
-                  return;
-                }
-                el.innerHTML = items.map(w => `
-                  <div class="flex justify-between items-center border-b border-gray-700/50 pb-1">
-                    <span class="font-mono text-gray-300">$${w.price.toLocaleString()}</span>
-                    <span class="text-gray-500">${w.size}</span>
-                    <span class="font-bold font-mono" style="color:${color}">$${w.usd.toLocaleString()}</span>
-                  </div>`).join('');
-              };
-
-              renderList(whaleBids, 'whale-bid-list-' + sym, '#4ade80');
-              renderList(whaleAsks, 'whale-ask-list-' + sym, '#f87171');
-            } else {
-              whaleEl.classList.add('hidden');
-            }
-          }
-        }
-
-        // Holdings
-        const holdings = (p.holdings || {});
-        const qty = holdings[sym] || 0;
-        const holdEl = document.getElementById('holdings-' + sym);
-        const qtyEl = document.getElementById('qty-' + sym);
-        if (qty > 0) {
-          holdEl.classList.remove('hidden');
-          qtyEl.textContent = qty.toFixed(6);
-        } else {
-          holdEl.classList.add('hidden');
-        }
-      });
-
-      // Portfolio Chart
-      if (s.history && s.history.length > 0) {
-        fullHistory = s.history;
-        renderChart();
-      }
-
-      // Allocation Chart
-      const holdings = p.holdings || {};
-      const prices = s.prices || {};
-      window._prices = prices;   // expõe para o modal de trade
-      const labels = ['BRL'];
-      const values = [(p.usd || 10000) * usdBrl];
-      const colors = ['#4ade80'];
-      if (holdings.BTC && prices['BTC-USD']) { labels.push('BTC'); values.push(holdings.BTC * prices['BTC-USD'].price * usdBrl); colors.push('#f97316'); }
-      if (holdings.ETH && prices['ETH-USD']) { labels.push('ETH'); values.push(holdings.ETH * prices['ETH-USD'].price * usdBrl); colors.push('#3b82f6'); }
-      if (holdings.SOL && prices['SOL-USD']) { labels.push('SOL'); values.push(holdings.SOL * prices['SOL-USD'].price * usdBrl); colors.push('#a855f7'); }
-      if (holdings.AVAX && prices['AVAX-USD']) { labels.push('AVAX'); values.push(holdings.AVAX * prices['AVAX-USD'].price * usdBrl); colors.push('#eab308'); }
-      if (holdings.LINK && prices['LINK-USD']) { labels.push('LINK'); values.push(holdings.LINK * prices['LINK-USD'].price * usdBrl); colors.push('#60a5fa'); }
-      if (holdings.DOGE && prices['DOGE-USD']) { labels.push('DOGE'); values.push(holdings.DOGE * prices['DOGE-USD'].price * usdBrl); colors.push('#f59e0b'); }
-      allocationChart.data.labels = labels;
-      allocationChart.data.datasets[0].data = values;
-      allocationChart.data.datasets[0].backgroundColor = colors;
-      allocationChart.update('none');
-      const tot = values.reduce((a,b) => a+b, 0);
-      document.getElementById('allocation-legend').innerHTML = labels.map((l, i) =>
-        `<div class="flex justify-between"><span style="color:${colors[i]}">● ${l}</span><span>R$ ${fmtBRL(values[i])} (${(values[i]/tot*100).toFixed(1)}%)</span></div>`
-      ).join('');
-
-      // ── Painel de estratégias — P&L por estratégia ───────────────
-      const stratNames  = ['Donchian Breakout','EMA Pullback','MACD Momentum','Stoch Bounce','RSI Divergence Detect'];
-      const stratIcons  = {'Donchian Breakout':'🚀','EMA Pullback':'📈','MACD Momentum':'⚡','Stoch Bounce':'🎯','RSI Divergence Detect':'〰️'};
-      const stratPnl    = s.strategy_pnl    || {};
-      const panel = document.getElementById('strategy-panel');
-      if (panel) {
-        panel.innerHTML = stratNames.map(name => {
-          const sp       = stratPnl[name] || {};
-          const realUsd  = sp.realized || 0;
-          const realBrl  = realUsd * usdBrl;
-          const buys     = sp.buys  || 0;
-          const sells    = sp.sells || 0;
-          const trades   = sp.trades || (buys + sells);
-
-          // P&L não realizado e TP esperado: soma dos slots desta estratégia em todos os pares
-          const allSlots = s.slots || {};
-          let unrlUsd = 0;
-          let tpUsd = 0;
-          const pairColors = {'BTC-USD':'text-orange-400','ETH-USD':'text-blue-400','SOL-USD':'text-purple-400'};
-          const tpPct = s.tp_objective?.current || 5;
-          const pairDots = ['BTC-USD','ETH-USD','SOL-USD'].map(pair => {
-            const sl = allSlots[`${name}:${pair}`] || {};
-            unrlUsd += (sl.unrealized || 0);
-            // Calcula TP esperado: entrada × quantidade × (TP% / 100)
-            if ((sl.qty || 0) > 0 && (sl.entry || 0) > 0) {
-              tpUsd += sl.entry * sl.qty * (tpPct / 100);
-            }
-            const sym = pair.split('-')[0];
-            return (sl.qty||0) > 0
-              ? `<span class="${pairColors[pair]}">● ${sym}</span>`
-              : `<span class="text-gray-700">○ ${sym}</span>`;
-          });
-          const posIndicator = pairDots.join(' ');
-          const unrlBrl  = unrlUsd * usdBrl;
-          const tpBrl = tpUsd * usdBrl;
-          const tpFaltaBrl = Math.max(0, tpBrl - realBrl); // quanto falta para atingir TP
-          const totalBrl = realBrl + unrlBrl;
-          const pnlColor = totalBrl >= 0 ? '#4ade80' : '#f87171';
-
-          return `<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
-            <div class="flex items-center gap-1.5 mb-2">
-              <span>${stratIcons[name]||'📊'}</span>
-              <span class="text-xs font-semibold text-white truncate">${name}</span>
-            </div>
-            <div class="text-xs mb-2">${posIndicator}</div>
-            <p class="text-sm font-bold font-mono" style="color:${pnlColor}">${totalBrl >= 0 ? '+' : '-'}R$ ${fmtBRL(Math.abs(totalBrl))}</p>
-            <div class="flex justify-between text-[10px] mt-1">
-              <span style="color:#4ade80">realiz: ${realBrl >= 0 ? '+' : ''}R$ ${fmtBRL(realBrl)}</span>
-              <span class="text-gray-600">${buys}↑ ${sells}↓ (${trades} ops)</span>
-            </div>
-            ${unrlUsd !== 0 ? `<p class="text-[10px] mt-0.5" style="color:#f97316">não realiz: ${unrlBrl>=0?'+':'-'}R$ ${fmtBRL(Math.abs(unrlBrl))}</p>` : ''}
-            ${tpUsd > 0 ? `<p class="text-[9px] mt-1 text-blue-400">🎯 TP: +${tpPct}% (R$ ${fmtBRL(tpBrl)}) · Falta R$ ${fmtBRL(tpFaltaBrl)} (${tpBrl > 0 ? ((tpFaltaBrl/tpBrl)*100).toFixed(0) : 0}%)</p>` : ''}
-          </div>`;
-        }).join('');
-      }
-
-      // (Status das Posições removido — informações agora nos cards das criptos)
-
-      // ── Histórico de Trades ─────────────────────────────────────
-      function tradeReason(strategy, side) {
-        if (!strategy || strategy === 'manual') return '👤 Manual';
-        const sMap = {
-          'Donchian Breakout':     'Donchian 🚀',
-          'EMA Pullback':          'EMA Pull 📈',
-          'MACD Momentum':         'MACD Mom ⚡',
-          'Stoch Bounce':          'Stoch Bounce 🎯',
-          'RSI Divergence Detect': 'RSI Div 〰️',
-          'consenso':              'Consenso',
-          'vol_guard':             'Vol.Guard',
-          'Pyramid':           'Pyramid 📈',
-          'Fear&Greed':        'Fear&Greed 😱',
-          'reset':             'Reset inicial',
-        };
-        // Format: "StratName:Reason" or just "StratName"
-        const colon = strategy.indexOf(':');
-        if (colon === -1) {
-          const n = sMap[strategy] || strategy;
-          return side === 'BUY' ? `${n} · 📗 Compra` : `${n}`;
-        }
-        const stratPart  = strategy.slice(0, colon);
-        const reasonPart = strategy.slice(colon + 1);
-        const n = sMap[stratPart] || stratPart;
-        if (reasonPart.startsWith('TP+'))       return `${n} · 🎯 Take Profit ${reasonPart.slice(2)}`;
-        if (reasonPart.startsWith('SL-'))       return `${n} · 🛑 Stop Loss ${reasonPart.slice(2)}`;
-        if (reasonPart.startsWith('TRAILING'))  return `${n} · 📉 Trailing Stop`;
-        if (reasonPart === 'SELL')              return `${n} · 📉 Sinal SELL (${(s?.trade_pct*100).toFixed(0)}%/ciclo)`;
-        if (reasonPart.startsWith('pyramid')) {
-          const pyramidNum = reasonPart.match(/\d+/)?.[0] || '';
-          return `${n} · ▲ Pyramid ${pyramidNum ? `x${pyramidNum}` : ''}`;
-        }
-        if (reasonPart.startsWith('FEAR'))      return `${n} · 😱 Medo Extremo`;
-        if (reasonPart.startsWith('GREED'))     return `${n} · 🔴 Euforia (${(s?.trade_pct*100).toFixed(0)}%/ciclo)`;
-        if (reasonPart.startsWith('vol_guard')) return `Vol.Guard · 📉 Volatilidade`;
-        return `${n} · ${reasonPart}`;
-      }
-
-      const trades = s.trades || [];
-      const tradesList = document.getElementById('trades-list');
-      document.getElementById('trade-badge').textContent = trades.length + ' trade' + (trades.length !== 1 ? 's' : '');
-      if (trades.length === 0) {
-        tradesList.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Nenhum trade ainda...</p>';
-      } else {
-        tradesList.innerHTML = trades.map(t => {
-          const isBuy    = t.side === 'BUY';
-          const badgeCls = isBuy ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400';
-          const reason   = tradeReason(t.strategy, t.side);
-          const valColor = isBuy ? 'text-green-300' : 'text-red-300';
-          return `
-          <div class="trade-${t.side.toLowerCase()} bg-gray-800/40 rounded-lg px-3 py-2.5 flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="${badgeCls} text-xs font-bold px-2 py-0.5 rounded shrink-0">${t.side}</span>
-              <div class="min-w-0">
-                <p class="font-semibold text-white text-sm leading-none">${t.pair}</p>
-                <p class="text-gray-400 text-[11px] mt-0.5 truncate">${reason}</p>
-              </div>
-            </div>
-            <div class="text-right shrink-0">
-              <p class="${valColor} text-sm font-semibold font-mono">${isBuy ? '-' : '+'}R$ ${fmtBRL(t.usd * usdBrl)}</p>
-              <p class="text-gray-600 text-[10px] mt-0.5">${t.time} · fee R$ ${fmtBRL((t.fee||0)*usdBrl)}</p>
-            </div>
-          </div>`;
-        }).join('');
-      }
-
-      // Feed de sinais
-      const feed = s.feed || [];
-      const feedList = document.getElementById('feed-list');
-      if (feed.length === 0) {
-        feedList.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Aguardando sinais...</p>';
-      } else {
-        const sigBg  = { BUY: 'bg-green-500/20 text-green-400', SELL: 'bg-red-500/20 text-red-400', HOLD: 'bg-gray-700/40 text-gray-500' };
-        const sigBdr = { BUY: 'border-l-green-500', SELL: 'border-l-red-500', HOLD: 'border-l-gray-700' };
-        feedList.innerHTML = feed.map(f => {
-          // Badge de execução: ✓ executado | motivo se não executado | nada se HOLD
-          const actionable = f.signal === 'BUY' || f.signal === 'SELL';
-          let execBadge = '';
-          if (actionable) {
-            if (f.executed) {
-              execBadge = `<span class="text-[9px] font-bold px-1 py-0.5 rounded bg-indigo-500/20 text-indigo-400 shrink-0">✓ ${f.note || 'exec'}</span>`;
-            } else if (f.note) {
-              execBadge = `<span class="text-[9px] px-1 py-0.5 rounded bg-gray-700/60 text-gray-500 shrink-0">${f.note}</span>`;
-            }
-          }
-          return `
-          <div class="border-l-2 ${sigBdr[f.signal]||'border-l-gray-700'} bg-gray-800/40 rounded-r-lg px-3 py-2 flex items-center justify-between gap-2">
-            <div class="flex items-center gap-2 min-w-0">
-              <span class="${sigBg[f.signal]||'bg-gray-700/40 text-gray-500'} text-xs font-bold px-1.5 py-0.5 rounded shrink-0">${f.signal}</span>
-              <div class="min-w-0">
-                <p class="text-white text-xs font-semibold leading-none">${f.pair}</p>
-                <p class="text-gray-500 text-[10px] mt-0.5 truncate">${f.strategy}</p>
-              </div>
-            </div>
-            <div class="flex items-center gap-1.5 shrink-0">
-              ${execBadge}
-              <div class="text-right">
-                <p class="text-gray-200 text-xs font-mono font-semibold">R$ ${fmtBRL(f.price * usdBrl)}</p>
-                <p class="text-gray-600 text-[10px] mt-0.5">${f.time}${f.cycle ? ' · #' + f.cycle : ''}</p>
-              </div>
-            </div>
-          </div>`;
-        }).join('');
-      }
-
-      // ── Calcular e atualizar KPIs ──────────────────────────────────
-      updateKPIs(s);
-    }
-
-    // ── Função de cálculo de KPIs ──────────────────────────────────
-    function updateKPIs(s) {
-      const trades = s.trades || [];
-      const slots = s.slots || {};
-      const p = s.portfolio || {};
-      const total = p.total || 10000;
-      const initial = p.initial_balance || 10000;
-      const pnl_pct = p.pnl_pct || 0;
-
-      // KPI 1: P&L Portfolio (%)
-      const kpiPnl = document.getElementById('kpi-pnl');
-      if (kpiPnl) {
-        kpiPnl.textContent = (pnl_pct >= 0 ? '+' : '') + pnl_pct.toFixed(2) + '%';
-        kpiPnl.className = 'text-lg font-bold mt-1 ' + (pnl_pct >= 0 ? 'text-green-400' : 'text-red-400');
-      }
-
-      // KPI 2: Win Rate (%) — calcula a partir de trades realizados
-      let winTrades = 0, totalTrades = 0;
-      trades.forEach(t => {
-        if (t.side === 'SELL') {
-          // Detecta PnL da trade pelo label (simplificado)
-          totalTrades++;
-          // Não temos PnL direto, então assumimos que se foi vendido, consideramos como potencial win/loss
-        }
-      });
-      // Implementação simplificada: conta sinais de "SELL" relacionados a wins
-      let winRate = '--';
-      if (totalTrades > 0) {
-        // Nota: Para cálculo preciso, o backend deveria enviar P&L por trade
-        // Por enquanto, usa a contagem de sells como proxy
-        winRate = ((trades.filter(t => t.side === 'BUY').length > 0 ? 50 : 0) || '--').toString();
-      }
-      const kpiWinRate = document.getElementById('kpi-win-rate');
-      if (kpiWinRate) {
-        kpiWinRate.textContent = typeof winRate === 'number' ? winRate.toFixed(0) + '%' : winRate;
-        const isGood = typeof winRate === 'number' && winRate >= 50;
-        kpiWinRate.className = 'text-lg font-bold mt-1 ' + (isGood ? 'text-green-400' : 'text-yellow-400');
-      }
-
-      // KPI 3: Sharpe Ratio (simplificado)
-      // Nota: Cálculo preciso requer variância histórica dos retornos
-      const kpiSharpe = document.getElementById('kpi-sharpe');
-      if (kpiSharpe) {
-        const sharpe = pnl_pct > 0 ? -0.3 : -1.2;  // Valores da análise anterior
-        kpiSharpe.textContent = sharpe.toFixed(2);
-        kpiSharpe.className = 'text-lg font-bold mt-1 ' + (sharpe >= -0.5 ? 'text-green-400' : 'text-yellow-400');
-      }
-
-      // KPI 4: MACD Sinais/dia
-      // Conta sinais de MACD nas últimas 24 horas
-      let macdSignals = 0;
-      trades.forEach(t => {
-        if ((t.strategy || '').includes('MACD')) macdSignals++;
-      });
-      // Se não há trades MACD, mostra 0 (estava bloqueado); se há, estima sinais/dia
-      const kpiMacdSignals = document.getElementById('kpi-macd-signals');
-      if (kpiMacdSignals) {
-        kpiMacdSignals.textContent = macdSignals > 0 ? (macdSignals / 2).toFixed(1) : '0';  // Divide por 2 (BUY+SELL pares)
-        kpiMacdSignals.className = 'text-lg font-bold mt-1 ' + (macdSignals >= 2 ? 'text-green-400' : 'text-red-400');
-      }
-
-      // KPI 5: Donchian False BR
-      let donchianFalseBR = 0;
-      trades.forEach(t => {
-        if ((t.strategy || '').includes('Donchian') && t.side === 'BUY') {
-          // Se há posição ainda aberta ou com loss, provavelmente foi false breakout
-          const slotKey = `Donchian Breakout:${t.symbol}-USD`;
-          const slot = slots[slotKey] || {};
-          if (slot.unrealized && slot.unrealized < 0) {
-            donchianFalseBR++;
-          }
-        }
-      });
-      const kpiDonchianFalse = document.getElementById('kpi-donchian-false');
-      if (kpiDonchianFalse) {
-        kpiDonchianFalse.textContent = donchianFalseBR.toString();
-        kpiDonchianFalse.className = 'text-lg font-bold mt-1 ' + (donchianFalseBR === 0 ? 'text-green-400' : 'text-red-400');
-      }
-
-      // KPI 6: EMA TP_HALF Eventos
-      // Conta trades com "TP_HALF" no motivo
-      let emaTPHalf = 0;
-      trades.forEach(t => {
-        if ((t.strategy || '').includes('TP_HALF')) emaTPHalf++;
-      });
-      const kpiEmaTPHalf = document.getElementById('kpi-ema-tp-half');
-      if (kpiEmaTPHalf) {
-        kpiEmaTPHalf.textContent = emaTPHalf.toString();
-        kpiEmaTPHalf.className = 'text-lg font-bold mt-1 ' + (emaTPHalf >= 2 ? 'text-green-400' : 'text-yellow-400');
-      }
-
-      // KPI 7: Capital Deployed (%)
-      const holdings = p.holdings || {};
-      let holdingsTotal = 0;
-      Object.keys(holdings).forEach(sym => {
-        const pair = sym + '-USD';
-        const price = (s.prices || {})[pair];
-        if (price && holdings[sym]) {
-          holdingsTotal += holdings[sym] * price.price;
-        }
-      });
-      const deployedPct = total > 0 ? ((holdingsTotal / total) * 100) : 0;
-      const kpiCapitalDeployed = document.getElementById('kpi-capital-deployed');
-      if (kpiCapitalDeployed) {
-        kpiCapitalDeployed.textContent = deployedPct.toFixed(1) + '%';
-        kpiCapitalDeployed.className = 'text-lg font-bold mt-1 ' + (deployedPct >= 50 ? 'text-green-400' : 'text-yellow-400');
-      }
-
-      // KPI 8: Uptime (assumindo conectado = 100%)
-      const kpiUptime = document.getElementById('kpi-uptime');
-      if (kpiUptime) {
-        kpiUptime.textContent = '100%';
-        kpiUptime.className = 'text-lg font-bold text-green-400 mt-1';
-      }
-    }
-
-    // ── Candlestick chart — Suite Agressiva v2 ─────────────────────
-    var candlePair = 'BTC-USD';
-    var candleGranularity = 'ONE_HOUR';
-    var candleChart = null, macdChart = null, stochChart = null, rsiChart = null;
-    var candleSeries = null;
-    // EMA Pullback
-    var ema9Series = null, ema21Series = null, ema50Series = null;
-    // Donchian Breakout
-    var dcUpperSeries = null, dcLowerSeries = null;
-    // MACD Momentum
-    var macdHistSeries = null, macdLineSeries = null, macdSigSeries = null, macdZeroSeries = null;
-    // Stoch Bounce
-    var stochKSeries = null, stochDSeries = null, stochOBSeries = null, stochOSSeries = null;
-    // RSI Divergence Detector
-    var rsiLineSeries = null, rsiOBSeries = null, rsiOSSeries = null, rsiDivMarkers = [];
-
-    // ── Funções de cálculo ──────────────────────────────────────────
-    function calcEMA(data, period) {
-      const k = 2 / (period + 1);
-      const result = [];
-      let ema = null;
-      for (let i = 0; i < data.length; i++) {
-        if (i === period - 1) {
-          ema = data.slice(0, period).reduce((s, d) => s + d.close, 0) / period;
-          result.push({ time: data[i].time, value: parseFloat(ema.toFixed(2)) });
-        } else if (i > period - 1) {
-          ema = data[i].close * k + ema * (1 - k);
-          result.push({ time: data[i].time, value: parseFloat(ema.toFixed(2)) });
-        }
-      }
-      return result;
-    }
-
-    function calcDonchian(data, period = 20) {
-      const upper = [], lower = [];
-      for (let i = period - 1; i < data.length; i++) {
-        const slice = data.slice(i - period + 1, i + 1);
-        upper.push({ time: data[i].time, value: parseFloat(Math.max(...slice.map(d => d.high)).toFixed(2)) });
-        lower.push({ time: data[i].time, value: parseFloat(Math.min(...slice.map(d => d.low)).toFixed(2)) });
-      }
-      return { upper, lower };
-    }
-
-    function calcMACD(data, fast = 12, slow = 26, signal = 9) {
-      function emaArr(values, p) {
-        const k = 2 / (p + 1);
-        const out = new Array(values.length).fill(null);
-        let sum = 0, count = 0;
-        for (let i = 0; i < values.length; i++) {
-          if (values[i] === null) continue;
-          sum += values[i]; count++;
-          if (count === p) { out[i] = sum / p; }
-          else if (count > p) { out[i] = values[i] * k + out[i-1] * (1 - k); }
-        }
-        return out;
-      }
-      const closes = data.map(d => d.close);
-      const eFast  = emaArr(closes, fast);
-      const eSlow  = emaArr(closes, slow);
-      const macd   = eFast.map((f, i) => f != null && eSlow[i] != null ? f - eSlow[i] : null);
-      const sig    = emaArr(macd, signal);
-      const hist = [], macdOut = [], sigOut = [];
-      for (let i = 0; i < data.length; i++) {
-        if (macd[i] != null && sig[i] != null) {
-          const h = macd[i] - sig[i];
-          hist.push({ time: data[i].time, value: parseFloat(h.toFixed(4)), color: h >= 0 ? '#4ade80' : '#f87171' });
-          macdOut.push({ time: data[i].time, value: parseFloat(macd[i].toFixed(4)) });
-          sigOut.push({ time: data[i].time, value: parseFloat(sig[i].toFixed(4)) });
-        }
-      }
-      return { histogram: hist, macd: macdOut, signal: sigOut };
-    }
-
-    function calcStoch(data, kPeriod = 14, dPeriod = 3) {
-      const kArr = [];
-      for (let i = kPeriod - 1; i < data.length; i++) {
-        const slice = data.slice(i - kPeriod + 1, i + 1);
-        const lo = Math.min(...slice.map(d => d.low));
-        const hi = Math.max(...slice.map(d => d.high));
-        const k = hi === lo ? 50 : (data[i].close - lo) / (hi - lo) * 100;
-        kArr.push({ time: data[i].time, k: parseFloat(k.toFixed(2)) });
-      }
-      const kLine = kArr.map(d => ({ time: d.time, value: d.k }));
-      const dLine = [];
-      for (let i = dPeriod - 1; i < kArr.length; i++) {
-        const avg = kArr.slice(i - dPeriod + 1, i + 1).reduce((s, d) => s + d.k, 0) / dPeriod;
-        dLine.push({ time: kArr[i].time, value: parseFloat(avg.toFixed(2)) });
-      }
-      return { k: kLine, d: dLine };
-    }
-
-    function calcRSI(data, period = 14) {
-      const closes = data.map(d => d.close);
-      const rsiArr = [];
-
-      // Calcular gains e losses
-      const deltas = [];
-      for (let i = 1; i < closes.length; i++) {
-        deltas.push(closes[i] - closes[i - 1]);
-      }
-
-      // Calcular primeiro RS (simple moving average)
-      let gainSum = 0, lossSum = 0;
-      for (let i = 0; i < period; i++) {
-        if (deltas[i] > 0) gainSum += deltas[i];
-        else lossSum += Math.abs(deltas[i]);
-      }
-
-      let avgGain = gainSum / period;
-      let avgLoss = lossSum / period;
-
-      // RSI primeira candle (índice period)
-      let rs = avgLoss === 0 ? 100 : (avgGain / avgLoss);
-      let rsi = 100 - (100 / (1 + rs));
-      rsiArr.push({ time: data[period].time, value: parseFloat(rsi.toFixed(2)) });
-
-      // RSI resto (smoothed moving average)
-      for (let i = period + 1; i < closes.length; i++) {
-        const delta = deltas[i - 1];
-        if (delta > 0) {
-          avgGain = (avgGain * (period - 1) + delta) / period;
-          avgLoss = (avgLoss * (period - 1)) / period;
-        } else {
-          avgGain = (avgGain * (period - 1)) / period;
-          avgLoss = (avgLoss * (period - 1) + Math.abs(delta)) / period;
-        }
-        rs = avgLoss === 0 ? 100 : (avgGain / avgLoss);
-        rsi = 100 - (100 / (1 + rs));
-        rsiArr.push({ time: data[i].time, value: parseFloat(rsi.toFixed(2)) });
-      }
-
-      return rsiArr;
-    }
-
-    function detectDivergences(data, rsiData) {
-      // Detecta divergências de alta (preço cai, RSI sobe) e baixa (preço sobe, RSI cai)
-      const divergences = [];
-      if (rsiData.length < 5) return divergences;
-
-      // Procura por divergências nos últimos 20 candles
-      const lookback = Math.min(20, rsiData.length);
-
-      for (let i = lookback - 1; i < rsiData.length; i++) {
-        if (i < 2) continue;
-
-        const curr = { price: data[i].close, rsi: rsiData[i - (data.length - rsiData.length)].value, time: data[i].time };
-        const prev = { price: data[i - 1].close, rsi: rsiData[i - 1 - (data.length - rsiData.length)].value };
-        const prev2 = { price: data[i - 2].close, rsi: rsiData[i - 2 - (data.length - rsiData.length)].value };
-
-        // Divergência de alta: preço toca mínima menor, RSI toca mínima maior
-        if (curr.price > prev.price && curr.price > prev2.price &&
-            curr.rsi < 40 && prev.rsi < curr.rsi && prev2.rsi < curr.rsi) {
-          divergences.push({ time: curr.time, type: 'bullish', text: '↑' });
-        }
-
-        // Divergência de baixa: preço toca máxima maior, RSI toca máxima menor
-        if (curr.price < prev.price && curr.price < prev2.price &&
-            curr.rsi > 60 && prev.rsi > curr.rsi && prev2.rsi > curr.rsi) {
-          divergences.push({ time: curr.time, type: 'bearish', text: '↓' });
         }
       }
 
-      return divergences;
-    }
+      // Holdings
+      const qty = (_holdings[c.sym] || 0);
+      const holdEl = document.getElementById('holdings-' + c.sym);
+      const qtyEl  = document.getElementById('qty-' + c.sym);
+      if (holdEl) holdEl.classList.toggle('hidden', qty <= 0);
+      if (qtyEl && qty > 0) qtyEl.textContent = qty.toFixed(6);
+    });
 
-    // ── Inicialização ───────────────────────────────────────────────
-    function initCandleChart() {
-      const container = document.getElementById('candle-chart');
-      container.innerHTML = '';
-
-      const baseOpts = (h) => ({
-        width: container.clientWidth, height: h,
-        layout: { background: { color: '#161b22' }, textColor: '#9ca3af' },
-        grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
-        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-        rightPriceScale: { borderColor: '#30363d', scaleMargins: { top: 0.05, bottom: 0.05 } },
-        timeScale: { borderColor: '#30363d', timeVisible: true, secondsVisible: false },
-      });
-
-      // ── Gráfico principal: candles + EMA9/21/50 + Donchian ──
-      const mainWrap = document.createElement('div');
-      const mainLabel = document.createElement('div');
-      mainLabel.innerHTML = '<span style="color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">Preço</span>'
-        + ' &nbsp;<span style="color:#06b6d4">━ EMA9</span>'
-        + ' &nbsp;<span style="color:#818cf8">━ EMA21</span>'
-        + ' &nbsp;<span style="color:#c084fc">━ EMA50</span>'
-        + ' &nbsp;<span style="color:rgba(249,115,22,0.9)">╌ Donchian(20)</span>';
-      mainLabel.style.cssText = 'padding:0 2px 5px;font-size:10px;line-height:1;color:#6b7280;';
-      const mainDiv = document.createElement('div');
-      mainWrap.appendChild(mainLabel);
-      mainWrap.appendChild(mainDiv);
-      container.appendChild(mainWrap);
-      candleChart = LightweightCharts.createChart(mainDiv, baseOpts(200));
-
-      candleSeries = candleChart.addCandlestickSeries({
-        upColor: '#4ade80', downColor: '#f87171',
-        borderUpColor: '#4ade80', borderDownColor: '#f87171',
-        wickUpColor: '#4ade80', wickDownColor: '#f87171',
-      });
-      ema9Series  = candleChart.addLineSeries({ color: '#06b6d4', lineWidth: 1,   priceLineVisible: false, lastValueVisible: false });
-      ema21Series = candleChart.addLineSeries({ color: '#818cf8', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
-      ema50Series = candleChart.addLineSeries({ color: '#c084fc', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
-      dcUpperSeries = candleChart.addLineSeries({ color: 'rgba(249,115,22,0.65)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
-      dcLowerSeries = candleChart.addLineSeries({ color: 'rgba(249,115,22,0.65)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
-
-      // ── Painel MACD (MACD Momentum) ──
-      const macdWrap = document.createElement('div');
-      macdWrap.style.cssText = 'margin-top:8px';
-      const macdLabel = document.createElement('div');
-      macdLabel.innerHTML = '<span style="color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">MACD</span>'
-        + ' <span style="color:#6b7280">(12/26/9)</span>'
-        + ' &nbsp;<span style="color:#3b82f6">━ MACD</span>'
-        + ' &nbsp;<span style="color:#f97316">━ Sinal</span>'
-        + ' &nbsp;<span style="color:#6b7280">▮ Histograma</span>';
-      macdLabel.style.cssText = 'padding:0 2px 5px;font-size:10px;line-height:1;color:#6b7280;';
-      const macdDiv = document.createElement('div');
-      macdWrap.appendChild(macdLabel);
-      macdWrap.appendChild(macdDiv);
-      container.appendChild(macdWrap);
-      macdChart = LightweightCharts.createChart(macdDiv, {
-        ...baseOpts(78),
-        rightPriceScale: { borderColor: '#30363d', scaleMargins: { top: 0.15, bottom: 0.15 } },
-      });
-      macdHistSeries = macdChart.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false });
-      macdLineSeries = macdChart.addLineSeries({ color: '#3b82f6', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
-      macdSigSeries  = macdChart.addLineSeries({ color: '#f97316', lineWidth: 1,   priceLineVisible: false, lastValueVisible: false });
-      macdZeroSeries = macdChart.addLineSeries({ color: 'rgba(75,85,99,0.5)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
-
-      // ── Painel Stochastic (Stoch Bounce) ──
-      const stochWrap = document.createElement('div');
-      stochWrap.style.cssText = 'margin-top:8px';
-      const stochLabel = document.createElement('div');
-      stochLabel.innerHTML = '<span style="color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">Stochastic</span>'
-        + ' <span style="color:#6b7280">(14/3)</span>'
-        + ' &nbsp;<span style="color:#4ade80">━ %K</span>'
-        + ' &nbsp;<span style="color:#f97316">━ %D</span>'
-        + ' &nbsp;<span style="color:rgba(248,113,113,0.8)">╌ OB 80</span>'
-        + ' &nbsp;<span style="color:rgba(74,222,128,0.8)">╌ OS 25</span>';
-      stochLabel.style.cssText = 'padding:0 2px 5px;font-size:10px;line-height:1;color:#6b7280;';
-      const stochDiv = document.createElement('div');
-      stochWrap.appendChild(stochLabel);
-      stochWrap.appendChild(stochDiv);
-      container.appendChild(stochWrap);
-      stochChart = LightweightCharts.createChart(stochDiv, {
-        ...baseOpts(78),
-        rightPriceScale: { borderColor: '#30363d', scaleMargins: { top: 0.1, bottom: 0.1 } },
-      });
-      stochKSeries  = stochChart.addLineSeries({ color: '#4ade80', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
-      stochDSeries  = stochChart.addLineSeries({ color: '#f97316', lineWidth: 1,   priceLineVisible: false, lastValueVisible: false });
-      stochOBSeries = stochChart.addLineSeries({ color: 'rgba(248,113,113,0.45)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
-      stochOSSeries = stochChart.addLineSeries({ color: 'rgba(74,222,128,0.35)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
-
-      // ── Painel RSI Divergence (RSI Divergence Detector) ──
-      const rsiWrap = document.createElement('div');
-      rsiWrap.style.cssText = 'margin-top:8px';
-      const rsiLabel = document.createElement('div');
-      rsiLabel.innerHTML = '<span style="color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">RSI Divergence</span>'
-        + ' <span style="color:#6b7280">(14)</span>'
-        + ' &nbsp;<span style="color:#facc15">━ RSI</span>'
-        + ' &nbsp;<span style="color:rgba(248,113,113,0.8)">╌ OB 70</span>'
-        + ' &nbsp;<span style="color:rgba(74,222,128,0.8)">╌ OS 30</span>'
-        + ' &nbsp;<span style="color:#818cf8">↑/↓ Divergências</span>';
-      rsiLabel.style.cssText = 'padding:0 2px 5px;font-size:10px;line-height:1;color:#6b7280;';
-      const rsiDiv = document.createElement('div');
-      rsiWrap.appendChild(rsiLabel);
-      rsiWrap.appendChild(rsiDiv);
-      container.appendChild(rsiWrap);
-      rsiChart = LightweightCharts.createChart(rsiDiv, {
-        ...baseOpts(78),
-        rightPriceScale: { borderColor: '#30363d', scaleMargins: { top: 0.1, bottom: 0.1 } },
-      });
-      rsiLineSeries = rsiChart.addLineSeries({ color: '#facc15', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: false });
-      rsiOBSeries = rsiChart.addLineSeries({ color: 'rgba(248,113,113,0.45)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
-      rsiOSSeries = rsiChart.addLineSeries({ color: 'rgba(74,222,128,0.35)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
-
-      // ── Crosshair sincronizado entre os 4 painéis ──
-      candleChart.subscribeCrosshairMove(param => {
-        if (!param.seriesData) return;
-        const d = param.seriesData.get(candleSeries);
-        if (d) {
-          const color = d.close >= d.open ? '#4ade80' : '#f87171';
-          document.getElementById('candle-info').innerHTML =
-            `O <span style="color:${color}">${d.open.toFixed(2)}</span> ` +
-            `H <span style="color:#4ade80">${d.high.toFixed(2)}</span> ` +
-            `L <span style="color:#f87171">${d.low.toFixed(2)}</span> ` +
-            `C <span style="color:${color}">${d.close.toFixed(2)}</span>`;
-        }
-        try { if (param.time) { macdChart.setCrosshairPosition(0, param.time, macdLineSeries); stochChart.setCrosshairPosition(0, param.time, stochKSeries); rsiChart.setCrosshairPosition(0, param.time, rsiLineSeries); } } catch(e) {}
-      });
-
-      // ── Sincronizar zoom/scroll entre painéis ──
-      [candleChart, macdChart, stochChart, rsiChart].forEach(master => {
-        master.timeScale().subscribeVisibleLogicalRangeChange(range => {
-          if (!range) return;
-          [candleChart, macdChart, stochChart, rsiChart].forEach(slave => {
-            if (slave !== master) try { slave.timeScale().setVisibleLogicalRange(range); } catch(e) {}
-          });
+    // ── Painel de Estratégias ─────────────────────────────────────────────
+    const stratPnl = s.strategy_pnl || {};
+    const allSlots = s.slots || {};
+    const tpPct    = (s.tp_objective || {}).current || 5;
+    const panel    = document.getElementById('strategy-panel');
+    if (panel) {
+      panel.innerHTML = STRATEGIES.map(st => {
+        const sp      = stratPnl[st.name] || {};
+        const realUsd = sp.realized || 0;
+        const realBrl = realUsd * usdBrl;
+        const buys    = sp.buys  || 0;
+        const sells   = sp.sells || 0;
+        let unrlUsd = 0;
+        CRYPTOS.forEach(c => {
+          const sl = allSlots[`${st.name}:${c.pair}`] || {};
+          unrlUsd += (sl.unrealized || 0);
         });
-      });
-
-      new ResizeObserver(() => {
-        const w = container.clientWidth;
-        [candleChart, macdChart, stochChart, rsiChart].forEach(c => { try { c.applyOptions({ width: w }); } catch(e) {} });
-      }).observe(container);
+        const unrlBrl  = unrlUsd * usdBrl;
+        const totalBrl2 = realBrl + unrlBrl;
+        const pnlColor = totalBrl2 >= 0 ? '#4ade80' : '#f87171';
+        return `<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
+          <div class="flex items-center gap-1.5 mb-2">
+            <span>${st.icon}</span>
+            <span class="text-xs font-semibold text-white truncate">${st.name}</span>
+          </div>
+          <p class="text-sm font-bold font-mono" style="color:${pnlColor}">${totalBrl2 >= 0 ? '+' : '-'}R$ ${fmtBRL(Math.abs(totalBrl2))}</p>
+          <div class="flex justify-between text-[10px] mt-1">
+            <span style="color:#4ade80">real: ${realBrl >= 0 ? '+' : ''}R$ ${fmtBRL(realBrl)}</span>
+            <span class="text-gray-600">${buys}↑ ${sells}↓</span>
+          </div>
+          ${unrlUsd !== 0 ? `<p class="text-[10px] mt-0.5" style="color:#f97316">n/r: ${unrlBrl>=0?'+':'-'}R$ ${fmtBRL(Math.abs(unrlBrl))}</p>` : ''}
+        </div>`;
+      }).join('');
     }
 
-    async function loadCandles() {
-      try {
-        const limit = candleGranularity === 'ONE_DAY' ? 250 : 150;
-        const res = await fetch(`/candles/${candlePair}?granularity=${candleGranularity}&limit=${limit}`);
-        const data = await res.json();
-        if (!data.length) return;
-
-        // Candles
-        candleSeries.setData(data.map(d => ({ time: d.time, open: d.open, high: d.high, low: d.low, close: d.close })));
-
-        // EMA9 / EMA21 / EMA50 — EMA Pullback
-        ema9Series.setData(calcEMA(data, 9));
-        ema21Series.setData(calcEMA(data, 21));
-        ema50Series.setData(calcEMA(data, 50));
-
-        // Donchian 20 — Donchian Breakout
-        const dc = calcDonchian(data, 20);
-        dcUpperSeries.setData(dc.upper);
-        dcLowerSeries.setData(dc.lower);
-
-        // MACD 12/26/9 — MACD Momentum
-        const macdData = calcMACD(data);
-        macdHistSeries.setData(macdData.histogram);
-        macdLineSeries.setData(macdData.macd);
-        macdSigSeries.setData(macdData.signal);
-        if (macdData.macd.length > 1) {
-          const t0 = macdData.macd[0].time, t1 = macdData.macd[macdData.macd.length - 1].time;
-          macdZeroSeries.setData([{ time: t0, value: 0 }, { time: t1, value: 0 }]);
-        }
-
-        // Stochastic 14/3 — Stoch Bounce
-        const stoch = calcStoch(data, 14, 3);
-        stochKSeries.setData(stoch.k);
-        stochDSeries.setData(stoch.d);
-        if (stoch.k.length > 1) {
-          const t0 = stoch.k[0].time, t1 = stoch.k[stoch.k.length - 1].time;
-          stochOBSeries.setData([{ time: t0, value: 80 }, { time: t1, value: 80 }]);
-          stochOSSeries.setData([{ time: t0, value: 20 }, { time: t1, value: 20 }]);
-        }
-
-        // RSI 14 — RSI Divergence Detector
-        const rsiData = calcRSI(data, 14);
-        rsiLineSeries.setData(rsiData);
-        if (rsiData.length > 1) {
-          const t0 = rsiData[0].time, t1 = rsiData[rsiData.length - 1].time;
-          rsiOBSeries.setData([{ time: t0, value: 70 }, { time: t1, value: 70 }]);
-          rsiOSSeries.setData([{ time: t0, value: 30 }, { time: t1, value: 30 }]);
-        }
-        // Detectar divergências
-        const divergences = detectDivergences(data, rsiData);
-        // Adicionar marcadores de divergências como anotações visuais (aqui fazemos com uma série fictícia)
-        rsiDivMarkers = divergences;
-
-        // Preço atual
-        const last = data[data.length - 1];
-        const priceEl = document.getElementById('candle-price');
-        priceEl.textContent = 'R$ ' + fmtBRL(last.close * usdBrl);
-        priceEl.style.color = last.close >= last.open ? '#4ade80' : '#f87171';
-
-        candleChart.timeScale().fitContent();
-        macdChart.timeScale().fitContent();
-        stochChart.timeScale().fitContent();
-        rsiChart.timeScale().fitContent();
-      } catch(e) { console.error('candles:', e); }
-    }
-
-    function setCandlePair(pair) {
-      candlePair = pair;
-      document.querySelectorAll('.candle-pair-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.pair === pair);
-        if (pair === 'ETH-USD') {
-          document.querySelectorAll('.candle-pair-btn.active').forEach(b => {
-            b.style.background = '#3b82f6'; b.style.borderColor = '#3b82f6';
-          });
-        }
-      });
-      loadCandles();
-    }
-
-    function setCandleTF(gran) {
-      candleGranularity = gran;
-      document.querySelectorAll('.candle-tf-btn').forEach(b =>
-        b.classList.toggle('active', b.dataset.tf === gran)
-      );
-      loadCandles();
-    }
-
-    // Inicializa após layout ter largura real
-    function tryInitCandle() {
-      const el = document.getElementById('candle-chart');
-      if (el && el.clientWidth > 0) {
-        initCandleChart();
-        loadCandles();
-      } else {
-        setTimeout(tryInitCandle, 100);
-      }
-    }
-    window.addEventListener('load', tryInitCandle);
-
-    // Period filter
-    var currentPeriod = '1h';
-    var fullHistory = [];
-
-    const periodSeconds = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '6h': 21600, '1d': 86400 };
-
-    function setPeriod(p) {
-      currentPeriod = p;
-      document.querySelectorAll('.period-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.period === p);
-      });
+    // ── Portfolio Chart ───────────────────────────────────────────────────
+    if (s.history && s.history.length > 0) {
+      fullHistory = s.history;
       renderChart();
     }
 
-    function renderChart() {
-      if (!fullHistory.length) return;
-      const now = Math.floor(Date.now() / 1000);
-      const cutoff = now - periodSeconds[currentPeriod];
-      const filtered = fullHistory.filter(h => (h.ts || 0) >= cutoff);
-      const data = filtered.length ? filtered : fullHistory;
-
-      // Reduz pontos para no máximo 200 para não sobrecarregar o gráfico
-      const step = Math.max(1, Math.floor(data.length / 200));
-      const sampled = data.filter((_, i) => i % step === 0 || i === data.length - 1);
-
-      portfolioChart.data.labels = sampled.map(h => h.time);
-      portfolioChart.data.datasets[0].data = sampled.map(h => h.total);
-      const last = sampled[sampled.length - 1]?.total || 10000;
-      const positive = last >= 10000;
-      portfolioChart.data.datasets[0].borderColor = positive ? '#6366f1' : '#ef4444';
-      portfolioChart.data.datasets[0].backgroundColor = positive ? 'rgba(99,102,241,0.08)' : 'rgba(239,68,68,0.08)';
-      portfolioChart.update('none');
-    }
-
-    // ── Countdown timer — sincronizado com o servidor ────────────────────────
-    var _cycleStartTs   = 0;      // Unix timestamp do início do ciclo (vem do servidor)
-    var _cycleInterval  = 90;     // duração em segundos (vem do servidor)
-    var _synced         = false;  // true após receber o primeiro state via WS
-    var _lastWsReceived = 0;      // fallback: quando recebemos o último state
-    var countdownInterval = null;
-
-    // Sincroniza quando o WebSocket entrega um novo state
-    function resetCountdown(s) {
-      _synced = true;
-      _lastWsReceived = Math.floor(Date.now() / 1000);
-      // cycle_start_ts > 0: usa timestamp real do servidor
-      // cycle_start_ts = 0: usa o instante de recepção do WS como proxy
-      if (s && s.cycle_start_ts) {
-        _cycleStartTs = s.cycle_start_ts;
-      } else {
-        _cycleStartTs = _lastWsReceived;
+    // ── Allocation Chart ─────────────────────────────────────────────────
+    const prices = s.prices || {};
+    const labels = ['BRL'], values = [usdAvail * usdBrl], colors = ['#6366f1'];
+    const allocMap = { BTC: '#f97316', ETH: '#3b82f6', SOL: '#a855f7', AVAX: '#eab308', LINK: '#60a5fa', DOGE: '#f59e0b' };
+    CRYPTOS.forEach(c => {
+      const qty2 = _holdings[c.sym] || 0;
+      if (qty2 > 0 && prices[c.pair]) {
+        labels.push(c.sym);
+        values.push(qty2 * prices[c.pair].price * usdBrl);
+        colors.push(allocMap[c.sym] || '#6366f1');
       }
-      if (s && s.cycle_interval) _cycleInterval = s.cycle_interval;
-      if (s && s.cycle) {
-        const n = s.cycle;
-        const ccEl = document.getElementById('header-cycle-count');
-        if (ccEl) ccEl.textContent = '#' + n;
-        const fcEl = document.getElementById('feed-cycle-label');
-        if (fcEl) fcEl.textContent = 'ciclo #' + n;
-      }
+    });
+    allocationChart.data.labels = labels;
+    allocationChart.data.datasets[0].data = values;
+    allocationChart.data.datasets[0].backgroundColor = colors;
+    allocationChart.update('none');
+    const tot = values.reduce((a, b) => a + b, 0);
+    document.getElementById('allocation-legend').innerHTML = labels.map((l, i) =>
+      `<div class="flex justify-between"><span style="color:${colors[i]}">● ${l}</span><span>R$ ${fmtBRL(values[i])} (${tot > 0 ? (values[i]/tot*100).toFixed(1) : 0}%)</span></div>`
+    ).join('');
+
+    // ── Histórico de Trades ───────────────────────────────────────────────
+    const trades = s.trades || [];
+    const tradesList = document.getElementById('trades-list');
+    if (trades.length === 0) {
+      tradesList.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Nenhum trade ainda...</p>';
+    } else {
+      tradesList.innerHTML = [...trades].reverse().map(t => {
+        const isBuy = t.side === 'BUY';
+        const valBRL = (t.usd || 0) * usdBrl;
+        const feesBRL = (t.fee || 0) * usdBrl;
+        const stratLabel = (t.strategy || 'manual').replace(/:.*$/, '');
+        return `<div class="trade-${t.side.toLowerCase()} bg-gray-800/40 rounded-lg px-3 py-2.5 flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 min-w-0">
+            <span class="${isBuy ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'} text-xs font-bold px-2 py-0.5 rounded shrink-0">${t.side}</span>
+            <div class="min-w-0">
+              <p class="font-semibold text-white text-sm leading-none">${t.symbol || t.pair || '?'}-USD</p>
+              <p class="text-gray-400 text-[11px] mt-0.5 truncate">${stratLabel}</p>
+            </div>
+          </div>
+          <div class="text-right shrink-0">
+            <p class="${isBuy ? 'text-green-300' : 'text-red-300'} text-sm font-semibold font-mono">${isBuy ? '-' : '+'}R$ ${fmtBRL(valBRL)}</p>
+            <p class="text-gray-600 text-[10px] mt-0.5">${(t.time||'').substring(11,19)} · fee R$ ${fmtBRL(feesBRL)}</p>
+          </div>
+        </div>`;
+      }).join('');
     }
 
-    // Formato compacto: M:SS para >= 60s, Xs para < 60s
-    function fmtTimer(secs) {
-      if (secs <= 0) return '0s';
-      if (secs < 60) return secs + 's';
-      const m = Math.floor(secs / 60);
-      const s = secs % 60;
-      return `${m}:${String(s).padStart(2,'0')}`;
+    // ── Feed de Sinais ────────────────────────────────────────────────────
+    const feed = s.feed || [];
+    const feedList = document.getElementById('feed-list');
+    if (feed.length === 0) {
+      feedList.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Aguardando sinais...</p>';
+    } else {
+      feedList.innerHTML = [...feed].reverse().slice(0, 50).map(f => {
+        const isB = f.decision === 'BUY', isS = f.decision === 'SELL';
+        const dot = isB ? 'bg-green-400' : isS ? 'bg-red-400' : 'bg-gray-600';
+        return `<div class="flex items-center gap-2 py-1 border-b border-gray-800/50">
+          <span class="w-1.5 h-1.5 rounded-full ${dot} shrink-0"></span>
+          <span class="text-gray-400 text-xs font-mono shrink-0">${(f.time||'').substring(11,19)}</span>
+          <span class="text-white text-xs font-medium truncate">${f.pair||''}</span>
+          <span class="ml-auto text-xs font-bold shrink-0 ${isB?'text-green-400':isS?'text-red-400':'text-gray-500'}">${f.decision||'HOLD'}</span>
+        </div>`;
+      }).join('');
     }
 
-    function startCountdown() {
-      if (countdownInterval) clearInterval(countdownInterval);
-      countdownInterval = setInterval(() => {
-        const timerEl = document.getElementById('cycle-timer');
-        const execEl  = document.getElementById('cycle-executing');
-        const hdrEl   = document.getElementById('header-cycle-timer');
-        const hdrMEl  = document.getElementById('header-cycle-timer-mobile');
+    // Candles
+    if (typeof loadCandles === 'function') loadCandles();
+  }
 
-        // Antes de sincronizar com o servidor, mostra "--"
-        if (!_synced) {
-          if (timerEl) timerEl.textContent = '--';
-          if (hdrEl)   hdrEl.textContent   = '--';
-          if (hdrMEl)  hdrMEl.textContent  = '--';
-          return;
-        }
+  // ─── Portfolio Chart ─────────────────────────────────────────────────
+  function setPeriod(p) {
+    currentPeriod = p;
+    document.querySelectorAll('#period-selector button').forEach(b =>
+      b.classList.toggle('active', b.dataset.period === p));
+    renderChart();
+  }
 
-        const elapsed   = Math.floor(Date.now() / 1000) - _cycleStartTs;
-        const remaining = Math.max(0, _cycleInterval - elapsed);
-        const executing = remaining === 0;
+  function renderChart() {
+    if (!fullHistory.length) return;
+    const now = fullHistory[fullHistory.length - 1]?.ts || Date.now() / 1000;
+    const periods = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '6h': 21600, '1d': 86400 };
+    const cutoff = now - (periods[currentPeriod] || 3600);
+    const filtered = fullHistory.filter(h => h.ts >= cutoff);
+    const data = filtered.length > 1 ? filtered : fullHistory.slice(-50);
+    portfolioChart.data.labels = data.map(h => h.time);
+    portfolioChart.data.datasets[0].data = data.map(h => h.total);
+    portfolioChart.update('none');
+  }
 
-        if (executing) {
-          // Bot está rodando o ciclo — feedback visual pulsante
-          const pulse = Math.floor(Date.now() / 600) % 2 === 0;
-          const txt = pulse ? 'executando…' : '· · ·';
-          if (timerEl) timerEl.style.display  = 'none';
-          if (execEl)  { execEl.style.display = 'inline'; execEl.textContent = txt; }
-          if (hdrEl)   { hdrEl.textContent    = txt; hdrEl.style.color   = '#f97316'; }
-          if (hdrMEl)  { hdrMEl.textContent   = txt; hdrMEl.style.color  = '#f97316'; }
-        } else {
-          const fmt = fmtTimer(remaining);
-          if (timerEl) { timerEl.style.display = 'inline'; timerEl.textContent = fmt; }
-          if (execEl)  execEl.style.display = 'none';
-          if (hdrEl)   { hdrEl.textContent   = fmt; hdrEl.style.color   = ''; }
-          if (hdrMEl)  { hdrMEl.textContent  = fmt; hdrMEl.style.color  = ''; }
-        }
-      }, 500);   // tick a 500ms para o piscar de "executando" funcionar
-    }
+  // ─── Candle Chart ─────────────────────────────────────────────────────
+  let candleChart = null, macdChart = null, stochChart = null, rsiChart = null;
+  let candleSeries = null, macdFastSeries = null, macdSlowSeries = null, macdHistSeries = null;
+  let stochKSeries = null, stochDSeries = null, rsiSeries = null;
+  let ema9Series = null, ema21Series = null, ema50Series = null;
+  let donchUpperSeries = null, donchLowerSeries = null;
+  let candlePair = 'BTC-USD', candleGranularity = 'ONE_HOUR';
 
-    startCountdown();
-    // ─────────────────────────────────────────────────────────────────────────
+  function initCandleChart() {
+    const container = document.getElementById('candle-chart');
+    if (!container || container.clientWidth < 10) return;
+    const w = container.clientWidth;
 
-    // ─── Trade Modal ─────────────────────────────────────────────────────────
-    var _modalSide = '';
-    var _modalPair = '';
-    var _holdings  = { BTC: 0, ETH: 0 };
+    const commonOpts = {
+      width: w, layout: { background: { color: 'transparent' }, textColor: '#6b7280' },
+      grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
+      timeScale: { borderColor: '#30363d', timeVisible: true, secondsVisible: false },
+      rightPriceScale: { borderColor: '#30363d' }, crosshair: { mode: 1 },
+      handleScroll: true, handleScale: true,
+    };
 
-    function openTradeModal(side, pair) {
-      const symbol  = pair.split('-')[0];
-      _modalSide    = side;
-      _modalPair    = pair;
+    candleChart = LightweightCharts.createChart(container, { ...commonOpts, height: 220 });
+    candleSeries = candleChart.addCandlestickSeries({
+      upColor: '#4ade80', downColor: '#f87171', borderUpColor: '#4ade80', borderDownColor: '#f87171',
+      wickUpColor: '#4ade80', wickDownColor: '#f87171',
+    });
+    ema9Series  = candleChart.addLineSeries({ color: '#06b6d4', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+    ema21Series = candleChart.addLineSeries({ color: '#818cf8', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+    ema50Series = candleChart.addLineSeries({ color: '#c084fc', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+    donchUpperSeries = candleChart.addLineSeries({ color: 'rgba(249,115,22,0.8)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
+    donchLowerSeries = candleChart.addLineSeries({ color: 'rgba(249,115,22,0.8)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
 
-      const modal   = document.getElementById('trade-modal');
-      const titleEl = document.getElementById('modal-title');
-      const subEl   = document.getElementById('modal-subtitle');
-      const labelEl = document.getElementById('modal-label');
-      const input   = document.getElementById('modal-input');
-      const confirmBtn = document.getElementById('modal-confirm');
+    const macdEl = document.createElement('div');
+    container.after(macdEl);
+    macdChart = LightweightCharts.createChart(macdEl, { ...commonOpts, height: 70 });
+    macdFastSeries = macdChart.addLineSeries({ color: '#3b82f6', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+    macdSlowSeries = macdChart.addLineSeries({ color: '#f87171', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+    macdHistSeries = macdChart.addHistogramSeries({ color: '#6366f1', priceLineVisible: false, lastValueVisible: false });
 
-      if (side === 'buy') {
-        titleEl.textContent = `Comprar ${symbol}`;
-        const defaultBrl = window._tradeMaxBRL || 500;
-        const balUSD = window._balanceUSD || 0;
-        const balBRL = balUSD * (window._usdBrl || 1);
-        subEl.textContent   = `Saldo disponível: R$ ${fmtBRL(balBRL)}`;
-        labelEl.textContent = 'Valor a investir (R$)';
-        input.step          = '0.01';
-        input.placeholder   = '150,00';
-        input.value         = defaultBrl.toFixed(2);
-        confirmBtn.className = 'flex-1 py-2.5 rounded-lg text-sm font-bold bg-green-500/25 text-green-400 border border-green-500/40 hover:bg-green-500/35 transition-colors';
-      } else {
-        titleEl.textContent = `Vender ${symbol}`;
-        const held      = _holdings[symbol] || 0;
-        const priceUSD  = (window._prices && window._prices[pair]) ? window._prices[pair].price : 0;
-        const usdBrlNow = window._usdBrl || 1;
-        const posValBRL = held * priceUSD * usdBrlNow;
-        subEl.textContent   = `Em carteira: ${held.toFixed(8)} ${symbol}${priceUSD ? ` ≈ R$ ${fmtBRL(posValBRL)}` : ''}`;
-        labelEl.textContent = 'Valor a vender (R$)';
-        input.step          = '0.01';
-        input.placeholder   = '0,00';
-        input.value         = posValBRL > 0 ? posValBRL.toFixed(2) : '';
-        confirmBtn.className = 'flex-1 py-2.5 rounded-lg text-sm font-bold bg-red-500/25 text-red-400 border border-red-500/40 hover:bg-red-500/35 transition-colors';
-      }
+    const stochEl = document.createElement('div');
+    macdEl.after(stochEl);
+    stochChart = LightweightCharts.createChart(stochEl, { ...commonOpts, height: 70 });
+    stochKSeries = stochChart.addLineSeries({ color: '#4ade80', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+    stochDSeries = stochChart.addLineSeries({ color: '#facc15', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
 
-      modal.style.display = 'flex';
-      setTimeout(() => { input.select(); }, 60);
-    }
+    const rsiEl = document.createElement('div');
+    stochEl.after(rsiEl);
+    rsiChart = LightweightCharts.createChart(rsiEl, { ...commonOpts, height: 70 });
+    rsiSeries = rsiChart.addLineSeries({ color: '#facc15', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
 
-    function closeTradeModal() {
-      document.getElementById('trade-modal').style.display = 'none';
-    }
-
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') closeTradeModal();
+    // Sync scroll entre charts
+    [macdChart, stochChart, rsiChart].forEach(ch => {
+      candleChart.timeScale().subscribeVisibleTimeRangeChange(range => {
+        try { ch.timeScale().setVisibleRange(range); } catch(e) {}
+      });
     });
 
-    function confirmTrade() {
-      (async () => {
-      const input      = document.getElementById('modal-input');
-      const confirmBtn = document.getElementById('modal-confirm');
-      const val        = parseFloat(input.value);
-      if (!val || val <= 0) { input.focus(); return; }
+    // ResizeObserver
+    new ResizeObserver(() => {
+      const nw = container.clientWidth;
+      [candleChart, macdChart, stochChart, rsiChart].forEach(c => {
+        try { c.applyOptions({ width: nw }); } catch(e) {}
+      });
+    }).observe(container);
 
-      confirmBtn.disabled    = true;
-      confirmBtn.textContent = '...';
+    loadCandles();
+  }
 
+  function setCandlePair(pair) {
+    candlePair = pair;
+    document.querySelectorAll('.candle-pair-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.pair === pair));
+    loadCandles();
+  }
+
+  function setCandleTF(gran) {
+    candleGranularity = gran;
+    document.querySelectorAll('.candle-tf-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.tf === gran));
+    loadCandles();
+  }
+
+  async function loadCandles() {
+    if (!candleSeries) return;
+    try {
+      const limit = candleGranularity === 'ONE_DAY' ? 250 : 150;
+      const res = await fetch(`/candles/${candlePair}?granularity=${candleGranularity}&limit=${limit}`);
+      const data = await res.json();
+      if (!data.length) return;
+
+      const toTs = t => Math.floor(new Date(t).getTime() / 1000);
+      const candles = data.map(d => ({ time: toTs(d[0]), open: +d[3], high: +d[2], low: +d[1], close: +d[4] }))
+                          .sort((a, b) => a.time - b.time);
+
+      candleSeries.setData(candles);
+      document.getElementById('candle-price').textContent = 'R$ ' + fmtBRL(candles[candles.length-1].close * usdBrl);
+
+      // EMAs
+      const closes = candles.map(c => c.close);
+      const calcEMA = (data, p) => {
+        const k = 2 / (p + 1), ema = [data[0]];
+        for (let i = 1; i < data.length; i++) ema.push(data[i] * k + ema[i-1] * (1 - k));
+        return ema;
+      };
+      const ema9  = calcEMA(closes, 9);
+      const ema21 = calcEMA(closes, 21);
+      const ema50 = calcEMA(closes, 50);
+      ema9Series.setData(candles.map((c,i) => ({ time: c.time, value: ema9[i]  })));
+      ema21Series.setData(candles.map((c,i) => ({ time: c.time, value: ema21[i] })));
+      ema50Series.setData(candles.map((c,i) => ({ time: c.time, value: ema50[i] })));
+
+      // Donchian 20
+      const period = 20;
+      const donchU = candles.map((c, i) => {
+        const slice = candles.slice(Math.max(0, i - period + 1), i + 1);
+        return { time: c.time, value: Math.max(...slice.map(x => x.high)) };
+      });
+      const donchL = candles.map((c, i) => {
+        const slice = candles.slice(Math.max(0, i - period + 1), i + 1);
+        return { time: c.time, value: Math.min(...slice.map(x => x.low)) };
+      });
+      donchUpperSeries.setData(donchU);
+      donchLowerSeries.setData(donchL);
+
+      // MACD (12, 26, 9)
+      const ema12 = calcEMA(closes, 12), ema26 = calcEMA(closes, 26);
+      const macdLine = ema12.map((v, i) => v - ema26[i]);
+      const signal   = calcEMA(macdLine, 9);
+      macdFastSeries.setData(candles.map((c,i) => ({ time: c.time, value: macdLine[i] })));
+      macdSlowSeries.setData(candles.map((c,i) => ({ time: c.time, value: signal[i]   })));
+      macdHistSeries.setData(candles.map((c,i) => ({ time: c.time, value: macdLine[i] - signal[i], color: macdLine[i] >= signal[i] ? '#4ade80' : '#f87171' })));
+
+      // Stochastic (14, 3)
+      const kPeriod = 14, dPeriod = 3;
+      const kRaw = candles.map((c, i) => {
+        const sl = candles.slice(Math.max(0, i - kPeriod + 1), i + 1);
+        const hi = Math.max(...sl.map(x => x.high)), lo = Math.min(...sl.map(x => x.low));
+        return hi === lo ? 50 : (c.close - lo) / (hi - lo) * 100;
+      });
+      const kSmooth = calcEMA(kRaw, 3);
+      const dSmooth = calcEMA(kSmooth, dPeriod);
+      stochKSeries.setData(candles.map((c,i) => ({ time: c.time, value: kSmooth[i] })));
+      stochDSeries.setData(candles.map((c,i) => ({ time: c.time, value: dSmooth[i] })));
+
+      // RSI (14)
+      const rsiPeriod = 14;
+      const rsiValues = closes.map((_, i) => {
+        if (i < rsiPeriod) return 50;
+        const slice = closes.slice(i - rsiPeriod, i);
+        const gains = slice.map((v, j) => j > 0 ? Math.max(0, v - slice[j-1]) : 0);
+        const losses = slice.map((v, j) => j > 0 ? Math.max(0, slice[j-1] - v) : 0);
+        const avgG = gains.reduce((a,b) => a+b, 0) / rsiPeriod;
+        const avgL = losses.reduce((a,b) => a+b, 0) / rsiPeriod;
+        return avgL === 0 ? 100 : 100 - (100 / (1 + avgG / avgL));
+      });
+      rsiSeries.setData(candles.map((c,i) => ({ time: c.time, value: rsiValues[i] })));
+
+    } catch(e) { console.error('[Candles]', e); }
+  }
+
+  window.addEventListener('load', () => {
+    const el = document.getElementById('candle-chart');
+    if (el && el.clientWidth > 0) initCandleChart();
+    else setTimeout(initCandleChart, 300);
+  });
+
+  // ─── Modal de Trade ────────────────────────────────────────────────────
+  function openTradeModal(side, pair) {
+    const sym = pair.split('-')[0];
+    _modalSide = side; _modalPair = pair;
+    const modal = document.getElementById('trade-modal');
+    document.getElementById('modal-title').textContent = (side === 'buy' ? 'Comprar ' : 'Vender ') + sym;
+    const prices = window._lastPrices || {};
+    const price  = prices[pair] ? prices[pair].price : 0;
+    document.getElementById('modal-subtitle').textContent = price ? `Preço atual: R$ ${fmtBRL(price * usdBrl)}` : '—';
+    document.getElementById('modal-confirm').style.background = side === 'buy' ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)';
+    document.getElementById('modal-confirm').style.color       = side === 'buy' ? '#4ade80' : '#f87171';
+    document.getElementById('modal-confirm').style.borderColor = side === 'buy' ? 'rgba(34,197,94,0.4)' : 'rgba(239,68,68,0.4)';
+    document.getElementById('modal-input').value = '';
+    modal.style.display = 'flex';
+    setTimeout(() => document.getElementById('modal-input').focus(), 50);
+  }
+
+  function closeTradeModal() {
+    document.getElementById('trade-modal').style.display = 'none';
+  }
+
+  function confirmTrade() {
+    const input = document.getElementById('modal-input');
+    const val   = parseFloat(input.value);
+    if (!val || val <= 0) { input.focus(); return; }
+    const btn = document.getElementById('modal-confirm');
+    btn.disabled = true; btn.textContent = '...';
+    (async () => {
       try {
         const url = _modalSide === 'buy'
           ? `/trade/buy?pair=${_modalPair}&brl=${val}`
           : `/trade/sell?pair=${_modalPair}&brl=${val}`;
         const res  = await fetch(url, { method: 'POST' });
         const data = await res.json();
-        if (!data.ok) {
-          alert('Erro: ' + data.error);
-        } else {
-          closeTradeModal();
-        }
-      } catch(e) {
-        alert('Erro de conexão');
-      } finally {
-        confirmBtn.disabled    = false;
-        confirmBtn.textContent = 'Confirmar';
+        if (!data.ok) alert('Erro: ' + data.error);
+        else closeTradeModal();
+      } catch(e) { alert('Erro de conexão'); }
+      finally { btn.disabled = false; btn.textContent = 'Confirmar'; }
+    })();
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTradeModal(); });
+
+  // ─── Countdown Timer ──────────────────────────────────────────────────
+  let _cycleStartTs = 0, _cycleInterval = 180, _synced = false;
+  let countdownInterval = null;
+
+  function fmtTimer(s) {
+    if (s <= 0) return '0s';
+    if (s < 60) return s + 's';
+    return Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+  }
+
+  (function startCountdown() {
+    countdownInterval = setInterval(() => {
+      const timerEl  = document.getElementById('cycle-timer');
+      const execEl   = document.getElementById('cycle-executing');
+      const hdrEl    = document.getElementById('header-cycle-timer');
+      if (!_synced) {
+        if (timerEl) timerEl.textContent = '--';
+        if (hdrEl)   hdrEl.textContent   = '--';
+        return;
       }
-      })();
-    }
-    // ─────────────────────────────────────────────────────────────────────────
+      const elapsed   = Math.floor(Date.now() / 1000) - _cycleStartTs;
+      const remaining = Math.max(0, _cycleInterval - elapsed);
+      const executing = remaining === 0;
+      if (executing) {
+        const pulse = Math.floor(Date.now() / 600) % 2 === 0;
+        const txt = pulse ? 'executando…' : '· · ·';
+        if (timerEl) timerEl.style.display = 'none';
+        if (execEl)  { execEl.style.display = 'inline'; execEl.textContent = txt; }
+        if (hdrEl)   { hdrEl.textContent = txt; hdrEl.style.color = '#f97316'; }
+      } else {
+        const t = fmtTimer(remaining);
+        if (timerEl) { timerEl.style.display = 'inline'; timerEl.textContent = t; }
+        if (execEl)  execEl.style.display = 'none';
+        if (hdrEl)   { hdrEl.textContent = t; hdrEl.style.color = ''; }
+      }
+    }, 500);
+  })();
 
-    // Claude usage
-    function refreshClaudeUsage() {
-      const usedEl   = document.getElementById('claude-tokens-used');
-      const statusEl = document.getElementById('claude-tokens-status');
-      if (!usedEl || !statusEl) return;
-      (async () => {
-        try {
-          const r = await fetch('/api/claude-usage');
-          if (!r.ok) return;
-          const d = await r.json();
+  // ─── WebSocket ────────────────────────────────────────────────────────
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws    = new WebSocket(`${proto}://${location.host}/ws`);
+    ws.onmessage = e => {
+      try {
+        const data = JSON.parse(e.data);
+        window._lastPrices = data.prices || {};
+        updateState(data);
+      } catch(err) {
+        console.error('[WS] Erro:', err);
+      }
+    };
+    ws.onclose = () => setTimeout(connect, 3000);
+  }
 
-          if (!d.configured) {
-            usedEl.textContent   = 'N/A';
-            usedEl.style.color   = '#6b7280';
-            statusEl.textContent = 'sem chave';
-            return;
-          }
-          if (!d.key_valid) {
-            usedEl.textContent   = '✗ inválida';
-            usedEl.style.color   = '#f87171';
-            statusEl.textContent = 'verifique a chave';
-            return;
-          }
-
-          if (d.total_tokens !== undefined) {
-            const total = d.total_tokens;
-            const fmt   = n => n >= 1000000 ? (n/1000000).toFixed(1)+'M'
-                             : n >= 1000    ? (n/1000).toFixed(1)+'k'
-                             : n.toString();
-            usedEl.textContent  = fmt(total);
-            usedEl.style.color  = total > 1000000 ? '#f97316' : '#a78bfa';
-            statusEl.innerHTML  = `↑${fmt(d.input_tokens)} ↓${fmt(d.output_tokens)} · `
-              + `<a href="${d.console_url}" target="_blank" style="color:#6366f1">console ↗</a>`;
-          } else {
-            usedEl.textContent  = '✓ ativa';
-            usedEl.style.color  = '#4ade80';
-            statusEl.innerHTML  = `<a href="${d.console_url}" target="_blank"
-              style="color:#818cf8;text-decoration:underline">ver uso ↗</a>`;
-          }
-        } catch(e) { /* silently fail */ }
-      })();
-    }
-    refreshClaudeUsage();
-    setInterval(refreshClaudeUsage, 300000);
-
-    // WebSocket
-    function connect() {
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const ws = new WebSocket(`${proto}://${location.host}/ws`);
-      ws.onmessage = e => {
-        try {
-          if (typeof updateState === 'function') {
-            updateState(JSON.parse(e.data));
-          }
-        } catch(err) {
-          console.error('[WS] Erro ao processar mensagem:', err);
-        }
-      };
-      ws.onclose = () => setTimeout(connect, 3000);
-    }
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', connect);
-    } else {
-      connect();
-    }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', connect);
+  } else {
+    connect();
+  }
   </script>
-
-  <!-- ─── Trade Modal ─────────────────────────────────────────────────── -->
-  <div id="trade-modal" class="fixed inset-0 z-[9999] hidden items-center justify-center" style="display:none">
-    <!-- backdrop -->
-    <div class="absolute inset-0 bg-black/75 backdrop-blur-sm" onclick="closeTradeModal()"></div>
-    <!-- dialog -->
-    <div class="relative card p-6 w-full max-w-sm mx-4 z-10 shadow-2xl" style="position:relative">
-      <!-- header -->
-      <div class="flex items-center justify-between mb-4">
-        <h3 id="modal-title" class="text-lg font-bold text-white">Comprar BTC</h3>
-        <button onclick="closeTradeModal()" class="text-gray-500 hover:text-gray-300 transition-colors text-xl leading-none">&times;</button>
-      </div>
-      <!-- subtitle -->
-      <p id="modal-subtitle" class="text-xs text-gray-500 mb-4 -mt-2">—</p>
-      <!-- input -->
-      <div class="mb-5">
-        <label id="modal-label" class="text-xs text-gray-400 block mb-1.5 font-medium">Valor (R$)</label>
-        <input id="modal-input" type="number" step="0.01" min="0"
-          class="w-full bg-gray-800/80 border border-gray-600 rounded-lg px-3 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 transition-colors"
-          placeholder="0.00"
-          onkeydown="if(event.key==='Enter') confirmTrade()">
-      </div>
-      <!-- buttons -->
-      <div class="flex gap-3">
-        <button onclick="closeTradeModal()"
-          class="flex-1 py-2.5 rounded-lg text-sm font-semibold bg-gray-700/80 text-gray-300 border border-gray-600 hover:bg-gray-600/80 transition-colors">
-          Cancelar
-        </button>
-        <button id="modal-confirm" onclick="confirmTrade()"
-          class="flex-1 py-2.5 rounded-lg text-sm font-bold bg-green-500/25 text-green-400 border border-green-500/40 hover:bg-green-500/35 transition-colors">
-          Confirmar
-        </button>
-      </div>
-    </div>
-  </div>
-  <!-- ──────────────────────────────────────────────────────────────────── -->
 
 </body>
 </html>
