@@ -617,22 +617,56 @@
     if (trades.length === 0) {
       tradesList.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Nenhum trade ainda...</p>';
     } else {
+      const totalBRL = (s.portfolio || {}).total_brl || 0;
       tradesList.innerHTML = [...trades].reverse().map(t => {
-        const isBuy = t.side === 'BUY';
-        const valBRL = (t.usd || 0) * usdBrl;
+        const isBuy   = t.side === 'BUY';
+        const valBRL  = (t.usd || 0) * usdBrl;
         const feesBRL = (t.fee || 0) * usdBrl;
-        const stratLabel = (t.strategy || 'manual').replace(/:.*$/, '');
+        const raw     = t.strategy || 'manual';
+        const colon   = raw.indexOf(':');
+        const stratName  = colon === -1 ? raw : raw.slice(0, colon);
+        const stratReason = colon === -1 ? '' : raw.slice(colon + 1);
+
+        // Motivo legível
+        let motivo = '';
+        if (isBuy && !stratReason)               motivo = '📗 Compra';
+        else if (stratReason.startsWith('pyramid')) {
+          const n = stratReason.match(/\d+/)?.[0] || '';
+          motivo = `▲ Pyramid${n ? ' x' + n : ''}`;
+        }
+        else if (stratReason.startsWith('TP'))    motivo = `🎯 Take Profit ${stratReason.slice(2)}`;
+        else if (stratReason.startsWith('SL'))    motivo = `🛑 Stop Loss ${stratReason.slice(2)}`;
+        else if (stratReason === 'TRAILING')      motivo = '📉 Trailing Stop';
+        else if (stratReason === 'SELL')          motivo = '📉 Sinal Venda';
+        else if (stratReason)                     motivo = stratReason;
+
+        // Pyramid badge
+        const pyramidMatch = stratReason.match(/^pyramid(\d+)$/);
+        const pyramidBadge = pyramidMatch
+          ? `<span class="text-[9px] px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-400 border border-yellow-500/20 font-bold">▲×${pyramidMatch[1]}</span>`
+          : '';
+
+        // % do patrimônio
+        const pctPatr = totalBRL > 0 ? ((valBRL / totalBRL) * 100).toFixed(1) + '%' : '—';
+
+        const time = (t.time || '').substring(11, 19) || (t.time || '').substring(0, 8);
+        const pair = t.pair || ((t.symbol || '?') + '-USD');
+
         return `<div class="trade-${t.side.toLowerCase()} bg-gray-800/40 rounded-lg px-3 py-2.5 flex items-center justify-between gap-2">
           <div class="flex items-center gap-2 min-w-0">
             <span class="${isBuy ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'} text-xs font-bold px-2 py-0.5 rounded shrink-0">${t.side}</span>
             <div class="min-w-0">
-              <p class="font-semibold text-white text-sm leading-none">${t.symbol || t.pair || '?'}-USD</p>
-              <p class="text-gray-400 text-[11px] mt-0.5 truncate">${stratLabel}</p>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <p class="font-semibold text-white text-sm leading-none">${pair}</p>
+                ${pyramidBadge}
+              </div>
+              <p class="text-gray-400 text-[11px] mt-0.5">${stratName}${motivo ? ' · ' + motivo : ''}</p>
+              <p class="text-gray-600 text-[10px] mt-0.5">${pctPatr} do patrimônio · fee R$ ${fmtBRL(feesBRL)}</p>
             </div>
           </div>
           <div class="text-right shrink-0">
             <p class="${isBuy ? 'text-green-300' : 'text-red-300'} text-sm font-semibold font-mono">${isBuy ? '-' : '+'}R$ ${fmtBRL(valBRL)}</p>
-            <p class="text-gray-600 text-[10px] mt-0.5">${(t.time||'').substring(11,19)} · fee R$ ${fmtBRL(feesBRL)}</p>
+            <p class="text-gray-600 text-[10px] mt-0.5">${time}</p>
           </div>
         </div>`;
       }).join('');
