@@ -919,6 +919,14 @@ async def trading_loop():
                       signal = signals_this_cycle.get(strat.name, "HOLD")
 
                       if slot["qty"] > 0:
+                          # ── Limpa posições de "pó" (valor < $0.50) ──────────────
+                          slot_value_usd = slot["qty"] * price
+                          if slot_value_usd < 0.50:
+                              logger.info(f"[{pair}][{strat.name}] Zerando posição de pó: {slot['qty']:.10f} val=${slot_value_usd:.4f}")
+                              engine.holdings[symbol] = max(0, engine.holdings.get(symbol, 0) - slot["qty"])
+                              slot.update({"qty": 0.0, "entry": 0.0, "peak": 0.0, "pyramids": 0, "be_sl": 0.0})
+                              continue
+
                           slot["peak"] = max(slot["peak"], price)
                           gain_pct = (price - slot["entry"]) / slot["entry"] * 100
 
@@ -965,10 +973,11 @@ async def trading_loop():
                               _sell_slot(slot["qty"], f"SL-pyramid-1.5%", is_sl=True)
                           elif tr_hit:
                               _sell_slot(slot["qty"], f"TRAILING-{TRAILING_STOP_PCT:.1f}%")
-                          # ── TP parcial (+2.5%) para TODAS as estratégias com pyramid ──
+                          # ── TP parcial (+2.5%) para estratégias com pyramid ──────
                           elif gain_pct >= 2.5 and slot.get("pyramids", 0) > 0:
                               half_qty = slot["qty"] / 2
-                              if half_qty > 1e-8:
+                              half_usd = half_qty * price
+                              if half_usd >= 1.0:   # mínimo $1 — evita trades de pó
                                   _sell_slot(half_qty, f"TP_HALF+2.5%")
                           elif extreme_greed or signal == "SELL":
                               # Saída gradual: TRADE_PCT% do patrimonio por ciclo

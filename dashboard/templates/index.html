@@ -644,7 +644,7 @@
       tradesList.innerHTML = '<p class="text-gray-500 text-sm text-center py-8">Nenhum trade ainda...</p>';
     } else {
       const totalBRL = (s.portfolio || {}).total_brl || 0;
-      tradesList.innerHTML = trades.map(t => {
+      tradesList.innerHTML = trades.filter(t => (t.usd || 0) >= 0.01).map(t => {
         const isBuy   = t.side === 'BUY';
         const valBRL  = (t.usd || 0) * usdBrl;
         const feesBRL = (t.fee || 0) * usdBrl;
