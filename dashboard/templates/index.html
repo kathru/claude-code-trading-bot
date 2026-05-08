@@ -362,16 +362,6 @@
           <span id="chg-entry-${c.sym}" class="font-mono font-bold">—</span>
         </div>
       </div>
-      <div class="flex gap-2 mt-3">
-        <button onclick="openTradeModal('buy','${c.pair}')"
-          class="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-green-500/15 text-green-400 border border-green-500/30 hover:bg-green-500/25">
-          Comprar
-        </button>
-        <button onclick="openTradeModal('sell','${c.pair}')"
-          class="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25">
-          Vender
-        </button>
-      </div>
     </div>`).join('');
 
   // ─── Formatação ─────────────────────────────────────────────────────────
@@ -584,6 +574,23 @@
         const tpFalta   = Math.max(0, tpBrl - realBrl);
         const totalBrl2 = realBrl + unrlBrl;
         const pnlColor  = totalBrl2 >= 0 ? '#4ade80' : '#f87171';
+        // Pares com posição aberta ou já negociados por esta estratégia
+        const cryptoColors = { BTC:'#f97316', ETH:'#3b82f6', SOL:'#a855f7', AVAX:'#eab308', LINK:'#60a5fa', DOGE:'#f59e0b' };
+        const pairDots = CRYPTOS.map(c => {
+          const sl  = allSlots[`${st.name}:${c.pair}`] || {};
+          const hasPos = (sl.qty || 0) > 0;
+          const wasTraded = (sl.realized || 0) !== 0;
+          if (hasPos) {
+            const chg = price && prices[c.pair] ? ((prices[c.pair].price - sl.entry) / sl.entry * 100) : null;
+            const chgStr = chg !== null ? ` ${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%` : '';
+            return `<span class="text-[9px] px-1 py-0.5 rounded font-bold" style="background:${cryptoColors[c.sym]}22;color:${cryptoColors[c.sym]};border:1px solid ${cryptoColors[c.sym]}44">● ${c.sym}${chgStr}</span>`;
+          }
+          if (wasTraded) {
+            return `<span class="text-[9px] text-gray-600">○ ${c.sym}</span>`;
+          }
+          return null;
+        }).filter(Boolean);
+
         return `<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
           <div class="flex items-center gap-1.5 mb-2">
             <span>${st.icon}</span>
@@ -596,6 +603,7 @@
           </div>
           ${unrlUsd !== 0 ? `<p class="text-[10px] mt-0.5" style="color:#f97316">Não realizado: ${unrlBrl>=0?'+':'-'}R$ ${fmtBRL(Math.abs(unrlBrl))}</p>` : ''}
           ${tpBrl > 0 ? `<p class="text-[10px] mt-0.5" style="color:#818cf8">TP: falta R$ ${fmtBRL(tpFalta)} (${tpBrl > 0 ? ((tpFalta/tpBrl)*100).toFixed(0) : 0}%)</p>` : ''}
+          ${pairDots.length > 0 ? `<div class="flex flex-wrap gap-1 mt-2">${pairDots.join('')}</div>` : ''}
         </div>`;
       }).join('');
     }
