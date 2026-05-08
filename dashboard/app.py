@@ -222,7 +222,7 @@ BREAKEVEN_ACTIVATE_PCT = 1.5 # após +1.5%, SL sobe para entrada (risco zero)
 SL_COOLDOWN_CYCLES    = 3    # após SL, aguarda 3 ciclos (9min) antes de re-entrar
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
-PYRAMID_MAX          = 2     # máx. 2 adições — evita acumulação excessiva em tendência contrária
+PYRAMID_MAX          = 3     # máx. 3 adições (175% da entrada total)
 PYRAMID_MIN_GAIN_PCT = 1.0   # só adiciona se ≥ +1.0% no lucro — confirma tendência antes de escalar
 PYRAMID_SIZE_PCT     = 0.25  # cada pyramid = 25% do trade inicial
 
