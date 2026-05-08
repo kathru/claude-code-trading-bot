@@ -674,7 +674,7 @@
           : '';
 
         // % do patrimônio
-        const pctPatr = totalBRL > 0 ? ((valBRL / totalBRL) * 100).toFixed(1) + '%' : '—';
+        const pctPatr = totalBRL > 0 ? ((valBRL / totalBRL) * 100).toFixed(2) + '%' : '—';
 
         const time = (t.time || '').substring(11, 19) || (t.time || '').substring(0, 8);
         const pair = t.pair || ((t.symbol || '?') + '-USD');
