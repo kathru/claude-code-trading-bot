@@ -262,7 +262,8 @@ sl_cooldowns: dict = {}   # {f"{strat}:{pair}": cycles_remaining}
 # ── Slots independentes: 4 estratégias × 3 pares + 3 manuais ────
 def _empty_slot():
     return {"qty": 0.0, "entry": 0.0, "peak": 0.0,
-            "realized": 0.0, "unrealized": 0.0, "pyramids": 0, "be_sl": 0.0}
+            "realized": 0.0, "unrealized": 0.0, "pyramids": 0, "be_sl": 0.0,
+            "entry_usd": 0.0}  # tamanho da entrada original — pyramid usa esse valor
 
 SLOTS_FILE = os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "data", "strategy_slots.json")
@@ -1009,9 +1010,10 @@ async def trading_loop():
                           elif signal == "BUY" and gain_pct >= PYRAMID_MIN_GAIN_PCT:
                               pdone = slot.get("pyramids", 0)
                               if pdone < PYRAMID_MAX:
-                                  pyr_usd = portfolio_total * dynamic_pct * PYRAMID_SIZE_PCT
+                                  # Pyramid proporcional à entrada original — não varia com dynamic_pct atual
+                                  base_usd = slot.get("entry_usd") or (portfolio_total * dynamic_pct)
+                                  pyr_usd  = base_usd * PYRAMID_SIZE_PCT
                                   if engine.balance_usd < pyr_usd * 1.006:
-                                      # Se não tem o valor do pyramid, usa o saldo restante em caixa
                                       pyr_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
 
                                   if pyr_usd > 1.0:  # Mínimo de $1 para pyramid
@@ -1044,10 +1046,11 @@ async def trading_loop():
                               if trade_usd > 1.0:  # Mínimo de $1 para trade
                                   qty = trade_usd / price
                                   if engine.buy(symbol, trade_usd, price, strat.name):
-                                      slot["qty"]      = qty
-                                      slot["entry"]    = price
-                                      slot["peak"]     = price
-                                      slot["pyramids"] = 0
+                                      slot["qty"]       = qty
+                                      slot["entry"]     = price
+                                      slot["peak"]      = price
+                                      slot["pyramids"]  = 0
+                                      slot["entry_usd"] = trade_usd  # guarda tamanho original
                                       _record_trade("BUY", pair, qty, price, trade_usd, strat.name)
                                       _count_buy(strat.name)
                                       pct_used = (trade_usd / engine.initial_balance) * 100 if engine.initial_balance > 0 else 0
