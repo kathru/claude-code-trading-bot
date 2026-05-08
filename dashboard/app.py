@@ -204,9 +204,9 @@ def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float =
     else:
         vol_ratio = 1.0
 
-    # Aplicar ratio com limites
+    # Aplicar ratio com limites (2% mín, TRADE_PCT máx)
     size = base_pct * vol_ratio
-    size = max(0.02, min(0.10, size))  # Min 2%, Max 10%
+    size = max(0.02, min(TRADE_PCT, size))
 
     return size
 
@@ -762,9 +762,9 @@ async def trading_loop():
             logger.warning("USD/BRL fetch timeout - usando cache")
             usd_brl = _usd_brl_cache["rate"]
         state["usd_brl"] = round(usd_brl, 4)
-        state["trade_pct"] = TRADE_PCT
+        state["trade_pct"] = TRADE_PCT  # máximo — o real por par é dinâmico (2-10%)
 
-        # Calcula portfolio_total (5% de TRADE_PCT é baseado no patrimonio total)
+        # Calcula portfolio_total
         portfolio_total = engine.portfolio_value()
         state["trade_amount_brl"] = round(portfolio_total * TRADE_PCT * usd_brl, 2)
 
@@ -930,6 +930,9 @@ async def trading_loop():
                   extreme_fear  = fg_value <= FG_FEAR_MAX
                   extreme_greed = fg_value >= FG_GREED_MIN
 
+                  # Tamanho dinâmico por par — usa candles 1h (mais estável)
+                  dynamic_pct = _calculate_dynamic_position_size(pair, candles_1h)
+
                   for strat in all_strategies:
                       key    = f"{strat.name}:{pair}"
                       slot   = strategy_slots.setdefault(key, _empty_slot())
@@ -1006,7 +1009,7 @@ async def trading_loop():
                           elif signal == "BUY" and gain_pct >= PYRAMID_MIN_GAIN_PCT:
                               pdone = slot.get("pyramids", 0)
                               if pdone < PYRAMID_MAX:
-                                  pyr_usd = portfolio_total * TRADE_PCT * PYRAMID_SIZE_PCT
+                                  pyr_usd = portfolio_total * dynamic_pct * PYRAMID_SIZE_PCT
                                   if engine.balance_usd < pyr_usd * 1.006:
                                       # Se não tem o valor do pyramid, usa o saldo restante em caixa
                                       pyr_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
@@ -1033,8 +1036,7 @@ async def trading_loop():
                           if cooldown > 0:
                               sl_cooldowns[key] = cooldown - 1
                           else:
-                              # Tenta 5% do patrimonio, se não houver em caixa usa o restante disponível
-                              trade_usd = portfolio_total * TRADE_PCT
+                              trade_usd = portfolio_total * dynamic_pct
                               if engine.balance_usd < trade_usd * 1.006:
                                   # Se não tem 5% em caixa, usa o saldo restante (menos margem de taxa)
                                   trade_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
