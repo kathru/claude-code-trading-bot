@@ -470,8 +470,10 @@
       subtitleEl.innerHTML = `P&L em trades · Portfolio R$ 4.000 (fixo)${tpStr}`;
     }
 
-    document.getElementById('trade-count').textContent = (s.trades || []).length;
-    document.getElementById('trade-badge').textContent = (s.trades || []).length + ' trades';
+    // Usa kpis.total_trades para o total real — state['trades'] é limitado a 50 para o WebSocket
+    const totalTrades = (s.kpis || {}).total_trades ?? (s.trades || []).length;
+    document.getElementById('trade-count').textContent = totalTrades;
+    document.getElementById('trade-badge').textContent = totalTrades + ' trades';
 
     const feesUsd = p.total_fees_usd || 0;
     document.getElementById('total-fees').textContent = 'R$ ' + fmtBRL(feesUsd * usdBrl);
