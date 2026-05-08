@@ -108,15 +108,16 @@ _last_prices: dict = {}      # {pair: float}
 
 
 def _dynamic_tp(fg_value: int) -> float:
-    """TP dinâmico entre 3% e 5% inversamente proporcional ao Fear & Greed.
-    Mercado com medo   → alvo maior (deixa winners correrem mais)
-    Mercado ganancioso → alvo menor (realiza antes da euforia acabar)
+    """TP dinâmico entre TAKE_PROFIT_MIN e MAX inversamente proporcional ao Fear & Greed.
+    Medo   → alvo maior (deixa winners correrem mais em mercado com potencial)
+    Ganância → alvo menor (realiza antes da euforia acabar)
     """
-    if   fg_value <= 25: return TAKE_PROFIT_MAX          # Medo extremo: +5%
-    elif fg_value <= 40: return round(TAKE_PROFIT_MIN + (TAKE_PROFIT_MAX - TAKE_PROFIT_MIN) * 0.67, 1)  # +4.3%
-    elif fg_value <= 60: return round((TAKE_PROFIT_MIN + TAKE_PROFIT_MAX) / 2, 1)  # Neutro: +4%
-    elif fg_value <= 74: return round(TAKE_PROFIT_MIN + (TAKE_PROFIT_MAX - TAKE_PROFIT_MIN) * 0.17, 1)  # +3.3%
-    else:                return TAKE_PROFIT_MIN           # Ganância extrema: +3%
+    rng = TAKE_PROFIT_MAX - TAKE_PROFIT_MIN
+    if   fg_value <= 25: return TAKE_PROFIT_MAX                            # Medo extremo: +12%
+    elif fg_value <= 40: return round(TAKE_PROFIT_MIN + rng * 0.67, 1)    # +9.4%
+    elif fg_value <= 60: return round(TAKE_PROFIT_MIN + rng * 0.50, 1)    # Neutro: +8%
+    elif fg_value <= 74: return round(TAKE_PROFIT_MIN + rng * 0.25, 1)    # +6%
+    else:                return TAKE_PROFIT_MIN                            # Ganância extrema: +4%
 
 
 def _load_history() -> list:
@@ -199,12 +200,12 @@ def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float =
 
 # ── Gestão de risco ──────────────────────────────────────────────
 INITIAL_SL_PCT        = 5.0  # SL: -5%
-TAKE_PROFIT_MIN       = 3.0  # TP mínimo: +3%
-TAKE_PROFIT_MAX       = 10.0 # TP máximo: +10% (medo extremo)
-TRAILING_STOP_PCT     = 2.5  # trailing: -2.5% do pico (mais apertado = protege mais lucro)
-TRAILING_ACTIVATE_PCT = 2.0  # trailing ativa após +2% — antes do TP mínimo (3%)
-BREAKEVEN_ACTIVATE_PCT = 1.5 # após +1.5%, SL sobe para o ponto de entrada (risco zero)
-SL_COOLDOWN_CYCLES    = 0    # após SL, re-entra imediatamente
+TAKE_PROFIT_MIN       = 4.0  # TP mínimo: +4% (era 3% — precisa cobrir 1.2% de taxas + lucro)
+TAKE_PROFIT_MAX       = 12.0 # TP máximo: +12% (era 10% — deixa winners correrem mais)
+TRAILING_STOP_PCT     = 2.5  # trailing: -2.5% do pico
+TRAILING_ACTIVATE_PCT = 2.0  # trailing ativa após +2%
+BREAKEVEN_ACTIVATE_PCT = 1.5 # após +1.5%, SL sobe para entrada (risco zero)
+SL_COOLDOWN_CYCLES    = 3    # após SL, aguarda 3 ciclos (9min) antes de re-entrar — evita whipsaw
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
 PYRAMID_MAX          = 2     # máx. 2 adições — evita acumulação excessiva em tendência contrária
