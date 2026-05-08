@@ -853,11 +853,12 @@ async def trading_loop():
                                 vslot["realized"] += pnl_vg
                                 _attr_pnl(strat.name, pnl_vg)
                                 _record_trade("SELL", pair, vqty, price, vnet, f"vol_guard:{strat.name}")
-                            rem = vslot["qty"] - vqty
-                            if rem < 1e-8:
-                                vslot["qty"] = 0.0; vslot["entry"] = 0.0; vslot["peak"] = 0.0
-                            else:
-                                vslot["qty"] = rem
+                                # ← slot só atualiza se venda foi executada
+                                rem = vslot["qty"] - vqty
+                                if rem < 1e-8:
+                                    vslot.update({"qty": 0.0, "entry": 0.0, "peak": 0.0, "pyramids": 0, "be_sl": 0.0})
+                                else:
+                                    vslot["qty"] = rem
                     _save_slots(strategy_slots)
                     logger.info(f"[{pair}] VOLATILIDADE EXTREMA — reduzindo posições {TRADE_PCT*100:.0f}%/ciclo")
                     # ← Não executa estratégias neste ciclo para evitar re-abertura imediata
@@ -933,7 +934,8 @@ async def trading_loop():
 
                           def _sell_slot(qty, label, is_sl=False):
                               net = qty * price * (1 - 0.006)
-                              if engine.sell(symbol, qty, price, f"{strat.name}:{label}"):
+                              sold = engine.sell(symbol, qty, price, f"{strat.name}:{label}")
+                              if sold:
                                   pnl = net - slot["entry"] * qty
                                   slot["realized"] += pnl
                                   _attr_pnl(strat.name, pnl)
@@ -941,12 +943,15 @@ async def trading_loop():
                                   logger.info(f"[{pair}][{strat.name}] SELL {label} gain={gain_pct:+.2f}% P&L ${pnl:+.2f}")
                                   if is_sl:
                                       sl_cooldowns[key] = SL_COOLDOWN_CYCLES
-                              rem = slot["qty"] - qty
-                              if rem < 1e-8:
-                                  slot.update({"qty": 0.0, "entry": 0.0, "peak": 0.0, "pyramids": 0, "be_sl": 0.0})
+                                  # ← Só atualiza o slot SE a venda foi executada no engine
+                                  rem = slot["qty"] - qty
+                                  if rem < 1e-8:
+                                      slot.update({"qty": 0.0, "entry": 0.0, "peak": 0.0, "pyramids": 0, "be_sl": 0.0})
+                                  else:
+                                      slot["qty"] = rem
+                                      slot["peak"] = price  # reseta peak após venda parcial
                               else:
-                                  slot["qty"] = rem
-                                  slot["peak"] = price   # reseta peak após venda parcial
+                                  logger.warning(f"[{pair}][{strat.name}] SELL {label} FALHOU — engine rejeitou (held insuficiente?)")
 
                           # SL apertado para posições com pyramid
                           pyramid_sl_hit = (slot.get("pyramids", 0) > 0 and gain_pct <= -1.5)
@@ -1036,22 +1041,55 @@ async def trading_loop():
                 if ms and ms.get("qty", 0) > 0:
                     ms["peak"] = max(ms["peak"], price)
                     g   = (price - ms["entry"]) / ms["entry"] * 100
+                    # Break-even stop para manual também
+                    ms_eff_sl = ms["entry"] if g >= BREAKEVEN_ACTIVATE_PCT else ms["entry"] * (1 - INITIAL_SL_PCT / 100)
+                    ms_eff_sl = max(ms_eff_sl, ms.get("be_sl", 0))
+                    ms["be_sl"] = ms_eff_sl
                     tph = price >= ms["entry"] * (1 + current_tp_pct / 100)
-                    slh = price <= ms["entry"] * (1 - INITIAL_SL_PCT  / 100)
+                    slh = price <= ms_eff_sl
                     tra = g >= TRAILING_ACTIVATE_PCT
                     trh = tra and price <= ms["peak"] * (1 - TRAILING_STOP_PCT / 100)
                     rsn = (f"TP+{current_tp_pct:.0f}%" if tph else
+                           f"BE-stop"                   if slh and g >= 0 else
                            f"SL-{INITIAL_SL_PCT:.0f}%"  if slh else
-                           f"TRAILING-{TRAILING_STOP_PCT:.0f}%" if trh else None)
+                           f"TRAILING-{TRAILING_STOP_PCT:.1f}%" if trh else None)
                     if rsn:
                         net = ms["qty"] * price * (1 - 0.006)
                         if engine.sell(symbol, ms["qty"], price, f"manual:{rsn}"):
                             ms["realized"] += net - ms["entry"] * ms["qty"]
                             _record_trade("SELL", pair, ms["qty"], price, net, f"manual:{rsn}")
                             logger.info(f"[{pair}][manual] {rsn} @ ${price:,.2f}")
-                        ms["qty"] = 0.0; ms["entry"] = 0.0; ms["peak"] = 0.0
+                            # ← slot só reseta se venda foi executada
+                            ms.update({"qty": 0.0, "entry": 0.0, "peak": 0.0, "be_sl": 0.0})
+                        else:
+                            logger.warning(f"[{pair}][manual] {rsn} FALHOU — engine rejeitou")
                     else:
                         ms["unrealized"] = (price - ms["entry"]) * ms["qty"]
+
+                # ── Verificação de consistência slots ↔ engine ───────────────
+                # Garante que slots não acumulem qty quando engine não tem posição
+                held_in_engine = engine.holdings.get(symbol, 0)
+                slots_total_qty = sum(
+                    strategy_slots.get(f"{s.name}:{pair}", {}).get("qty", 0)
+                    for s in all_strategies
+                ) + strategy_slots.get(f"manual:{pair}", {}).get("qty", 0)
+
+                if held_in_engine < slots_total_qty - 1e-6:
+                    # Engine tem menos que os slots declaram — corrige proporcionalmente
+                    logger.warning(f"[{pair}] INCONSISTÊNCIA: engine={held_in_engine:.6f} slots={slots_total_qty:.6f} — corrigindo")
+                    if slots_total_qty > 1e-10:
+                        ratio = held_in_engine / slots_total_qty
+                        for s in all_strategies:
+                            sk = f"{s.name}:{pair}"
+                            if strategy_slots.get(sk, {}).get("qty", 0) > 0:
+                                strategy_slots[sk]["qty"] *= ratio
+                                if strategy_slots[sk]["qty"] < 1e-8:
+                                    strategy_slots[sk].update({"qty": 0.0, "entry": 0.0, "peak": 0.0, "pyramids": 0, "be_sl": 0.0})
+                        ms_key = f"manual:{pair}"
+                        if strategy_slots.get(ms_key, {}).get("qty", 0) > 0:
+                            strategy_slots[ms_key]["qty"] *= ratio
+                            if strategy_slots[ms_key]["qty"] < 1e-8:
+                                strategy_slots[ms_key].update({"qty": 0.0, "entry": 0.0, "peak": 0.0, "be_sl": 0.0})
 
                 # ── Salva slots e atualiza signals no state ───────────────────
                 _save_slots(strategy_slots)
