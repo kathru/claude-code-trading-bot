@@ -574,30 +574,30 @@
         const tpFalta   = Math.max(0, tpBrl - realBrl);
         const totalBrl2 = realBrl + unrlBrl;
         const pnlColor  = totalBrl2 >= 0 ? '#4ade80' : '#f87171';
-        // Pares com posição aberta ou já negociados por esta estratégia
-        const cryptoColors = { BTC:'#f97316', ETH:'#3b82f6', SOL:'#a855f7', AVAX:'#eab308', LINK:'#60a5fa', DOGE:'#f59e0b' };
+        // Badges de todas as criptos: cinza=sem posição, verde=positivo, vermelho=negativo
         const sPrices = s.prices || {};
-        const pairDots = CRYPTOS.map(c => {
-          const sl  = allSlots[`${st.name}:${c.pair}`] || {};
-          const hasPos = (sl.qty || 0) > 0;
-          const wasTraded = (sl.realized || 0) !== 0;
-          if (hasPos) {
-            const curPrice = (sPrices[c.pair] || {}).price;
-            const chg = curPrice && sl.entry ? ((curPrice - sl.entry) / sl.entry * 100) : null;
-            const chgStr = chg !== null ? ` ${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%` : '';
-            return `<span class="text-[9px] px-1 py-0.5 rounded font-bold" style="background:${cryptoColors[c.sym]}22;color:${cryptoColors[c.sym]};border:1px solid ${cryptoColors[c.sym]}44">● ${c.sym}${chgStr}</span>`;
+        const pairBadges = CRYPTOS.map(c => {
+          const sl       = allSlots[`${st.name}:${c.pair}`] || {};
+          const hasPos   = (sl.qty || 0) > 0;
+          const curPrice = (sPrices[c.pair] || {}).price;
+          if (hasPos && curPrice && sl.entry) {
+            const chg     = (curPrice - sl.entry) / sl.entry * 100;
+            const positive = chg >= 0;
+            const bg      = positive ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)';
+            const border  = positive ? 'rgba(74,222,128,0.35)' : 'rgba(248,113,113,0.35)';
+            const color   = positive ? '#4ade80' : '#f87171';
+            return `<span style="background:${bg};border:1px solid ${border};color:${color}" class="text-[9px] font-bold px-1.5 py-0.5 rounded">${c.sym} ${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%</span>`;
           }
-          if (wasTraded) {
-            return `<span class="text-[9px] text-gray-600">○ ${c.sym}</span>`;
-          }
-          return null;
-        }).filter(Boolean);
+          // cinza — sem posição
+          return `<span style="background:rgba(75,85,99,0.2);border:1px solid rgba(75,85,99,0.3);color:#6b7280" class="text-[9px] px-1.5 py-0.5 rounded">${c.sym}</span>`;
+        });
 
         return `<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
-          <div class="flex items-center gap-1.5 mb-2">
+          <div class="flex items-center gap-1.5 mb-1.5">
             <span>${st.icon}</span>
             <span class="text-xs font-semibold text-white truncate">${st.name}</span>
           </div>
+          <div class="flex flex-wrap gap-1 mb-2">${pairBadges.join('')}</div>
           <p class="text-sm font-bold font-mono" style="color:${pnlColor}">${totalBrl2 >= 0 ? '+' : '-'}R$ ${fmtBRL(Math.abs(totalBrl2))}</p>
           <div class="flex justify-between text-[10px] mt-1">
             <span style="color:#4ade80">Realizado: ${realBrl >= 0 ? '+' : ''}R$ ${fmtBRL(realBrl)}</span>
@@ -605,7 +605,6 @@
           </div>
           ${unrlUsd !== 0 ? `<p class="text-[10px] mt-0.5" style="color:#f97316">Não realizado: ${unrlBrl>=0?'+':'-'}R$ ${fmtBRL(Math.abs(unrlBrl))}</p>` : ''}
           ${tpBrl > 0 ? `<p class="text-[10px] mt-0.5" style="color:#818cf8">TP: falta R$ ${fmtBRL(tpFalta)} (${tpBrl > 0 ? ((tpFalta/tpBrl)*100).toFixed(0) : 0}%)</p>` : ''}
-          ${pairDots.length > 0 ? `<div class="flex flex-wrap gap-1 mt-2">${pairDots.join('')}</div>` : ''}
         </div>`;
       }).join('');
     }
