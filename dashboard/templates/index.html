@@ -576,12 +576,14 @@
         const pnlColor  = totalBrl2 >= 0 ? '#4ade80' : '#f87171';
         // Pares com posição aberta ou já negociados por esta estratégia
         const cryptoColors = { BTC:'#f97316', ETH:'#3b82f6', SOL:'#a855f7', AVAX:'#eab308', LINK:'#60a5fa', DOGE:'#f59e0b' };
+        const sPrices = s.prices || {};
         const pairDots = CRYPTOS.map(c => {
           const sl  = allSlots[`${st.name}:${c.pair}`] || {};
           const hasPos = (sl.qty || 0) > 0;
           const wasTraded = (sl.realized || 0) !== 0;
           if (hasPos) {
-            const chg = price && prices[c.pair] ? ((prices[c.pair].price - sl.entry) / sl.entry * 100) : null;
+            const curPrice = (sPrices[c.pair] || {}).price;
+            const chg = curPrice && sl.entry ? ((curPrice - sl.entry) / sl.entry * 100) : null;
             const chgStr = chg !== null ? ` ${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%` : '';
             return `<span class="text-[9px] px-1 py-0.5 rounded font-bold" style="background:${cryptoColors[c.sym]}22;color:${cryptoColors[c.sym]};border:1px solid ${cryptoColors[c.sym]}44">● ${c.sym}${chgStr}</span>`;
           }
