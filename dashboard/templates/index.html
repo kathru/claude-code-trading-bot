@@ -308,7 +308,6 @@
     { name: 'EMA Pullback',      id: 'EMA',   icon: '📈' },
     { name: 'MACD Momentum',     id: 'MACD',  icon: '⚡' },
     { name: 'Stoch Bounce',      id: 'Stoch', icon: '🎯' },
-    { name: 'RSI Divergence',    id: 'RSI',   icon: '〰️' },
   ];
 
   // ─── Gera cards de cripto dinamicamente ─────────────────────────────────
@@ -705,7 +704,7 @@
     } else {
       const stratShort = {
         'Donchian Breakout': 'DONCH', 'EMA Pullback': 'EMA',
-        'MACD Momentum': 'MACD', 'Stoch Bounce': 'STOCH', 'RSI Divergence': 'RSI',
+        'MACD Momentum': 'MACD', 'Stoch Bounce': 'STOCH',
       };
       feedList.innerHTML = feed.slice(0, 60).map(f => {
         const sig      = f.signal || f.decision || 'HOLD';
