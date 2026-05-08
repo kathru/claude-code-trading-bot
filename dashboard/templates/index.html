@@ -114,7 +114,7 @@
     <div class="card p-5">
       <div class="flex items-center justify-between mb-3">
         <h3 class="font-semibold text-white">Painel de estratégias</h3>
-        <span id="strategy-panel-subtitle" class="text-xs text-gray-500">P&L em trades · Portfolio R$ 4.000 (fixo)</span>
+        <span id="strategy-panel-subtitle" class="text-xs text-gray-500">P&L em trades</span>
       </div>
       <div id="strategy-panel" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
     </div>
@@ -467,7 +467,8 @@
     if (subtitleEl) {
       const tp = s.tp_objective || {};
       const tpStr = tp.current != null ? ` · <span style="color:#818cf8;font-weight:600">TP: ${tp.current.toFixed(1)}%</span>` : '';
-      subtitleEl.innerHTML = `P&L em trades · Portfolio R$ 4.000 (fixo)${tpStr}`;
+      const slStr = ` · <span style="color:#f87171;font-weight:600">SL: 5%</span>`;
+      subtitleEl.innerHTML = `P&L em trades${tpStr}${slStr}`;
     }
 
     // Usa kpis.total_trades para o total real — state['trades'] é limitado a 50 para o WebSocket
