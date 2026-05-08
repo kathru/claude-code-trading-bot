@@ -198,12 +198,13 @@ def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float =
 
 
 # ── Gestão de risco ──────────────────────────────────────────────
-INITIAL_SL_PCT        = 5.0  # SL: -5% (mais apertado — sai de posições ruins rápido)
-TAKE_PROFIT_MIN       = 3.0  # TP mínimo: +3% (realiza rápido em crypto)
-TAKE_PROFIT_MAX       = 10.0 # TP máximo: +10% (deixa winners rodarem em medo extremo)
-TRAILING_STOP_PCT     = 5.0  # trailing: -5% do pico (proteção mais apertada)
-TRAILING_ACTIVATE_PCT = 4.0  # trailing ativa após +4% (proteção mais cedo)
-SL_COOLDOWN_CYCLES    = 0    # após SL, re-entra IMEDIATAMENTE (sem cooldown defensivo)
+INITIAL_SL_PCT        = 5.0  # SL: -5%
+TAKE_PROFIT_MIN       = 3.0  # TP mínimo: +3%
+TAKE_PROFIT_MAX       = 10.0 # TP máximo: +10% (medo extremo)
+TRAILING_STOP_PCT     = 2.5  # trailing: -2.5% do pico (mais apertado = protege mais lucro)
+TRAILING_ACTIVATE_PCT = 2.0  # trailing ativa após +2% — antes do TP mínimo (3%)
+BREAKEVEN_ACTIVATE_PCT = 1.5 # após +1.5%, SL sobe para o ponto de entrada (risco zero)
+SL_COOLDOWN_CYCLES    = 0    # após SL, re-entra imediatamente
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
 PYRAMID_MAX          = 2     # máx. 2 adições — evita acumulação excessiva em tendência contrária
@@ -246,7 +247,7 @@ sl_cooldowns: dict = {}   # {f"{strat}:{pair}": cycles_remaining}
 # ── Slots independentes: 4 estratégias × 3 pares + 3 manuais ────
 def _empty_slot():
     return {"qty": 0.0, "entry": 0.0, "peak": 0.0,
-            "realized": 0.0, "unrealized": 0.0, "pyramids": 0}
+            "realized": 0.0, "unrealized": 0.0, "pyramids": 0, "be_sl": 0.0}
 
 SLOTS_FILE = os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "data", "strategy_slots.json")
@@ -918,9 +919,15 @@ async def trading_loop():
 
                       if slot["qty"] > 0:
                           slot["peak"] = max(slot["peak"], price)
-                          gain_pct     = (price - slot["entry"]) / slot["entry"] * 100
+                          gain_pct = (price - slot["entry"]) / slot["entry"] * 100
+
+                          # Break-even stop: após +1.5%, SL sobe para o ponto de entrada
+                          effective_sl = slot["entry"] if gain_pct >= BREAKEVEN_ACTIVATE_PCT else slot["entry"] * (1 - INITIAL_SL_PCT / 100)
+                          effective_sl = max(effective_sl, slot.get("be_sl", 0))
+                          slot["be_sl"] = effective_sl  # persiste o break-even stop
+
                           tp_hit = price >= slot["entry"] * (1 + current_tp_pct / 100)
-                          sl_hit = price <= slot["entry"] * (1 - INITIAL_SL_PCT  / 100)
+                          sl_hit = price <= effective_sl
                           tr_act = gain_pct >= TRAILING_ACTIVATE_PCT
                           tr_hit = tr_act and price <= slot["peak"] * (1 - TRAILING_STOP_PCT / 100)
 
@@ -931,33 +938,33 @@ async def trading_loop():
                                   slot["realized"] += pnl
                                   _attr_pnl(strat.name, pnl)
                                   _record_trade("SELL", pair, qty, price, net, f"{strat.name}:{label}")
-                                  logger.info(f"[{pair}][{strat.name}] SELL {label} P&L ${pnl:+.2f}")
+                                  logger.info(f"[{pair}][{strat.name}] SELL {label} gain={gain_pct:+.2f}% P&L ${pnl:+.2f}")
                                   if is_sl:
                                       sl_cooldowns[key] = SL_COOLDOWN_CYCLES
                               rem = slot["qty"] - qty
                               if rem < 1e-8:
-                                  slot["qty"] = 0.0; slot["entry"] = 0.0
-                                  slot["peak"] = 0.0; slot["pyramids"] = 0
+                                  slot.update({"qty": 0.0, "entry": 0.0, "peak": 0.0, "pyramids": 0, "be_sl": 0.0})
                               else:
                                   slot["qty"] = rem
+                                  slot["peak"] = price   # reseta peak após venda parcial
 
-                          # ── SL mais apertado para posições com pyramid ──────────
-                          # Se fez pyramid e o preço voltou abaixo da entrada (-1.5%), sai antes
+                          # SL apertado para posições com pyramid
                           pyramid_sl_hit = (slot.get("pyramids", 0) > 0 and gain_pct <= -1.5)
 
                           if tp_hit:
                               _sell_slot(slot["qty"], f"TP+{current_tp_pct:.0f}%")
                           elif sl_hit:
-                              _sell_slot(slot["qty"], f"SL-{INITIAL_SL_PCT:.0f}%", is_sl=True)
+                              lbl = f"BE-stop" if gain_pct >= 0 else f"SL-{INITIAL_SL_PCT:.0f}%"
+                              _sell_slot(slot["qty"], lbl, is_sl=True)
                           elif pyramid_sl_hit:
                               _sell_slot(slot["qty"], f"SL-pyramid-1.5%", is_sl=True)
                           elif tr_hit:
-                              _sell_slot(slot["qty"], f"TRAILING-{TRAILING_STOP_PCT:.0f}%")
-                          # ── EMA Pullback: Partial TP at +2.5% when pyramiding ──
-                          elif strat.name == "EMA Pullback" and gain_pct >= 2.5 and slot.get("pyramids", 0) > 0:
+                              _sell_slot(slot["qty"], f"TRAILING-{TRAILING_STOP_PCT:.1f}%")
+                          # ── TP parcial (+2.5%) para TODAS as estratégias com pyramid ──
+                          elif gain_pct >= 2.5 and slot.get("pyramids", 0) > 0:
                               half_qty = slot["qty"] / 2
                               if half_qty > 1e-8:
-                                  _sell_slot(half_qty, f"TP_HALF+2.5% (pyramid protect)")
+                                  _sell_slot(half_qty, f"TP_HALF+2.5%")
                           elif extreme_greed or signal == "SELL":
                               # Saída gradual: TRADE_PCT% do patrimonio por ciclo
                               max_qty = portfolio_total * TRADE_PCT / price
