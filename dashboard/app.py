@@ -109,15 +109,28 @@ _last_prices: dict = {}      # {pair: float}
 
 def _dynamic_tp(fg_value: int) -> float:
     """TP dinâmico entre TAKE_PROFIT_MIN e MAX inversamente proporcional ao Fear & Greed.
-    Medo   → alvo maior (deixa winners correrem mais em mercado com potencial)
+    Medo   → alvo maior (deixa winners correrem mais)
     Ganância → alvo menor (realiza antes da euforia acabar)
     """
     rng = TAKE_PROFIT_MAX - TAKE_PROFIT_MIN
-    if   fg_value <= 25: return TAKE_PROFIT_MAX                            # Medo extremo: +12%
-    elif fg_value <= 40: return round(TAKE_PROFIT_MIN + rng * 0.67, 1)    # +9.4%
-    elif fg_value <= 60: return round(TAKE_PROFIT_MIN + rng * 0.50, 1)    # Neutro: +8%
-    elif fg_value <= 74: return round(TAKE_PROFIT_MIN + rng * 0.25, 1)    # +6%
-    else:                return TAKE_PROFIT_MIN                            # Ganância extrema: +4%
+    if   fg_value <= 25: return TAKE_PROFIT_MAX
+    elif fg_value <= 40: return round(TAKE_PROFIT_MIN + rng * 0.67, 1)
+    elif fg_value <= 60: return round(TAKE_PROFIT_MIN + rng * 0.50, 1)
+    elif fg_value <= 74: return round(TAKE_PROFIT_MIN + rng * 0.25, 1)
+    else:                return TAKE_PROFIT_MIN
+
+
+def _dynamic_sl(fg_value: int) -> float:
+    """SL dinâmico entre SL_MIN e SL_MAX — proporcional ao Fear & Greed (inverso ao TP).
+    Medo extremo → SL mais largo (mercado volátil, evita stop prematuro)
+    Ganância extrema → SL mais apertado (sai rápido de posições ruins em euforia)
+    """
+    rng = SL_MAX - SL_MIN
+    if   fg_value <= 25: return SL_MAX                            # Medo extremo: -7%
+    elif fg_value <= 40: return round(SL_MIN + rng * 0.67, 1)    # -5.7%
+    elif fg_value <= 60: return round(SL_MIN + rng * 0.50, 1)    # Neutro: -5%
+    elif fg_value <= 74: return round(SL_MIN + rng * 0.25, 1)    # -4%
+    else:                return SL_MIN                            # Ganância extrema: -3%
 
 
 def _load_history() -> list:
@@ -199,13 +212,14 @@ def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float =
 
 
 # ── Gestão de risco ──────────────────────────────────────────────
-INITIAL_SL_PCT        = 5.0  # SL: -5%
-TAKE_PROFIT_MIN       = 4.0  # TP mínimo: +4% (era 3% — precisa cobrir 1.2% de taxas + lucro)
-TAKE_PROFIT_MAX       = 12.0 # TP máximo: +12% (era 10% — deixa winners correrem mais)
+SL_MIN                = 3.0  # SL mínimo: -3% (ganância extrema — sai rápido)
+SL_MAX                = 7.0  # SL máximo: -7% (medo extremo — mais espaço para respirar)
+TAKE_PROFIT_MIN       = 4.0  # TP mínimo: +4%
+TAKE_PROFIT_MAX       = 12.0 # TP máximo: +12%
 TRAILING_STOP_PCT     = 2.5  # trailing: -2.5% do pico
 TRAILING_ACTIVATE_PCT = 2.0  # trailing ativa após +2%
 BREAKEVEN_ACTIVATE_PCT = 1.5 # após +1.5%, SL sobe para entrada (risco zero)
-SL_COOLDOWN_CYCLES    = 3    # após SL, aguarda 3 ciclos (9min) antes de re-entrar — evita whipsaw
+SL_COOLDOWN_CYCLES    = 3    # após SL, aguarda 3 ciclos (9min) antes de re-entrar
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
 PYRAMID_MAX          = 2     # máx. 2 adições — evita acumulação excessiva em tendência contrária
@@ -765,8 +779,10 @@ async def trading_loop():
             fg = _fg_cache
         state["fear_greed"] = {"value": fg["value"], "label": fg["label"]}
         fg_value       = fg["value"]
-        current_tp_pct = _dynamic_tp(fg_value)   # 3%–5% dinâmico
+        current_tp_pct = _dynamic_tp(fg_value)
+        current_sl_pct = _dynamic_sl(fg_value)
         state["tp_objective"] = {"min": TAKE_PROFIT_MIN, "max": TAKE_PROFIT_MAX, "current": current_tp_pct}
+        state["sl_objective"] = {"min": SL_MIN,          "max": SL_MAX,          "current": current_sl_pct}
 
         for pair in PAIRS:
             symbol = pair.split("-")[0]
@@ -932,7 +948,7 @@ async def trading_loop():
                           gain_pct = (price - slot["entry"]) / slot["entry"] * 100
 
                           # Break-even stop: após +1.5%, SL sobe para o ponto de entrada
-                          effective_sl = slot["entry"] if gain_pct >= BREAKEVEN_ACTIVATE_PCT else slot["entry"] * (1 - INITIAL_SL_PCT / 100)
+                          effective_sl = slot["entry"] if gain_pct >= BREAKEVEN_ACTIVATE_PCT else slot["entry"] * (1 - current_sl_pct / 100)
                           effective_sl = max(effective_sl, slot.get("be_sl", 0))
                           slot["be_sl"] = effective_sl  # persiste o break-even stop
 
@@ -968,7 +984,7 @@ async def trading_loop():
                           if tp_hit:
                               _sell_slot(slot["qty"], f"TP+{current_tp_pct:.0f}%")
                           elif sl_hit:
-                              lbl = f"BE-stop" if gain_pct >= 0 else f"SL-{INITIAL_SL_PCT:.0f}%"
+                              lbl = f"BE-stop" if gain_pct >= 0 else f"SL-{current_sl_pct:.1f}%"
                               _sell_slot(slot["qty"], lbl, is_sl=True)
                           elif pyramid_sl_hit:
                               _sell_slot(slot["qty"], f"SL-pyramid-1.5%", is_sl=True)
@@ -1052,7 +1068,7 @@ async def trading_loop():
                     ms["peak"] = max(ms["peak"], price)
                     g   = (price - ms["entry"]) / ms["entry"] * 100
                     # Break-even stop para manual também
-                    ms_eff_sl = ms["entry"] if g >= BREAKEVEN_ACTIVATE_PCT else ms["entry"] * (1 - INITIAL_SL_PCT / 100)
+                    ms_eff_sl = ms["entry"] if g >= BREAKEVEN_ACTIVATE_PCT else ms["entry"] * (1 - current_sl_pct / 100)
                     ms_eff_sl = max(ms_eff_sl, ms.get("be_sl", 0))
                     ms["be_sl"] = ms_eff_sl
                     tph = price >= ms["entry"] * (1 + current_tp_pct / 100)
@@ -1061,7 +1077,7 @@ async def trading_loop():
                     trh = tra and price <= ms["peak"] * (1 - TRAILING_STOP_PCT / 100)
                     rsn = (f"TP+{current_tp_pct:.0f}%" if tph else
                            f"BE-stop"                   if slh and g >= 0 else
-                           f"SL-{INITIAL_SL_PCT:.0f}%"  if slh else
+                           f"SL-{current_sl_pct:.1f}%"  if slh else
                            f"TRAILING-{TRAILING_STOP_PCT:.1f}%" if trh else None)
                     if rsn:
                         net = ms["qty"] * price * (1 - 0.006)
@@ -1115,7 +1131,7 @@ async def trading_loop():
                     "rsi":         rsi_val,
                     "entry_price": round(entry_price, 2) if entry_price else None,
                     "change_pct":  round(change_pct,  2) if change_pct is not None else None,
-                    "sl_level":    round(entry_price * (1 - INITIAL_SL_PCT  / 100), 2) if entry_price else None,
+                    "sl_level":    round(entry_price * (1 - current_sl_pct / 100), 2) if entry_price else None,
                     "tp_level":    round(entry_price * (1 + current_tp_pct / 100), 2) if entry_price else None,
                 }
                 log_cycle(logger, state["cycle"], pair, price, pair_signals, trend)
