@@ -785,6 +785,8 @@ async def trading_loop():
         state["tp_objective"] = {"min": TAKE_PROFIT_MIN, "max": TAKE_PROFIT_MAX, "current": current_tp_pct}
         state["sl_objective"] = {"min": SL_MIN,          "max": SL_MAX,          "current": current_sl_pct}
 
+        _dynamic_pcts = []   # acumula dynamic_pct de cada par para média no final
+
         for pair in PAIRS:
             symbol = pair.split("-")[0]
             try:
@@ -933,6 +935,7 @@ async def trading_loop():
 
                   # Tamanho dinâmico por par — usa candles 1h (mais estável)
                   dynamic_pct = _calculate_dynamic_position_size(pair, candles_1h)
+                  _dynamic_pcts.append(dynamic_pct)
 
                   for strat in all_strategies:
                       key    = f"{strat.name}:{pair}"
@@ -1151,8 +1154,10 @@ async def trading_loop():
         state["history"] = state["history"][-90000:]
         _save_history(state["history"])
 
-        # Atualizar KPIs a cada ciclo
+        # Atualizar KPIs e tamanho médio de trade a cada ciclo
         state["kpis"] = _calculate_kpis()
+        if _dynamic_pcts:
+            state["trade_pct"] = round(sum(_dynamic_pcts) / len(_dynamic_pcts), 4)
 
         await broadcast(state)
         await asyncio.sleep(CYCLE_INTERVAL)
