@@ -975,14 +975,18 @@ async def trading_loop():
                                   logger.info(f"[{pair}][{strat.name}] SELL {label} gain={gain_pct:+.2f}% P&L ${pnl:+.2f}")
                                   if is_sl:
                                       sl_cooldowns[key] = SL_COOLDOWN_CYCLES
-                                  # Mark existing SELL feed entry as executed (atualiza o entry existente)
-                                  for fe in state["feed"]:
-                                      if (fe.get("pair") == pair and fe.get("strategy") == strat.name
-                                              and fe.get("signal") == "SELL" and not fe.get("executed")):
-                                          fe["executed"] = True
-                                          fe["note"] = label
-                                          break
-                                  else:
+                                  # Marca entry SELL existente como executado (sem alterar note)
+                                  # Para SL/TP/TRAILING: sempre cria novo entry com label descritivo
+                                  sell_by_signal = label == "SELL"
+                                  marked = False
+                                  if sell_by_signal:
+                                      for fe in state["feed"]:
+                                          if (fe.get("pair") == pair and fe.get("strategy") == strat.name
+                                                  and fe.get("signal") == "SELL" and not fe.get("executed")):
+                                              fe["executed"] = True
+                                              marked = True
+                                              break
+                                  if not marked:
                                       state["feed"].insert(0, {
                                           "time": now_str, "cycle": state["cycle"],
                                           "pair": pair, "strategy": strat.name,
