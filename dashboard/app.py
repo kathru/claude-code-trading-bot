@@ -975,15 +975,22 @@ async def trading_loop():
                                   logger.info(f"[{pair}][{strat.name}] SELL {label} gain={gain_pct:+.2f}% P&L ${pnl:+.2f}")
                                   if is_sl:
                                       sl_cooldowns[key] = SL_COOLDOWN_CYCLES
-                                  # Add SELL to feed with executed status
-                                  state["feed"].insert(0, {
-                                      "time": now_str, "cycle": state["cycle"],
-                                      "pair": pair, "strategy": strat.name,
-                                      "signal": "SELL", "price": price,
-                                      "executed": True,
-                                      "note": label,
-                                  })
-                                  state["feed"] = state["feed"][:100]
+                                  # Mark existing SELL feed entry as executed (atualiza o entry existente)
+                                  for fe in state["feed"]:
+                                      if (fe.get("pair") == pair and fe.get("strategy") == strat.name
+                                              and fe.get("signal") == "SELL" and not fe.get("executed")):
+                                          fe["executed"] = True
+                                          fe["note"] = label
+                                          break
+                                  else:
+                                      state["feed"].insert(0, {
+                                          "time": now_str, "cycle": state["cycle"],
+                                          "pair": pair, "strategy": strat.name,
+                                          "signal": "SELL", "price": price,
+                                          "executed": True,
+                                          "note": label,
+                                      })
+                                      state["feed"] = state["feed"][:100]
                                   # ← Só atualiza o slot SE a venda foi executada no engine
                                   rem = slot["qty"] - qty
                                   if rem < 1e-8:
