@@ -35,6 +35,7 @@ class StochBounce(BaseStrategy):
         high_max = df["high"].rolling(self.k_period).max()
         df["k"]  = 100 * (df["close"] - low_min) / (high_max - low_min).replace(0, 1e-9)
         df["d"]  = df["k"].rolling(self.d_period).mean()
+        df["ema50"] = df["close"].ewm(span=self.ma_filter, adjust=False).mean()
         df = df.dropna().reset_index(drop=True)
         if len(df) < 2:
             return "HOLD"
@@ -43,14 +44,15 @@ class StochBounce(BaseStrategy):
         curr = df.iloc[-1]
 
         bull_candle = curr["close"] > curr["open"]
+        above_ema50 = curr["close"] > curr["ema50"]  # filtro de tendência macro
 
-        # ── BUY: sobrevenda + cruzamento %K acima %D + vela verde
+        # ── BUY: sobrevenda + cruzamento %K acima %D + vela verde + tendência macro positiva
         oversold_cross_up = (
             prev["k"] < self.oversold
             and prev["k"] <= prev["d"]
             and curr["k"] > curr["d"]
         )
-        if oversold_cross_up and bull_candle:
+        if oversold_cross_up and bull_candle and above_ema50:
             return "BUY"
 
         # ── SELL: sobrecompra + cruzamento %K abaixo %D

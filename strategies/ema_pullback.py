@@ -54,8 +54,15 @@ class EMAPullback(BaseStrategy):
         if in_uptrend and touched_em21 and reclaimed and bull_candle:
             return "BUY"
 
-        # SELL técnico: EMA9 cruzou abaixo do EMA21 (perdeu tendência)
-        if prev["ema_f"] >= prev["ema_m"] and curr["ema_f"] < curr["ema_m"]:
-            return "SELL"
+        # SELL técnico: EMA9 abaixo do EMA21 por 2 velas consecutivas (evita whipsaw)
+        if len(df) >= 3:
+            prev2 = df.iloc[-3]
+            two_candle_cross = (
+                prev2["ema_f"] >= prev2["ema_m"]
+                and prev["ema_f"] < prev["ema_m"]
+                and curr["ema_f"] < curr["ema_m"]
+            )
+            if two_candle_cross:
+                return "SELL"
 
         return "HOLD"
