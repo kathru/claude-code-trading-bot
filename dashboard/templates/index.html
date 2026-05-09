@@ -732,7 +732,7 @@
         const time      = (f.time || '').length > 8 ? f.time.substring(11, 19) : (f.time || '');
         const cycle     = f.cycle ? ` · #${f.cycle}` : '';
         const noteBadge = note
-          ? `<span class="text-[9px] px-1.5 py-0.5 rounded font-medium ${f.executed ? 'bg-green-500/15 text-green-400 border border-green-500/20' : 'bg-gray-700/60 text-gray-400 border border-gray-700'}">${f.executed ? '✓ ' : ''}${note}</span>`
+          ? `<span class="text-[9px] px-1.5 py-0.5 rounded font-medium ${f.executed ? (isS ? 'bg-red-500/15 text-red-400 border border-red-500/20' : 'bg-green-500/15 text-green-400 border border-green-500/20') : 'bg-gray-700/60 text-gray-400 border border-gray-700'}">${f.executed ? '✓ ' : ''}${note}</span>`
           : '';
         return `<div class="flex items-center justify-between gap-3 py-2 pl-2 ${borderCls}">
           <div class="flex items-center gap-2 min-w-0">
