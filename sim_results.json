@@ -1,0 +1,604 @@
+{
+  "metrics": {
+    "pnl": -149.16895214593205,
+    "pnl_pct": -2.9833790429186413,
+    "trade_count": 59,
+    "realized_trade_count": 24,
+    "win_rate": 29.166666666666668,
+    "profit_factor": 0.3793434302007629,
+    "final_value": 4850.831047854068,
+    "total_fees": 207.14958635809487
+  },
+  "trades": [
+    {
+      "time": "2026-01-05T00:00:00",
+      "side": "BUY",
+      "symbol": "BTC",
+      "qty": 0.005413843044400196,
+      "price": 92355.8359375,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-05T01:00:00",
+      "side": "BUY",
+      "symbol": "SOL",
+      "qty": 3.6569289920991226,
+      "price": 136.72674560546875,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-05T14:00:00",
+      "side": "BUY",
+      "symbol": "BTC",
+      "qty": 0.005353684472575082,
+      "price": 93393.625,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-05T14:00:00",
+      "side": "BUY",
+      "symbol": "LINK",
+      "qty": 36.76535453257844,
+      "price": 13.599760055541992,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-06T14:00:00",
+      "side": "BUY",
+      "symbol": "LINK",
+      "qty": 35.63071167162561,
+      "price": 14.032837867736816,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-06T17:00:00",
+      "side": "SELL",
+      "symbol": "BTC",
+      "qty": 0.010767527516975278,
+      "price": 91550.1796875,
+      "amount": 979.8544644953722,
+      "fee": 5.914614473815124,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-06T17:00:00",
+      "side": "SELL",
+      "symbol": "SOL",
+      "qty": 3.6569289920991226,
+      "price": 136.6159210205078,
+      "amount": 496.5971540280457,
+      "fee": 2.997568334173314,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-08T06:00:00",
+      "side": "SELL",
+      "symbol": "LINK",
+      "qty": 72.39606620420406,
+      "price": 13.17282009124756,
+      "amount": 947.9383932894956,
+      "fee": 5.721962132532167,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-09T13:00:00",
+      "side": "BUY",
+      "symbol": "SOL",
+      "qty": 3.6084425751294527,
+      "price": 138.56393432617188,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-09T19:00:00",
+      "side": "SELL",
+      "symbol": "SOL",
+      "qty": 3.6084425751294527,
+      "price": 135.78961181640625,
+      "amount": 487.04908243939,
+      "fee": 2.9399340992317304,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-11T16:00:00",
+      "side": "BUY",
+      "symbol": "LINK",
+      "qty": 37.68066903656165,
+      "price": 13.269403457641602,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-12T02:00:00",
+      "side": "BUY",
+      "symbol": "ETH",
+      "qty": 0.1584404385798445,
+      "price": 3155.760009765625,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-13T05:00:00",
+      "side": "BUY",
+      "symbol": "BTC",
+      "qty": 0.005446389022802925,
+      "price": 91803.9453125,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-14T14:00:00",
+      "side": "BUY",
+      "symbol": "BTC",
+      "qty": 0.005183473079227605,
+      "price": 96460.421875,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-15T14:00:00",
+      "side": "SELL",
+      "symbol": "ETH",
+      "qty": 0.1584404385798445,
+      "price": 3340.79736328125,
+      "amount": 526.1414950480014,
+      "fee": 3.1759043966680163,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-15T20:00:00",
+      "side": "SELL",
+      "symbol": "BTC",
+      "qty": 0.01062986210203053,
+      "price": 95143.53125,
+      "amount": 1005.294441385206,
+      "fee": 6.068175702526395,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-16T15:00:00",
+      "side": "SELL",
+      "symbol": "LINK",
+      "qty": 37.68066903656165,
+      "price": 13.494665145874023,
+      "amount": 505.43708305417766,
+      "fee": 3.0509280667254184,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-27T16:00:00",
+      "side": "BUY",
+      "symbol": "DOGE",
+      "qty": 4008.62163920576,
+      "price": 0.1247311532497406,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-27T18:00:00",
+      "side": "BUY",
+      "symbol": "AVAX",
+      "qty": 42.29172682936273,
+      "price": 11.822643280029297,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-28T07:00:00",
+      "side": "SELL",
+      "symbol": "DOGE",
+      "qty": 4008.62163920576,
+      "price": 0.1252811551094055,
+      "amount": 499.1915208601186,
+      "fee": 3.0132284961375366,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-28T19:00:00",
+      "side": "BUY",
+      "symbol": "AVAX",
+      "qty": 41.47303767646319,
+      "price": 12.056025505065918,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-01-29T02:00:00",
+      "side": "SELL",
+      "symbol": "AVAX",
+      "qty": 83.76476450582592,
+      "price": 11.774502754211426,
+      "amount": 980.3707196774405,
+      "fee": 5.917730702278313,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-02-03T15:00:00",
+      "side": "BUY",
+      "symbol": "DOGE",
+      "qty": 4555.953294544278,
+      "price": 0.109746515750885,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-02-03T16:00:00",
+      "side": "SELL",
+      "symbol": "DOGE",
+      "qty": 4555.953294544278,
+      "price": 0.1064260378479957,
+      "amount": 481.9628254123168,
+      "fee": 2.90923234655322,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-02-08T11:00:00",
+      "side": "BUY",
+      "symbol": "DOGE",
+      "qty": 5090.6469858361415,
+      "price": 0.0982193425297737,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-02-10T05:00:00",
+      "side": "SELL",
+      "symbol": "DOGE",
+      "qty": 5090.6469858361415,
+      "price": 0.0946833416819572,
+      "amount": 479.10747113449605,
+      "fee": 2.8919968076528937,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-02-13T07:00:00",
+      "side": "BUY",
+      "symbol": "DOGE",
+      "qty": 5376.281504974127,
+      "price": 0.0930010825395584,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-02-13T08:00:00",
+      "side": "BUY",
+      "symbol": "AVAX",
+      "qty": 56.23498632009477,
+      "price": 8.89126205444336,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-02-14T04:00:00",
+      "side": "SELL",
+      "symbol": "DOGE",
+      "qty": 5376.281504974127,
+      "price": 0.0967580378055572,
+      "amount": 517.0772584169349,
+      "fee": 3.121190694669627,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-02-14T08:00:00",
+      "side": "BUY",
+      "symbol": "BTC",
+      "qty": 0.007170266607317772,
+      "price": 69732.4140625,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-02-14T11:00:00",
+      "side": "BUY",
+      "symbol": "AVAX",
+      "qty": 53.355010977563936,
+      "price": 9.371191024780272,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-02-16T15:00:00",
+      "side": "SELL",
+      "symbol": "BTC",
+      "qty": 0.007170266607317772,
+      "price": 67508.296875,
+      "amount": 481.14817187890895,
+      "fee": 2.9043149207982433,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-02-16T15:00:00",
+      "side": "SELL",
+      "symbol": "AVAX",
+      "qty": 109.5899972976587,
+      "price": 9.088020324707031,
+      "amount": 989.9803860887566,
+      "fee": 5.975736736954265,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-02-22T01:00:00",
+      "side": "BUY",
+      "symbol": "ETH",
+      "qty": 0.2529357154245955,
+      "price": 1976.786865234375,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-02-22T12:00:00",
+      "side": "SELL",
+      "symbol": "ETH",
+      "qty": 0.2529357154245955,
+      "price": 1966.4031982421875,
+      "amount": 494.38935816203673,
+      "fee": 2.984241598563602,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-03-04T06:00:00",
+      "side": "BUY",
+      "symbol": "BTC",
+      "qty": 0.007300736381930723,
+      "price": 68486.2421875,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-03-08T04:00:00",
+      "side": "SELL",
+      "symbol": "BTC",
+      "qty": 0.007300736381930723,
+      "price": 66647.515625,
+      "amount": 483.6564864362014,
+      "fee": 2.919455652532403,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-03-10T14:00:00",
+      "side": "BUY",
+      "symbol": "ETH",
+      "qty": 0.24092530374469448,
+      "price": 2075.33203125,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-03-10T14:00:00",
+      "side": "BUY",
+      "symbol": "SOL",
+      "qty": 5.6807922805161635,
+      "price": 88.0158920288086,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-03-12T23:00:00",
+      "side": "BUY",
+      "symbol": "SOL",
+      "qty": 5.7549691228905795,
+      "price": 86.88143920898438,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-03-15T17:00:00",
+      "side": "BUY",
+      "symbol": "AVAX",
+      "qty": 51.18148170022469,
+      "price": 9.769158363342283,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-03-15T21:00:00",
+      "side": "BUY",
+      "symbol": "BTC",
+      "qty": 0.006938222178135602,
+      "price": 72064.5703125,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-03-16T14:00:00",
+      "side": "SELL",
+      "symbol": "BTC",
+      "qty": 0.006938222178135602,
+      "price": 73457.046875,
+      "amount": 506.60334389786067,
+      "fee": 3.057967870610829,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-03-17T02:00:00",
+      "side": "SELL",
+      "symbol": "ETH",
+      "qty": 0.24092530374469448,
+      "price": 2353.51708984375,
+      "amount": 563.6196888205012,
+      "fee": 3.402130918433609,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-03-22T00:00:00",
+      "side": "SELL",
+      "symbol": "SOL",
+      "qty": 11.435761403406744,
+      "price": 87.25032043457031,
+      "amount": 991.7872037793668,
+      "fee": 5.98664308116318,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-03-24T20:00:00",
+      "side": "BUY",
+      "symbol": "LINK",
+      "qty": 54.33780669227432,
+      "price": 9.201696395874023,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-03-25T17:00:00",
+      "side": "SELL",
+      "symbol": "LINK",
+      "qty": 54.33780669227432,
+      "price": 9.329221725463867,
+      "amount": 503.88787002737575,
+      "fee": 3.041576680245729,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-03-26T04:00:00",
+      "side": "SELL",
+      "symbol": "AVAX",
+      "qty": 51.18148170022469,
+      "price": 9.551020622253418,
+      "amount": 485.9023748731539,
+      "fee": 2.9330123231779917,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-04-09T15:00:00",
+      "side": "BUY",
+      "symbol": "BTC",
+      "qty": 0.006934482897235622,
+      "price": 72103.4296875,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-04-10T13:00:00",
+      "side": "BUY",
+      "symbol": "BTC",
+      "qty": 0.006910551548395457,
+      "price": 72353.125,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-04-11T18:00:00",
+      "side": "BUY",
+      "symbol": "BTC",
+      "qty": 0.0067985984264431485,
+      "price": 73544.5703125,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-04-15T07:00:00",
+      "side": "SELL",
+      "symbol": "BTC",
+      "qty": 0.020643632872074227,
+      "price": 73771.34375,
+      "amount": 1513.77108563346,
+      "fee": 9.137451221127526,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-04-15T11:00:00",
+      "side": "BUY",
+      "symbol": "LINK",
+      "qty": 54.674682883752475,
+      "price": 9.145000457763672,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-04-15T19:00:00",
+      "side": "BUY",
+      "symbol": "BTC",
+      "qty": 0.006664327904092824,
+      "price": 75026.3203125,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-04-16T19:00:00",
+      "side": "BUY",
+      "symbol": "BTC",
+      "qty": 0.006633765264008828,
+      "price": 75371.9765625,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-04-17T08:00:00",
+      "side": "BUY",
+      "symbol": "BTC",
+      "qty": 0.006597177088539992,
+      "price": 75789.9921875,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-04-19T21:00:00",
+      "side": "SELL",
+      "symbol": "LINK",
+      "qty": 54.674682883752475,
+      "price": 9.10200023651123,
+      "amount": 494.66308267985704,
+      "fee": 2.9858938592345496,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-04-28T11:00:00",
+      "side": "SELL",
+      "symbol": "BTC",
+      "qty": 0.019895270256641645,
+      "price": 76221.59375,
+      "amount": 1507.3505118059084,
+      "fee": 9.098695242289185,
+      "strategy": "consensus"
+    },
+    {
+      "time": "2026-04-29T00:00:00",
+      "side": "BUY",
+      "symbol": "DOGE",
+      "qty": 5007.511319510152,
+      "price": 0.0998499989509582,
+      "amount": 500.0,
+      "fee": 3.0,
+      "strategy": "consensus"
+    }
+  ]
+}
