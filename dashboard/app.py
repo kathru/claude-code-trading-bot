@@ -637,6 +637,13 @@ state = {
     "strategy_pnl":     strategy_pnl,
     "fear_greed":       {"value": 50, "label": "Neutral"},
     "kpis":             _calculate_kpis(),  # Métricas de performance
+    # ── Campos de controle — inicializados para evitar undefined no frontend ──
+    "scores":           {p: 0.0 for p in PAIRS},   # score de confiança por par
+    "trades_today":     0,
+    "max_daily_trades": MAX_DAILY_TRADES,
+    "open_slots_count": 0,
+    "max_open_slots":   MAX_OPEN_SLOTS,
+    "trade_pct":        TRADE_PCT,
 }
 
 
