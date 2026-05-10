@@ -40,6 +40,18 @@
     .candle-tf-btn.active { background: #21262d; color: #e5e7eb; border-color: #6b7280; }
     .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
     .scrollbar-none::-webkit-scrollbar { display: none; }
+    /* Regime badges */
+    .regime-trending { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.35); }
+    .regime-ranging  { background: rgba(234,179,8,0.15);  color: #facc15; border: 1px solid rgba(234,179,8,0.35); }
+    .regime-neutral  { background: rgba(107,114,128,0.15);color: #9ca3af; border: 1px solid rgba(107,114,128,0.3); }
+    /* Tooltip for strategy filters */
+    .strat-tooltip { position: relative; }
+    .strat-tooltip:hover .strat-tooltip-box { display: block; }
+    .strat-tooltip-box { display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+      background: #1c2128; border: 1px solid #30363d; border-radius: 8px; padding: 8px 10px;
+      white-space: nowrap; z-index: 50; min-width: 180px; }
+    .strat-tooltip-box::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+      border: 5px solid transparent; border-top-color: #30363d; }
   </style>
 </head>
 <body class="min-h-screen text-gray-100">
@@ -125,6 +137,31 @@
         <span id="strategy-panel-subtitle" class="text-xs text-gray-500">P&L em trades</span>
       </div>
       <div id="strategy-panel" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+    </div>
+
+    <!-- ── Filtros Ativos por Par ── -->
+    <div class="card p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-white">Filtros Ativos</h3>
+        <span class="text-xs text-gray-500">ADX · MTF 6H · ATR — atualizados por ciclo</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="text-gray-500 uppercase tracking-wider text-[10px]">
+              <th class="text-left pb-2 pr-4">Par</th>
+              <th class="text-center pb-2 pr-4">Regime ADX</th>
+              <th class="text-center pb-2 pr-4">MTF 6H</th>
+              <th class="text-center pb-2 pr-4">ATR Stop</th>
+              <th class="text-center pb-2 pr-4">Circuit Breaker</th>
+              <th class="text-center pb-2">Slots</th>
+            </tr>
+          </thead>
+          <tbody id="filters-table-body">
+            <!-- populated by JS -->
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- ── Cards de Criptos ── -->
@@ -233,7 +270,7 @@
         <h3 class="font-semibold text-white">KPIs em Tempo Real</h3>
         <span class="text-xs text-gray-500">Atualizado a cada ciclo</span>
       </div>
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3">
         <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
           <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Total Trades</p>
           <p id="kpi-total-trades" class="text-xl font-bold text-white">—</p>
@@ -265,6 +302,24 @@
           <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Dynamic Trade Size</p>
           <p id="kpi-trade-pct" class="text-xl font-bold text-yellow-400">—</p>
           <p class="text-[10px] mt-0.5"><span class="text-yellow-500">Mín: 2%</span> · <span class="text-gray-600">Máx: 10%</span></p>
+        </div>
+        <!-- NEW KPI: Circuit Breaker -->
+        <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
+          <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Circuit Breaker</p>
+          <p id="kpi-circuit-breaker" class="text-xl font-bold text-orange-400">—/12</p>
+          <p class="text-[10px] text-gray-600 mt-0.5">Trades hoje · máx 12</p>
+        </div>
+        <!-- NEW KPI: Slots Abertos -->
+        <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
+          <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Slots Abertos</p>
+          <p id="kpi-open-slots" class="text-xl font-bold text-cyan-400">—/8</p>
+          <p class="text-[10px] text-gray-600 mt-0.5">Posições · máx 8</p>
+        </div>
+        <!-- NEW KPI: Regime Predominante -->
+        <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
+          <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Regime</p>
+          <p id="kpi-regime" class="text-xl font-bold text-gray-300">—</p>
+          <p class="text-[10px] text-gray-600 mt-0.5">Mercado predominante</p>
         </div>
       </div>
     </div>
@@ -312,11 +367,64 @@
   ];
 
   const STRATEGIES = [
-    { name: 'Donchian Breakout', id: 'Don',   icon: '🚀' },
-    { name: 'EMA Pullback',      id: 'EMA',   icon: '📈' },
-    { name: 'MACD Momentum',     id: 'MACD',  icon: '⚡' },
-    { name: 'Stoch Bounce',      id: 'Stoch', icon: '🎯' },
+    {
+      name: 'Donchian Breakout', id: 'Don', icon: '🚀',
+      filters: ['ADX>25', 'OBV↑'],
+      desc: 'Breakout do canal Donchian 20. Exige ADX > 25 (trending) e OBV em nova máxima.'
+    },
+    {
+      name: 'EMA Pullback', id: 'EMA', icon: '📈',
+      filters: ['EMA50↑', 'Vol✓'],
+      desc: 'Pullback para EMA. Exige slope da EMA50 positivo e volume baixo no pullback, alto na retomada.'
+    },
+    {
+      name: 'MACD Momentum', id: 'MACD', icon: '⚡',
+      filters: ['MACD>0', 'RSI<70'],
+      desc: 'Cruzamento MACD acima de zero. Exige MACD line > 0 e RSI < 70.'
+    },
+    {
+      name: 'Stoch Bounce', id: 'Stoch', icon: '🎯',
+      filters: ['BB<15%', 'OS<20'],
+      desc: 'Bounce em sobrevenda. Exige Bollinger Bandwidth < 15%, oversold < 20, overbought > 75.'
+    },
   ];
+
+  // ─── Helpers de regime ──────────────────────────────────────────────────
+  function regimeCls(r) {
+    if (!r || r === '—') return 'regime-neutral';
+    const ru = r.toUpperCase();
+    if (ru === 'TRENDING') return 'regime-trending';
+    if (ru === 'RANGING')  return 'regime-ranging';
+    return 'regime-neutral';
+  }
+  function regimeLabel(r) {
+    if (!r || r === '—') return '—';
+    return r.toUpperCase();
+  }
+
+  // ─── Inferir regime a partir dos sinais disponíveis ────────────────────
+  // Heurística: se Donchian ou MACD (tendência) == BUY e Stoch == HOLD → TRENDING
+  // Se Stoch == BUY e estratégias de tendência == HOLD → RANGING
+  // Caso contrário → NEUTRAL
+  function inferRegime(sig) {
+    if (!sig || !sig.strategies) return 'NEUTRAL';
+    const don   = sig.strategies['Donchian Breakout'] || 'HOLD';
+    const ema   = sig.strategies['EMA Pullback']      || 'HOLD';
+    const macd  = sig.strategies['MACD Momentum']     || 'HOLD';
+    const stoch = sig.strategies['Stoch Bounce']      || 'HOLD';
+
+    const trendBuys   = [don, ema, macd].filter(v => v === 'BUY').length;
+    const trendActive = [don, ema, macd].some(v => v !== 'HOLD');
+    const stochActive = stoch === 'BUY';
+
+    // If backend sends explicit regime field, prefer it
+    if (sig.regime) return sig.regime.toUpperCase();
+
+    if (trendBuys >= 2) return 'TRENDING';
+    if (trendActive && !stochActive) return 'TRENDING';
+    if (stochActive && !trendActive) return 'RANGING';
+    return 'NEUTRAL';
+  }
 
   // ─── Gera cards de cripto dinamicamente ─────────────────────────────────
   document.getElementById('crypto-grid').innerHTML = CRYPTOS.map(c => `
@@ -334,6 +442,11 @@
           <p id="chg-${c.sym}" class="text-sm text-gray-400">—</p>
         </div>
       </div>
+      <!-- Regime badge -->
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs text-gray-600 uppercase tracking-wider">Regime de Mercado</span>
+        <span id="regime-${c.sym}" class="regime-neutral text-[10px] font-bold px-2.5 py-0.5 rounded-full">—</span>
+      </div>
       <div class="flex items-center justify-between mb-2">
         <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
         <span id="trend-${c.sym}" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
@@ -350,7 +463,7 @@
         Posição: <span id="qty-${c.sym}" class="${c.color} font-mono font-bold">0</span> ${c.sym}
       </div>
       <div id="sltp-${c.sym}" class="mt-2 hidden">
-        <div class="grid grid-cols-3 gap-1.5 text-xs">
+        <div class="grid grid-cols-4 gap-1.5 text-xs">
           <div class="bg-gray-800/60 rounded px-2 py-1.5 text-center">
             <p class="text-gray-500 mb-0.5">Entrada</p>
             <p id="entry-${c.sym}" class="text-white font-mono font-bold">—</p>
@@ -358,6 +471,10 @@
           <div class="bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5 text-center">
             <p class="text-red-400 mb-0.5">SL</p>
             <p id="sl-${c.sym}" class="text-red-300 font-mono font-bold">—</p>
+          </div>
+          <div class="bg-orange-500/10 border border-orange-500/20 rounded px-2 py-1.5 text-center">
+            <p class="text-orange-400 mb-0.5">ATR SL</p>
+            <p id="atr-sl-${c.sym}" class="text-orange-300 font-mono font-bold">—</p>
           </div>
           <div class="bg-green-500/10 border border-green-500/20 rounded px-2 py-1.5 text-center">
             <p class="text-green-400 mb-0.5">TP</p>
@@ -489,7 +606,9 @@
     document.getElementById('total-fees').textContent = 'R$ ' + fmtBRL(feesUsd * usdBrl);
     document.getElementById('total-fees-usd').textContent = 'US$ ' + fmt(feesUsd) + ' · 0,60%/trade';
 
-    // ── Preços e sinais dos cards de cripto ──────────────────────────────
+    // ── Preços, sinais e regime dos cards de cripto ───────────────────────
+    const regimeCounts = { TRENDING: 0, RANGING: 0, NEUTRAL: 0 };
+
     CRYPTOS.forEach(c => {
       const price = (s.prices || {})[c.pair];
       const sig   = (s.signals || {})[c.pair];
@@ -500,6 +619,15 @@
         const chgEl = document.getElementById('chg-' + c.sym);
         chgEl.textContent = 'US$ ' + fmt(price.price) + ' · ' + (chg >= 0 ? '▲ +' : '▼ ') + chg.toFixed(2) + '%';
         chgEl.className = 'text-sm ' + (chg >= 0 ? 'text-green-400' : 'text-red-400');
+      }
+
+      // Regime badge per pair
+      const regimeEl = document.getElementById('regime-' + c.sym);
+      if (regimeEl) {
+        const regime = sig ? inferRegime(sig) : 'NEUTRAL';
+        regimeCounts[regime] = (regimeCounts[regime] || 0) + 1;
+        regimeEl.textContent  = regime;
+        regimeEl.className    = regimeCls(regime) + ' text-[10px] font-bold px-2.5 py-0.5 rounded-full';
       }
 
       if (sig) {
@@ -532,7 +660,7 @@
           }
         });
 
-        // SL / TP
+        // SL / TP / ATR SL
         const sltpEl = document.getElementById('sltp-' + c.sym);
         if (sltpEl) {
           if (sig.entry_price) {
@@ -540,6 +668,15 @@
             document.getElementById('entry-' + c.sym).textContent = 'R$ ' + fmtBRL(sig.entry_price * usdBrl);
             document.getElementById('sl-' + c.sym).textContent    = 'R$ ' + fmtBRL((sig.sl_level || 0) * usdBrl);
             document.getElementById('tp-' + c.sym).textContent    = 'R$ ' + fmtBRL((sig.tp_level || 0) * usdBrl);
+            // ATR-based stop loss: prefer sig.atr_sl_level, fallback to "—"
+            const atrSlEl = document.getElementById('atr-sl-' + c.sym);
+            if (atrSlEl) {
+              if (sig.atr_sl_level) {
+                atrSlEl.textContent = 'R$ ' + fmtBRL(sig.atr_sl_level * usdBrl);
+              } else {
+                atrSlEl.textContent = '—';
+              }
+            }
             const chgEl2 = document.getElementById('chg-entry-' + c.sym);
             if (chgEl2) {
               const chgPct = sig.change_pct || 0;
@@ -587,27 +724,46 @@
         const pnlColor  = totalBrl2 >= 0 ? '#4ade80' : '#f87171';
         // Badges de todas as criptos: cinza=sem posição, verde=positivo, vermelho=negativo
         const sPrices = s.prices || {};
+        const sSignals = s.signals || {};
         const pairBadges = CRYPTOS.map(c => {
           const sl       = allSlots[`${st.name}:${c.pair}`] || {};
           const hasPos   = (sl.qty || 0) > 0;
           const curPrice = (sPrices[c.pair] || {}).price;
+          // Show regime ADX badge for each pair
+          const cSig    = sSignals[c.pair];
+          const cRegime = cSig ? inferRegime(cSig) : 'NEUTRAL';
+          const regBg   = cRegime === 'TRENDING' ? 'rgba(34,197,94,0.08)' : cRegime === 'RANGING' ? 'rgba(234,179,8,0.08)' : 'rgba(107,114,128,0.08)';
+          const regBord = cRegime === 'TRENDING' ? 'rgba(34,197,94,0.25)' : cRegime === 'RANGING' ? 'rgba(234,179,8,0.25)' : 'rgba(107,114,128,0.2)';
+          const regCol  = cRegime === 'TRENDING' ? '#4ade80' : cRegime === 'RANGING' ? '#facc15' : '#6b7280';
+          const regDot  = cRegime === 'TRENDING' ? '●' : cRegime === 'RANGING' ? '◐' : '○';
+
           if (hasPos && curPrice && sl.entry) {
             const chg     = (curPrice - sl.entry) / sl.entry * 100;
             const positive = chg >= 0;
             const bg      = positive ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)';
             const border  = positive ? 'rgba(74,222,128,0.35)' : 'rgba(248,113,113,0.35)';
             const color   = positive ? '#4ade80' : '#f87171';
-            return `<span style="background:${bg};border:1px solid ${border};color:${color}" class="text-[9px] font-bold px-1.5 py-0.5 rounded">${c.sym} ${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%</span>`;
+            return `<span style="background:${bg};border:1px solid ${border};color:${color}" class="text-[9px] font-bold px-1.5 py-0.5 rounded" title="${cRegime}">${c.sym} ${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%</span>`;
           }
-          // cinza — sem posição
-          return `<span style="background:rgba(75,85,99,0.2);border:1px solid rgba(75,85,99,0.3);color:#6b7280" class="text-[9px] px-1.5 py-0.5 rounded">${c.sym}</span>`;
+          // cinza — sem posição, but show regime dot
+          return `<span style="background:${regBg};border:1px solid ${regBord};color:${regCol}" class="text-[9px] px-1.5 py-0.5 rounded" title="${cRegime}">${regDot}${c.sym}</span>`;
         });
 
-        return `<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
-          <div class="flex items-center gap-1.5 mb-1.5">
+        // Filter badge per strategy
+        const filterBadge = st.filters.map(f =>
+          `<span class="text-[8px] px-1 py-0.5 rounded" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);color:#818cf8">${f}</span>`
+        ).join('');
+
+        return `<div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3 strat-tooltip">
+          <div class="strat-tooltip-box">
+            <p class="text-[10px] font-semibold text-white mb-1">${st.name}</p>
+            <p class="text-[10px] text-gray-400 leading-relaxed">${st.desc}</p>
+          </div>
+          <div class="flex items-center gap-1.5 mb-1">
             <span>${st.icon}</span>
             <span class="text-xs font-semibold text-white truncate">${st.name}</span>
           </div>
+          <div class="flex flex-wrap gap-1 mb-1.5">${filterBadge}</div>
           <div class="flex flex-wrap gap-1 mb-2">${pairBadges.join('')}</div>
           <p class="text-sm font-bold font-mono" style="color:${pnlColor}">${totalBrl2 >= 0 ? '+' : '-'}R$ ${fmtBRL(Math.abs(totalBrl2))}</p>
           <div class="flex justify-between text-[10px] mt-1">
@@ -617,6 +773,69 @@
           ${unrlUsd !== 0 ? `<p class="text-[10px] mt-0.5" style="color:#f97316">Não realizado: ${unrlBrl>=0?'+':'-'}R$ ${fmtBRL(Math.abs(unrlBrl))}</p>` : ''}
           ${tpBrl > 0 ? `<p class="text-[10px] mt-0.5" style="color:#818cf8">TP: falta R$ ${fmtBRL(tpFalta)} (${tpBrl > 0 ? ((tpFalta/tpBrl)*100).toFixed(0) : 0}%)</p>` : ''}
         </div>`;
+      }).join('');
+    }
+
+    // ── Filtros Ativos table ──────────────────────────────────────────────
+    const filtersBody = document.getElementById('filters-table-body');
+    if (filtersBody) {
+      // Count open slots
+      const openSlots = Object.values(allSlots).filter(sl => (sl.qty || 0) > 0).length;
+      // Circuit breaker: prefer s.trades_today; fallback count today from trades
+      const tradesToday = s.trades_today != null
+        ? s.trades_today
+        : (s.trades || []).filter(t => {
+            const d = new Date((t.time || ''));
+            const n = new Date();
+            return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+          }).length;
+
+      filtersBody.innerHTML = CRYPTOS.map(c => {
+        const sig    = (s.signals || {})[c.pair];
+        const regime = sig ? inferRegime(sig) : 'NEUTRAL';
+        const rCls   = regimeCls(regime);
+        // MTF: prefer sig.mtf_ok field; fallback heuristic from trend
+        let mtfOk = '—';
+        let mtfCls = 'text-gray-500';
+        if (sig) {
+          if (sig.mtf_ok === true)  { mtfOk = 'EMA50>200 ✓'; mtfCls = 'text-green-400'; }
+          else if (sig.mtf_ok === false) { mtfOk = 'EMA50<200 ✗'; mtfCls = 'text-red-400'; }
+          else {
+            // heuristic: if trend is BUY → likely MTF ok
+            const t = sig.trend || 'HOLD';
+            if (t === 'BUY') { mtfOk = '↑ (estimado)'; mtfCls = 'text-yellow-400'; }
+            else if (t === 'SELL') { mtfOk = '↓ (estimado)'; mtfCls = 'text-orange-400'; }
+          }
+        }
+        // ATR SL: prefer sig.atr_sl_pct; fallback "—"
+        let atrTxt = '—';
+        let atrCls = 'text-gray-500';
+        if (sig && sig.atr_sl_pct != null) {
+          atrTxt = sig.atr_sl_pct.toFixed(1) + '%';
+          atrCls = sig.atr_sl_pct > 8 ? 'text-red-400' : sig.atr_sl_pct > 5 ? 'text-orange-400' : 'text-green-400';
+        }
+
+        return `<tr class="border-t border-gray-800">
+          <td class="py-2 pr-4">
+            <span class="font-semibold text-white">${c.sym}</span>
+            <span class="text-gray-600 text-[10px] ml-1">${c.pair}</span>
+          </td>
+          <td class="py-2 pr-4 text-center">
+            <span class="${rCls} text-[10px] font-bold px-2 py-0.5 rounded-full">${regime}</span>
+          </td>
+          <td class="py-2 pr-4 text-center">
+            <span class="${mtfCls} text-[10px] font-medium">${mtfOk}</span>
+          </td>
+          <td class="py-2 pr-4 text-center">
+            <span class="${atrCls} text-[10px] font-mono font-bold">${atrTxt}</span>
+          </td>
+          <td class="py-2 pr-4 text-center">
+            <span class="${tradesToday >= 10 ? 'text-red-400' : tradesToday >= 6 ? 'text-orange-400' : 'text-green-400'} text-[10px] font-mono font-bold">${tradesToday}/12</span>
+          </td>
+          <td class="py-2 text-center">
+            <span class="${openSlots >= 7 ? 'text-red-400' : openSlots >= 5 ? 'text-orange-400' : 'text-cyan-400'} text-[10px] font-mono font-bold">${openSlots}/8</span>
+          </td>
+        </tr>`;
       }).join('');
     }
 
@@ -718,6 +937,28 @@
         'Donchian Breakout': 'DONCH', 'EMA Pullback': 'EMA',
         'MACD Momentum': 'MACD', 'Stoch Bounce': 'STOCH',
       };
+      // Map note text to readable filter block reasons
+      const filterReasonMap = {
+        'adx': 'ADX<25',
+        'adx<25': 'ADX<25',
+        'mtf': 'MTF❌',
+        'mtf_fail': 'MTF❌',
+        'multi_timeframe': 'MTF❌',
+        'bb': 'BB-wide',
+        'bb_wide': 'BB-wide',
+        'bollinger': 'BB-wide',
+        'obv': 'OBV❌',
+        'volume': 'Vol❌',
+        'cooldown': 'Cooldown',
+        'circuit': 'CircBrk',
+        'circuit_breaker': 'CircBrk',
+        'slots': 'MaxSlots',
+        'rsi': 'RSI>70',
+        'macd': 'MACD<0',
+        'slope': 'Slope❌',
+        'ema_slope': 'Slope❌',
+      };
+
       feedList.innerHTML = feed.slice(0, 60).map(f => {
         const sig      = f.signal || f.decision || 'HOLD';
         const isB      = sig === 'BUY', isS = sig === 'SELL';
@@ -731,9 +972,32 @@
         const note      = f.note || '';
         const time      = (f.time || '').length > 8 ? f.time.substring(11, 19) : (f.time || '');
         const cycle     = f.cycle ? ` · #${f.cycle}` : '';
-        const noteBadge = note
-          ? `<span class="text-[9px] px-1.5 py-0.5 rounded font-medium ${f.executed ? (isS ? 'bg-red-500/15 text-red-400 border border-red-500/20' : 'bg-green-500/15 text-green-400 border border-green-500/20') : 'bg-gray-700/60 text-gray-400 border border-gray-700'}">${f.executed ? '✓ ' : ''}${note}</span>`
-          : '';
+
+        // Determine filter block badge text
+        let blockReason = '';
+        if (!isB && !isS && note) {
+          const noteLow = note.toLowerCase();
+          for (const [key, label] of Object.entries(filterReasonMap)) {
+            if (noteLow.includes(key)) { blockReason = label; break; }
+          }
+        }
+
+        let noteBadge = '';
+        if (note) {
+          if (blockReason) {
+            // Blocked signal — show filter reason in red/orange
+            noteBadge = `<span class="text-[9px] px-1.5 py-0.5 rounded font-bold bg-red-500/10 text-red-400 border border-red-500/20">${blockReason}</span>`;
+          } else if (f.executed) {
+            // Executed signal — green/red checkmark
+            const execCls = isS
+              ? 'bg-red-500/15 text-red-400 border border-red-500/20'
+              : 'bg-green-500/15 text-green-400 border border-green-500/20';
+            noteBadge = `<span class="text-[9px] px-1.5 py-0.5 rounded font-medium ${execCls}">✓ ${note}</span>`;
+          } else {
+            noteBadge = `<span class="text-[9px] px-1.5 py-0.5 rounded font-medium bg-gray-700/60 text-gray-400 border border-gray-700">${note}</span>`;
+          }
+        }
+
         return `<div class="flex items-center justify-between gap-3 py-2 pl-2 ${borderCls}">
           <div class="flex items-center gap-2 min-w-0">
             <span class="text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${sigCls}">${sig}</span>
@@ -794,6 +1058,40 @@
     // Tamanho Trade
     if (el('kpi-trade-pct') && s.trade_pct != null) {
       el('kpi-trade-pct').textContent = (s.trade_pct * 100).toFixed(0) + '%';
+    }
+
+    // ── NEW: Circuit Breaker ──────────────────────────────────────────────
+    if (el('kpi-circuit-breaker')) {
+      const tdToday = s.trades_today != null
+        ? s.trades_today
+        : (s.trades || []).filter(t => {
+            const d = new Date((t.time || ''));
+            const n = new Date();
+            return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+          }).length;
+      el('kpi-circuit-breaker').textContent = tdToday + '/12';
+      el('kpi-circuit-breaker').style.color = tdToday >= 10 ? '#f87171' : tdToday >= 6 ? '#fb923c' : '#fb923c';
+    }
+
+    // ── NEW: Slots Abertos ────────────────────────────────────────────────
+    if (el('kpi-open-slots')) {
+      const openCount = Object.values(allSlots).filter(sl => (sl.qty || 0) > 0).length;
+      el('kpi-open-slots').textContent = openCount + '/8';
+      el('kpi-open-slots').style.color = openCount >= 7 ? '#f87171' : openCount >= 5 ? '#fb923c' : '#22d3ee';
+    }
+
+    // ── NEW: Regime Predominante ──────────────────────────────────────────
+    if (el('kpi-regime')) {
+      const sigs = s.signals || {};
+      const rCounts = { TRENDING: 0, RANGING: 0, NEUTRAL: 0 };
+      CRYPTOS.forEach(c => {
+        const sg = sigs[c.pair];
+        const r  = sg ? inferRegime(sg) : 'NEUTRAL';
+        rCounts[r] = (rCounts[r] || 0) + 1;
+      });
+      const dominant = Object.entries(rCounts).sort((a, b) => b[1] - a[1])[0][0];
+      el('kpi-regime').textContent = dominant;
+      el('kpi-regime').style.color = dominant === 'TRENDING' ? '#4ade80' : dominant === 'RANGING' ? '#facc15' : '#9ca3af';
     }
 
     // Candles
