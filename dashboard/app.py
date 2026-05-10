@@ -213,7 +213,7 @@ TOTAL_BRL_INITIAL = 4000.0  # Portfolio inicial em BRL — FIXO, nunca muda
 # Portfolio em USD varia com cotação: USD_atual = TOTAL_BRL_INITIAL / usd_brl_atual
 
 # ── Ciclo e candles ─────────────────────────────────────────────
-CYCLE_INTERVAL    = 180      # ciclo de 180s (3 minutos)
+CYCLE_INTERVAL    = 3600     # ciclo de 3600s (1 hora)
 CANDLE_30M        = "THIRTY_MINUTE"  # Donchian, Stoch
 CANDLE_1H         = "ONE_HOUR"       # EMA Pullback, MACD
 CANDLE_6H         = "SIX_HOUR"
@@ -278,7 +278,7 @@ PAIR_TRAILING = {
 ALT_PAIRS = {"SOL-USD", "AVAX-USD", "LINK-USD", "RENDER-USD"}
 BTC_PAIRS  = {"BTC-USD", "ETH-USD"}
 BREAKEVEN_ACTIVATE_PCT = 1.5  # após +1.5%, SL sobe para entrada
-SL_COOLDOWN_CYCLES    = 12    # SL normal: 3h = 12 ciclos de 15min
+SL_COOLDOWN_CYCLES    = 3     # SL normal: 3h = 3 ciclos de 1h
 
 # ── Circuit breaker + controles de risco ─────────────────────────
 MAX_DAILY_TRADES      = 10    # máximo de trades por dia (BUY+SELL)
@@ -1068,10 +1068,10 @@ async def trading_loop():
                                       sl_history[key] = [t for t in hist if now_ts - t < 86400]
                                       recent_3h = [t for t in sl_history[key] if now_ts - t < 10800]
                                       if len(sl_history[key]) >= 2:
-                                          sl_cooldowns[key] = 48  # 2+ SLs em 24h → 12h block
+                                          sl_cooldowns[key] = 12  # 2+ SLs em 24h → 12h block (12 ciclos × 1h)
                                           logger.info(f"[{pair}][{strat.name}] BLOCK 12h — {len(sl_history[key])} SLs em 24h")
                                       elif len(recent_3h) >= 2:
-                                          sl_cooldowns[key] = 24  # SL consecutivo → 6h
+                                          sl_cooldowns[key] = 6   # SL consecutivo → 6h (6 ciclos × 1h)
                                           logger.info(f"[{pair}][{strat.name}] COOLDOWN 6h — SL consecutivo")
                                       else:
                                           sl_cooldowns[key] = SL_COOLDOWN_CYCLES  # normal → 3h
