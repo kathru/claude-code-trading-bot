@@ -277,8 +277,15 @@ PAIR_TRAILING = {
 # ── Classificação de pares ─────────────────────────────────────────
 ALT_PAIRS = {"SOL-USD", "AVAX-USD", "LINK-USD", "RENDER-USD"}
 BTC_PAIRS  = {"BTC-USD", "ETH-USD"}
-BREAKEVEN_ACTIVATE_PCT = 1.5 # após +1.5%, SL sobe para entrada (risco zero)
-SL_COOLDOWN_CYCLES    = 12   # SL normal: 3h = 12 ciclos de 15min
+BREAKEVEN_ACTIVATE_PCT = 1.5  # após +1.5%, SL sobe para entrada
+SL_COOLDOWN_CYCLES    = 12    # SL normal: 3h = 12 ciclos de 15min
+
+# ── Circuit breaker + controles de risco ─────────────────────────
+MAX_DAILY_TRADES      = 10    # máximo de trades por dia (BUY+SELL)
+MAX_OPEN_SLOTS        = 8     # máximo de slots abertos simultaneamente
+BUY_COOLDOWN_SECONDS  = 3600  # 1h entre BUYs no mesmo par/estratégia
+_daily_trade_count: dict = {}  # {"YYYY-MM-DD": count}
+last_buy_time:      dict = {}  # {f"{strat}:{pair}": timestamp}
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
 PYRAMID_MAX          = 3     # máx. 3 adições (175% da entrada total)
@@ -303,9 +310,9 @@ all_strategies = [
     MACDMomentum(fast=12, slow=26, signal=9, ema_filter=12, rsi_max=75.0),
 ]
 
-# Mapa de candles por estratégia
+# Mapa de candles por estratégia — todas usam 1H agora
 STRAT_CANDLES = {
-    "Donchian Breakout": CANDLE_30M,
+    "Donchian Breakout": CANDLE_1H,   # migrado de 30M → 1H
     "EMA Pullback":      CANDLE_1H,
     "MACD Momentum":     CANDLE_1H,
 }
@@ -956,21 +963,11 @@ async def trading_loop():
 
                 else:
                   # ── PASSO 1: coleta TODOS os sinais antes de agir ─────────
-                  # (score completo no feed — sem notas parciais)
-                  try:
-                      candles_30m = await asyncio.wait_for(
-                          loop.run_in_executor(None, _get_candles, pair, CANDLE_30M, 250),
-                          timeout=8.0
-                      )
-                  except asyncio.TimeoutError:
-                      logger.warning(f"[{pair}] Candles 30M timeout - usando cache")
-                      candles_30m = _candle_cache.get(f"{pair}:{CANDLE_30M}", {}).get("data", [])
+                  # Todas as estratégias usam 1H agora (Donchian migrado de 30M)
                   candle_map  = {
-                      "Donchian Breakout":     candles_30m,
-                      "EMA Pullback":          candles_1h,
-                      "MACD Momentum":         candles_1h,
-                      "Stoch Bounce":          candles_30m,
-                      "RSI Divergence Detect": candles_30m,
+                      "Donchian Breakout": candles_1h,
+                      "EMA Pullback":      candles_1h,
+                      "MACD Momentum":     candles_1h,
                   }
                   signals_this_cycle = {}
 
@@ -1004,9 +1001,24 @@ async def trading_loop():
                   extreme_fear  = fg_value <= FG_FEAR_MAX
                   extreme_greed = fg_value >= FG_GREED_MIN
 
+                  # Circuit breaker diário
+                  today_str    = now_str[:8] if len(now_str) == 8 else str(now_str)[:10]
+                  today_key    = datetime.now().strftime("%Y-%m-%d")
+                  daily_trades = _daily_trade_count.get(today_key, 0)
+                  circuit_open = daily_trades >= MAX_DAILY_TRADES
+
+                  # Slots abertos
+                  open_slots_count = sum(1 for s in strategy_slots.values() if s.get("qty", 0) > 0)
+
                   # Tamanho dinâmico por par — usa candles 1h (mais estável)
                   dynamic_pct = _calculate_dynamic_position_size(pair, candles_1h)
                   _dynamic_pcts.append(dynamic_pct)
+
+                  # Expor ao frontend
+                  state["trades_today"]    = daily_trades
+                  state["max_daily_trades"] = MAX_DAILY_TRADES
+                  state["open_slots_count"] = open_slots_count
+                  state["max_open_slots"]   = MAX_OPEN_SLOTS
 
                   for strat in all_strategies:
                       key    = f"{strat.name}:{pair}"
@@ -1045,6 +1057,7 @@ async def trading_loop():
                                   slot["realized"] += pnl
                                   _attr_pnl(strat.name, pnl)
                                   _record_trade("SELL", pair, qty, price, net, f"{strat.name}:{label}")
+                                  _daily_trade_count[today_key] = _daily_trade_count.get(today_key, 0) + 1
                                   logger.info(f"[{pair}][{strat.name}] SELL {label} gain={gain_pct:+.2f}% P&L ${pnl:+.2f}")
                                   if is_sl:
                                       # ── Cooldown inteligente pós-SL ─────────────────────
@@ -1136,8 +1149,20 @@ async def trading_loop():
                           # ── Gates de qualidade — avaliados em sequência ──────────
                           _buy_blocked = None
 
+                          # G0: Circuit breaker diário
+                          if circuit_open:
+                              _buy_blocked = f"circuit breaker ({daily_trades}/{MAX_DAILY_TRADES} trades hoje)"
+
+                          # G0b: Max slots abertos
+                          elif open_slots_count >= MAX_OPEN_SLOTS:
+                              _buy_blocked = f"max slots ({open_slots_count}/{MAX_OPEN_SLOTS})"
+
+                          # G0c: Cooldown de 1h entre BUYs
+                          elif time.time() - last_buy_time.get(key, 0) < BUY_COOLDOWN_SECONDS:
+                              _buy_blocked = f"cooldown 1h ativo"
+
                           # G1: Bear market bloqueia TODOS os BUYs
-                          if market_mode == "bear":
+                          elif market_mode == "bear":
                               _buy_blocked = f"bear market"
 
                           # G2: Score mínimo 60%
@@ -1204,6 +1229,8 @@ async def trading_loop():
                                       slot["entry_usd"] = trade_usd
                                       _record_trade("BUY", pair, qty, price, trade_usd, strat.name)
                                       _count_buy(strat.name)
+                                      last_buy_time[key] = time.time()
+                                      _daily_trade_count[today_key] = daily_trades + 1
                                       pct_used = (trade_usd / engine.initial_balance) * 100 if engine.initial_balance > 0 else 0
                                       logger.info(f"[{pair}][{strat.name}] ✅ BUY {pct_used:.1f}% "
                                                   f"R${trade_usd*usd_brl:.0f} @ ${price:,.2f} "
