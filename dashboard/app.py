@@ -166,7 +166,7 @@ def _current_cycle() -> int:
 PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD", "AVAX-USD", "LINK-USD", "DOGE-USD"]  # 6 pares para melhor diversificação
 
 # ── Portfolio em Real é FIXO em R$ 4.000 ────────────────────────
-TOTAL_BRL_INITIAL = 4000.0  # Portfolio inicial em BRL — FIXO, nunca muda
+TOTAL_BRL_INITIAL = 5000.0  # Portfolio inicial em BRL — FIXO, nunca muda
 # Portfolio em USD varia com cotação: USD_atual = TOTAL_BRL_INITIAL / usd_brl_atual
 
 # ── Ciclo e candles ─────────────────────────────────────────────
