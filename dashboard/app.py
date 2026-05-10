@@ -1140,6 +1140,13 @@ async def trading_loop():
                           tr_hit = tr_act and price <= slot["peak"] * (1 - TRAILING_STOP_PCT / 100)
 
                           def _sell_slot(qty, label, is_sl=False):
+                              # ── Regra: só vende com lucro, exceto Stop Loss ──────────
+                              # Venda por sinal/trailing/greed abaixo do preço de entrada = bloqueada
+                              if not is_sl and slot["entry"] > 0 and price <= slot["entry"]:
+                                  logger.debug(f"[{pair}][{strat.name}] SELL bloqueado — "
+                                               f"preço {price:.4f} abaixo da entrada {slot['entry']:.4f} "
+                                               f"(gain={gain_pct:+.2f}%) — apenas SL permitido")
+                                  return
                               net = qty * price * (1 - 0.006)
                               sold = engine.sell(symbol, qty, price, f"{strat.name}:{label}")
                               if sold:
