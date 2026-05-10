@@ -23,6 +23,10 @@ from strategies.macd_momentum          import MACDMomentum
 # StochBounce e RSIDivergenceDetector removidos — excesso de fees
 from strategies.volatility_guard       import VolatilityGuard
 from strategies.trend_filter           import TrendFilter
+from strategies.news_guard             import is_news_blackout, next_event
+from strategies.news_sync              import sync_if_needed as _news_sync_if_needed
+from strategies.market_breadth         import get_market_breadth
+from strategies.market_regime          import calc_adx
 # Estratégias antigas preservadas para referência:
 # from strategies.rsi_divergence import RSIDivergence
 # from strategies.support_resistance import SupportResistance
@@ -39,7 +43,8 @@ STATIC_DIR   = os.path.join(os.path.dirname(__file__), "static")
 
 from fastapi.staticfiles import StaticFiles
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-HISTORY_FILE  = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "portfolio_history.json")
+HISTORY_FILE      = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "portfolio_history.json")
+NEWS_EVENTS_FILE  = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "news_events.json")
 
 
 # ── Cache de cotação USD/BRL ──────────────────────────────────────
@@ -338,7 +343,20 @@ PAIR_TRAILING = {
 # ── Classificação de pares ─────────────────────────────────────────
 ALT_PAIRS = {"SOL-USD", "AVAX-USD", "LINK-USD", "RENDER-USD"}
 BTC_PAIRS  = {"BTC-USD", "ETH-USD"}
-BREAKEVEN_ACTIVATE_PCT = 1.5  # após +1.5%, SL sobe para entrada
+BREAKEVEN_ACTIVATE_PCT = 1.5  # fallback global (substituído por PAIR_BREAKEVEN abaixo)
+
+# ── Break-even por ativo — SL sobe para entrada somente após este ganho ──
+# BTC/ETH: mais estáveis → break-even em +3%
+# Alts: mais voláteis → break-even em +4~5% (evita stop prematuro por ruído)
+# Regra: break-even só ativa APÓS o trailing stop começar a proteger
+PAIR_BREAKEVEN = {
+    "BTC-USD":    3.0,   # +3%
+    "ETH-USD":    3.0,   # +3%
+    "SOL-USD":    4.5,   # +4.5%
+    "AVAX-USD":   4.5,   # +4.5%
+    "LINK-USD":   4.5,   # +4.5%
+    "RENDER-USD": 5.0,   # +5%
+}
 SL_COOLDOWN_CYCLES    = 3     # SL normal: 3h = 3 ciclos de 1h
 
 # ── Circuit breaker + controles de risco ─────────────────────────
@@ -365,7 +383,8 @@ engine = PaperTradingEngine(initial_balance_usd=10000.0)
 # 3 estratégias de tendência — foco em qualidade, menos fees
 all_strategies = [
     DonchianBreakout(period=20, rsi_min=45.0, vol_mult=1.0,
-                     adx_min=20.0, obv_lookback=5),
+                     adx_min=20.0, obv_lookback=5,
+                     rvol_period=20, rvol_min=1.5),  # RVOL >= 1.5x média
     EMAPullback(fast=9, mid=21, slow=50, touch_tolerance_pct=0.5,
                 slope_bars=5, vol_pullback_mult=1.2, vol_breakout_mult=1.0),
     MACDMomentum(fast=12, slow=26, signal=9, ema_filter=12, rsi_max=75.0),
@@ -373,7 +392,7 @@ all_strategies = [
 
 # Mapa de candles por estratégia
 STRAT_CANDLES = {
-    "Donchian Breakout": CANDLE_30M,  # 30min — breakouts de curto prazo
+    "Donchian Breakout": CANDLE_1H,   # 1H principal + confirmação 6H (proxy 4H)
     "EMA Pullback":      CANDLE_1H,
     "MACD Momentum":     CANDLE_1H,
 }
@@ -896,6 +915,9 @@ async def trading_loop():
     while True:
         state["cycle"] = _current_cycle()
         now_str = datetime.now().strftime("%H:%M:%S")
+
+        # Auto-sync do calendário de notícias (a cada 12h se API configurada)
+        _news_sync_if_needed()
         state["last_update"]    = now_str
         state["cycle_start_ts"] = int(time.time())
 
@@ -943,6 +965,26 @@ async def trading_loop():
                                  "regime": market_mode}
 
         _dynamic_pcts = []   # acumula dynamic_pct de cada par para média no final
+
+        # ── Market Breadth — calculado 1× por ciclo com candles do cache ─────
+        try:
+            _breadth_candles = {
+                p: _candle_cache.get(f"{p}:{CANDLE_1H}", {}).get("data", [])
+                for p in PAIRS
+            }
+            _breadth = await asyncio.wait_for(
+                loop.run_in_executor(None, get_market_breadth, _breadth_candles),
+                timeout=15.0
+            )
+        except Exception as _be:
+            logger.warning(f"[MarketBreadth] Erro: {_be}")
+            _breadth = None
+        state["market_breadth"] = _breadth.to_dict() if _breadth else {
+            "alts_above_ema50_pct": None, "btc_dominance": None,
+            "funding_rate_btc": None, "funding_rate_avg": None,
+            "oi_expansion_btc": None, "oi_expansion_avg": None,
+            "score": None, "label": "N/A", "size_multiplier": 1.0,
+        }
 
         for pair in PAIRS:
             symbol = pair.split("-")[0]
@@ -1042,16 +1084,27 @@ async def trading_loop():
 
                 else:
                   # ── PASSO 1: coleta TODOS os sinais antes de agir ─────────
-                  try:
-                      candles_30m = await asyncio.wait_for(
-                          loop.run_in_executor(None, _get_candles, pair, CANDLE_30M, 250),
-                          timeout=8.0
-                      )
-                  except asyncio.TimeoutError:
-                      logger.warning(f"[{pair}] Candles 30M timeout - usando cache")
-                      candles_30m = _candle_cache.get(f"{pair}:{CANDLE_30M}", {}).get("data", [])
+                  # Donchian: 1H principal, confirmação 6H (proxy 4H)
+                  # Calcular confirmação 6H para Donchian
+                  def _donchian_6h_bullish(candles_6h_data: list) -> bool:
+                      """Confirmação 6H (proxy 4H): preço acima da EMA20 no 6H."""
+                      if not candles_6h_data or len(candles_6h_data) < 20:
+                          return True  # sem dados → não bloqueia
+                      try:
+                          import pandas as _pd6
+                          df6 = _pd6.DataFrame(candles_6h_data,
+                                               columns=["start","low","high","open","close","volume"])
+                          closes6 = df6["close"].astype(float)
+                          ema20_6h = float(closes6.ewm(span=20, adjust=False).mean().iloc[-1])
+                          price_6h = float(closes6.iloc[-1])
+                          return price_6h > ema20_6h
+                      except Exception:
+                          return True
+
+                  donchian_6h_confirmed = _donchian_6h_bullish(candles_6h)
+
                   candle_map  = {
-                      "Donchian Breakout": candles_30m,
+                      "Donchian Breakout": candles_1h,   # análise 1H
                       "EMA Pullback":      candles_1h,
                       "MACD Momentum":     candles_1h,
                   }
@@ -1063,6 +1116,15 @@ async def trading_loop():
                       signal = strat.analyze(df)
                       pair_signals[strat.name]        = signal
                       signals_this_cycle[strat.name]  = signal
+
+                  # Confidence score e ADX para este par
+                  try:
+                      import pandas as _pdx
+                      _df_adx = _pdx.DataFrame(candles_1h, columns=["start","low","high","open","close","volume"])
+                      _adx_val = calc_adx(_df_adx)
+                  except Exception:
+                      _adx_val = 20.0
+                  pair_score = _calc_confidence_score(signals_this_cycle, market_mode, _adx_val)
 
                   # Feed: registra mudanças de sinal com valor e percentual
                   for strat in all_strategies:
@@ -1124,7 +1186,8 @@ async def trading_loop():
                           gain_pct = (price - slot["entry"]) / slot["entry"] * 100
 
                           # Break-even stop: após +1.5%, SL sobe para o ponto de entrada
-                          effective_sl = slot["entry"] if gain_pct >= BREAKEVEN_ACTIVATE_PCT else slot["entry"] * (1 - current_sl_pct / 100)
+                          _be_pct = PAIR_BREAKEVEN.get(pair, BREAKEVEN_ACTIVATE_PCT)
+                          effective_sl = slot["entry"] if gain_pct >= _be_pct else slot["entry"] * (1 - current_sl_pct / 100)
                           effective_sl = max(effective_sl, slot.get("be_sl", 0))
                           slot["be_sl"] = effective_sl  # persiste o break-even stop
 
@@ -1235,6 +1298,18 @@ async def trading_loop():
                           # ── Gates de qualidade — avaliados em sequência ──────────
                           _buy_blocked = None
 
+                          # G-0.5: Market Breadth — bloqueia alts em DANGER
+                          if _breadth is not None and pair != "BTC-USD":
+                              if _breadth.should_block_alts():
+                                  _buy_blocked = f"breadth DANGER (score={_breadth.score:.0%})"
+
+                          # G-1: News Volatility Guard — bloqueia antes/depois de eventos macro
+                          _news_blocked, _news_reason = is_news_blackout(
+                              custom_events_path=NEWS_EVENTS_FILE
+                          )
+                          if _news_blocked:
+                              _buy_blocked = _news_reason
+
                           # G0: Circuit breaker diário
                           if circuit_open:
                               _buy_blocked = f"circuit breaker ({daily_trades}/{MAX_DAILY_TRADES} trades hoje)"
@@ -1250,6 +1325,10 @@ async def trading_loop():
                           # G1: Bear market bloqueia TODOS os BUYs
                           elif market_mode == "bear":
                               _buy_blocked = f"bear market"
+
+                          # G1b: Donchian — confirmação obrigatória no 6H (proxy 4H)
+                          elif strat.name == "Donchian Breakout" and not donchian_6h_confirmed:
+                              _buy_blocked = f"Donchian 6H bearish (proxy 4H)"
 
                           # G2: Score mínimo 60%
                           elif pair_score < 0.60:
@@ -1300,7 +1379,8 @@ async def trading_loop():
                               if market_mode == "bull":
                                   _score_mult = min(1.4, _score_mult * 1.1)
 
-                              trade_usd = portfolio_total * min(TRADE_PCT, dynamic_pct * _score_mult)
+                              _breadth_mult = _breadth.size_multiplier() if _breadth else 1.0
+                              trade_usd = portfolio_total * min(TRADE_PCT, dynamic_pct * _score_mult * _breadth_mult)
                               fee_margin = _current_taker_fee()
                               if engine.balance_usd < trade_usd * (1 + fee_margin):
                                   trade_usd = max(0, engine.balance_usd * (1 - fee_margin))
@@ -1338,7 +1418,8 @@ async def trading_loop():
                     ms["peak"] = max(ms["peak"], price)
                     g   = (price - ms["entry"]) / ms["entry"] * 100
                     # Break-even stop para manual também
-                    ms_eff_sl = ms["entry"] if g >= BREAKEVEN_ACTIVATE_PCT else ms["entry"] * (1 - current_sl_pct / 100)
+                    _ms_be = PAIR_BREAKEVEN.get(pair, BREAKEVEN_ACTIVATE_PCT)
+                    ms_eff_sl = ms["entry"] if g >= _ms_be else ms["entry"] * (1 - current_sl_pct / 100)
                     ms_eff_sl = max(ms_eff_sl, ms.get("be_sl", 0))
                     ms["be_sl"] = ms_eff_sl
                     tph = price >= ms["entry"] * (1 + current_tp_pct / 100)
@@ -1421,6 +1502,15 @@ async def trading_loop():
         state["kpis"] = _calculate_kpis()
         if _dynamic_pcts:
             state["trade_pct"] = round(sum(_dynamic_pcts) / len(_dynamic_pcts), 4)
+
+        # News Guard status para o dashboard
+        _nb, _nr = is_news_blackout(custom_events_path=NEWS_EVENTS_FILE)
+        _nxt = next_event(custom_events_path=NEWS_EVENTS_FILE)
+        state["news_blackout"]  = _nb
+        state["news_reason"]    = _nr if _nb else ""
+        state["next_news_event"] = {
+            "name": _nxt["name"], "mins_to": _nxt["mins_to"]
+        } if _nxt else None
 
         await broadcast(state)
         await asyncio.sleep(CYCLE_INTERVAL)

@@ -10,26 +10,31 @@ class MACDMomentum(BaseStrategy):
            + Linha MACD acima de zero (tendência de médio prazo já virou)
            + close > EMA20 (preço acima filtro de curto prazo)
            + momentum positivo (close > close 3 barras atrás)
-           + RSI < 70 (não sobrecomprado — evita topo de momentum)
+           + RSI < 75 (não sobrecomprado)
+           + ADX rising (força da tendência em crescimento — não em exaustão)
     SELL → Histograma cruza de positivo para negativo
 
-    Melhorias v2:
-      - MACD line > 0: garante que a tendência de médio prazo já virou para alta,
-        não apenas um salto temporário do histograma
-      - RSI < 70: evita comprar no "topo do momentum" quando RSI já está esticado
+    ADX Rising:
+      ADX atual > ADX N barras atrás → tendência ganhando força (confirma momentum)
+      ADX caindo → tendência em enfraquecimento → MACD pode ser sinal falso
+      Combinado com MACD > 0, elimina entradas em rebounds fracos sem follow-through.
     """
 
     def __init__(self, fast: int = 12, slow: int = 26, signal: int = 9,
-                 ema_filter: int = 20,
+                 ema_filter: int = 12,
                  rsi_period: int = 14,
-                 rsi_max: float = 70.0):
+                 rsi_max: float = 75.0,
+                 adx_period: int = 14,
+                 adx_rising_bars: int = 3):
         super().__init__("MACD Momentum")
-        self.fast       = fast
-        self.slow       = slow
-        self.signal     = signal
-        self.ema_filter = ema_filter
-        self.rsi_period = rsi_period
-        self.rsi_max    = rsi_max
+        self.fast            = fast
+        self.slow            = slow
+        self.signal          = signal
+        self.ema_filter      = ema_filter
+        self.rsi_period      = rsi_period
+        self.rsi_max         = rsi_max
+        self.adx_period      = adx_period
+        self.adx_rising_bars = adx_rising_bars  # ADX atual > ADX N barras atrás
 
     def _rsi(self, series: pd.Series) -> pd.Series:
         delta = series.diff()
@@ -38,22 +43,48 @@ class MACDMomentum(BaseStrategy):
         rs    = gain / loss.replace(0, float("inf"))
         return 100 - (100 / (1 + rs))
 
+    def _adx_series(self, df: pd.DataFrame) -> pd.Series:
+        """
+        Calcula a série completa do ADX para verificar se está subindo (rising).
+        ADX rising = tendência ganhando força = momentum mais confiável.
+        """
+        p = self.adx_period
+        high, low, close = df["high"], df["low"], df["close"]
+
+        tr = pd.concat([
+            high - low,
+            (high - close.shift(1)).abs(),
+            (low  - close.shift(1)).abs()
+        ], axis=1).max(axis=1)
+
+        dm_plus  = (high - high.shift(1)).clip(lower=0)
+        dm_minus = (low.shift(1) - low).clip(lower=0)
+        dm_plus  = dm_plus.where(dm_plus > dm_minus, 0.0)
+        dm_minus = dm_minus.where(dm_minus > dm_plus, 0.0)
+
+        atr_s    = tr.ewm(alpha=1 / p, adjust=False).mean()
+        di_plus  = 100 * dm_plus.ewm(alpha=1 / p, adjust=False).mean() / atr_s.replace(0, 1e-9)
+        di_minus = 100 * dm_minus.ewm(alpha=1 / p, adjust=False).mean() / atr_s.replace(0, 1e-9)
+        dx       = 100 * (di_plus - di_minus).abs() / (di_plus + di_minus).replace(0, 1e-9)
+        return dx.ewm(alpha=1 / p, adjust=False).mean()
+
     def analyze(self, df: pd.DataFrame) -> str:
-        min_bars = self.slow + self.signal + max(self.ema_filter, self.rsi_period) + 5
+        min_bars = self.slow + self.signal + max(self.ema_filter, self.rsi_period) + self.adx_period * 2 + self.adx_rising_bars + 5
         if len(df) < min_bars:
             return "HOLD"
 
         df = df.copy()
-        ema_fast     = df["close"].ewm(span=self.fast,   adjust=False).mean()
-        ema_slow     = df["close"].ewm(span=self.slow,   adjust=False).mean()
-        macd_line    = ema_fast - ema_slow
-        sig_line     = macd_line.ewm(span=self.signal, adjust=False).mean()
-        df["hist"]   = macd_line - sig_line
-        df["macd"]   = macd_line           # linha MACD (não apenas o histograma)
+        ema_fast      = df["close"].ewm(span=self.fast,   adjust=False).mean()
+        ema_slow      = df["close"].ewm(span=self.slow,   adjust=False).mean()
+        macd_line     = ema_fast - ema_slow
+        sig_line      = macd_line.ewm(span=self.signal, adjust=False).mean()
+        df["hist"]    = macd_line - sig_line
+        df["macd"]    = macd_line
         df["ema_flt"] = df["close"].ewm(span=self.ema_filter, adjust=False).mean()
-        df["rsi"]    = self._rsi(df["close"])
+        df["rsi"]     = self._rsi(df["close"])
+        df["adx"]     = self._adx_series(df)
         df = df.dropna().reset_index(drop=True)
-        if len(df) < 4:
+        if len(df) < self.adx_rising_bars + 4:
             return "HOLD"
 
         prev = df.iloc[-2]
@@ -61,23 +92,29 @@ class MACDMomentum(BaseStrategy):
 
         # ── BUY ──────────────────────────────────────────────────────────────
 
-        # 1. Histograma cruzou de negativo para positivo (impulso se iniciando)
+        # 1. Histograma cruzou de negativo para positivo
         hist_cross_up = prev["hist"] <= 0 and curr["hist"] > 0
 
-        # 2. Linha MACD acima de zero (tendência de médio prazo já virou para alta)
-        #    Diferencial principal v2: sem isso compramos no "bounce" de baixa
+        # 2. Linha MACD acima de zero
         macd_above_zero = curr["macd"] > 0
 
-        # 3. Preço acima do filtro de curto prazo (EMA20)
+        # 3. Preço acima da EMA de curto prazo
         above_filter = curr["close"] > curr["ema_flt"]
 
         # 4. Momentum: preço maior que 3 barras atrás
         momentum_pos = curr["close"] > df["close"].iloc[-4]
 
-        # 5. RSI não sobrecomprado (< 70): evita comprar no topo do momentum
+        # 5. RSI não sobrecomprado
         rsi_ok = curr["rsi"] < self.rsi_max
 
-        if hist_cross_up and macd_above_zero and above_filter and momentum_pos and rsi_ok:
+        # 6. ADX rising: força da tendência crescendo nos últimos N períodos
+        #    ADX_agora > ADX_N_barras_atrás → tendência em aceleração
+        #    Evita entrar quando o momentum já está esgotando (ADX caindo)
+        adx_now  = float(curr["adx"])
+        adx_prev = float(df["adx"].iloc[-(self.adx_rising_bars + 1)])
+        adx_rising = adx_now > adx_prev
+
+        if hist_cross_up and macd_above_zero and above_filter and momentum_pos and rsi_ok and adx_rising:
             return "BUY"
 
         # ── SELL: histograma cruzou de positivo para negativo ────────────────

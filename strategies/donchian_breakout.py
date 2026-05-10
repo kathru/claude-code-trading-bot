@@ -4,31 +4,37 @@ from .base import BaseStrategy
 
 class DonchianBreakout(BaseStrategy):
     """
-    Donchian Channel Breakout (estilo Turtle Traders) — 30min.
+    Donchian Channel Breakout (estilo Turtle Traders) — 1H principal, confirmação 6H.
 
     BUY  → Close > maior high das últimas N barras (rompimento)
-           + ADX > 25 (tendência forte confirmada — sem breakouts falsos)
-           + OBV em nova máxima (volume institucional confirmando o movimento)
-           + RSI(14) > 55 (momentum positivo)
+           + RVOL >= 1.5 (volume relativo acima da média — breakout real)
+           + ADX > 20 (tendência confirmada — sem lateralização)
+           + OBV em nova máxima (volume institucional acompanhando)
+           + RSI(14) > 45 (momentum positivo)
     SELL → Close < menor low das últimas N barras (saída técnica)
 
-    Melhorias v2:
-      - ADX > 25: filtra mercados laterais onde Donchian gera bull traps
-      - OBV nova máxima: exige que volume acompanhe o preço (breakout real)
+    RVOL (Relative Volume):
+      RVOL = volume_atual / media_volume_N_periodos
+      RVOL >= 1.5 → volume 50% acima da média → breakout com participação real
+      RVOL < 1.5  → breakout "seco" → alta probabilidade de armadilha (bull trap)
+      Em crypto, breakouts sem RVOL elevado são frequentemente reversões imediatas.
     """
 
     def __init__(self, period: int = 20, rsi_period: int = 14,
-                 rsi_min: float = 55.0, vol_mult: float = 1.5,
-                 adx_period: int = 14, adx_min: float = 25.0,
-                 obv_lookback: int = 10):
+                 rsi_min: float = 45.0, vol_mult: float = 1.0,
+                 adx_period: int = 14, adx_min: float = 20.0,
+                 obv_lookback: int = 5,
+                 rvol_period: int = 20, rvol_min: float = 1.5):
         super().__init__("Donchian Breakout")
-        self.period      = period
-        self.rsi_period  = rsi_period
-        self.rsi_min     = rsi_min
-        self.vol_mult    = vol_mult
-        self.adx_period  = adx_period
-        self.adx_min     = adx_min
+        self.period       = period
+        self.rsi_period   = rsi_period
+        self.rsi_min      = rsi_min
+        self.vol_mult     = vol_mult
+        self.adx_period   = adx_period
+        self.adx_min      = adx_min
         self.obv_lookback = obv_lookback
+        self.rvol_period  = rvol_period   # barras para calcular o volume médio
+        self.rvol_min     = rvol_min      # mínimo de RVOL para aceitar o breakout
 
     # ── Indicadores internos ──────────────────────────────────────────────────
 
@@ -40,10 +46,7 @@ class DonchianBreakout(BaseStrategy):
         return 100 - (100 / (1 + rs))
 
     def _adx(self, df: pd.DataFrame) -> float:
-        """ADX (Average Directional Index) — mede força da tendência.
-        ADX > 25 → tendência forte (breakouts têm maior probabilidade de sucesso).
-        ADX < 20 → mercado lateral (ignorar breakouts — alta chance de bull trap).
-        """
+        """ADX — mede a força da tendência. > 20 = tendência presente."""
         p = self.adx_period
         high, low, close = df["high"], df["low"], df["close"]
 
@@ -65,11 +68,27 @@ class DonchianBreakout(BaseStrategy):
         adx      = dx.ewm(alpha=1 / p, adjust=False).mean()
         return float(adx.iloc[-1])
 
-    def _obv_at_new_high(self, df: pd.DataFrame) -> bool:
-        """OBV em nova máxima nas últimas N barras.
-        Confirma que volume institucional está acompanhando o breakout de preço.
-        Breakout seco (sem OBV subindo) = alta probabilidade de falso rompimento.
+    def _rvol(self, df: pd.DataFrame) -> float:
         """
+        Relative Volume (RVOL) = volume_atual / media_volume_N_periodos.
+
+        RVOL >= 1.5 → breakout com participação real (smart money presente)
+        RVOL < 1.5  → breakout fraco → armadilha em potencial
+        RVOL > 2.0  → breakout explosivo (muito confiável em crypto)
+
+        O RVOL é calculado sobre as últimas N barras excluindo a barra atual,
+        para evitar viés de lookahead.
+        """
+        if len(df) < self.rvol_period + 2:
+            return 1.0  # sem dados suficientes → neutro
+        vol_now  = float(df["volume"].iloc[-1])
+        vol_avg  = float(df["volume"].iloc[-(self.rvol_period + 1):-1].mean())
+        if vol_avg <= 0:
+            return 1.0
+        return vol_now / vol_avg
+
+    def _obv_at_new_high(self, df: pd.DataFrame) -> bool:
+        """OBV em nova máxima — confirma volume institucional no breakout."""
         direction = df["close"].diff().apply(
             lambda x: 1 if x > 0 else (-1 if x < 0 else 0)
         )
@@ -81,7 +100,7 @@ class DonchianBreakout(BaseStrategy):
     # ── Análise principal ─────────────────────────────────────────────────────
 
     def analyze(self, df: pd.DataFrame) -> str:
-        min_bars = self.period + self.rsi_period + self.adx_period * 2 + 5
+        min_bars = self.period + self.rsi_period + self.adx_period * 2 + self.rvol_period + 5
         if len(df) < min_bars:
             return "HOLD"
 
@@ -89,32 +108,36 @@ class DonchianBreakout(BaseStrategy):
         df["dc_upper"] = df["high"].rolling(self.period).max().shift(1)
         df["dc_lower"] = df["low"].rolling(self.period).min().shift(1)
         df["rsi"]      = self._rsi(df["close"])
-        df["vol_ma"]   = df["volume"].rolling(self.period).mean()
         df = df.dropna().reset_index(drop=True)
-        if len(df) < self.obv_lookback + 5:
+        if len(df) < self.obv_lookback + self.rvol_period + 2:
             return "HOLD"
 
         curr = df.iloc[-1]
 
-        # ── BUY: rompimento de máxima
+        # ── BUY: rompimento confirmado com volume ─────────────────────────────
+
         price_breakout = curr["close"] > curr["dc_upper"]
         rsi_ok         = curr["rsi"] >= self.rsi_min
-        vol_ok         = curr["volume"] >= curr["vol_ma"] * self.vol_mult
 
-        if price_breakout and rsi_ok and vol_ok:
-            # Filtro ADX: só entra se há tendência forte (ADX > 25)
-            adx_value = self._adx(df)
-            if adx_value < self.adx_min:
-                return "HOLD"  # Mercado lateral — breakout provavelmente falso
+        if not (price_breakout and rsi_ok):
+            # Checagem rápida antes de calcular indicadores pesados
+            if curr["close"] < curr["dc_lower"]:
+                return "SELL"
+            return "HOLD"
 
-            # Filtro OBV: volume deve confirmar o rompimento
-            if not self._obv_at_new_high(df):
-                return "HOLD"  # Breakout "seco" — sem volume institucional
+        # ── RVOL: filtro anti bull-trap ───────────────────────────────────────
+        # Breakout sem RVOL elevado = geralmente armadilha em crypto
+        rvol_value = self._rvol(df)
+        if rvol_value < self.rvol_min:
+            return "HOLD"  # Volume fraco — breakout seco, ignorar
 
-            return "BUY"
+        # ── ADX: tendência presente ───────────────────────────────────────────
+        adx_value = self._adx(df)
+        if adx_value < self.adx_min:
+            return "HOLD"  # Mercado lateral — risco de whipsaw
 
-        # ── SELL técnico: rompimento de mínima
-        if curr["close"] < curr["dc_lower"]:
-            return "SELL"
+        # ── OBV: volume institucional acompanha ───────────────────────────────
+        if not self._obv_at_new_high(df):
+            return "HOLD"  # Breakout sem OBV crescente — distribuição, não acumulação
 
-        return "HOLD"
+        return "BUY"

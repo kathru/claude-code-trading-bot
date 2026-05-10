@@ -156,6 +156,43 @@
     <!-- ── Cards de Criptos ── -->
     <div id="crypto-grid" class="grid grid-cols-1 lg:grid-cols-3 gap-4"></div>
 
+    <!-- ── Market Breadth ── -->
+    <div class="card p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-white">Market Breadth</h3>
+        <span id="breadth-label" class="text-xs font-bold px-2 py-0.5 rounded bg-gray-700 text-gray-300">N/A</span>
+      </div>
+      <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div class="bg-gray-800 rounded-lg p-3 flex flex-col items-center">
+          <span class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Alts &gt; EMA50</span>
+          <span id="breadth-alts-ema50" class="text-lg font-bold text-white">—</span>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-3 flex flex-col items-center">
+          <span class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">BTC Dom.</span>
+          <span id="breadth-btc-dom" class="text-lg font-bold text-white">—</span>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-3 flex flex-col items-center">
+          <span class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Funding BTC</span>
+          <span id="breadth-funding" class="text-lg font-bold text-white">—</span>
+        </div>
+        <div class="bg-gray-800 rounded-lg p-3 flex flex-col items-center">
+          <span class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">OI Expansion</span>
+          <span id="breadth-oi" class="text-lg font-bold text-white">—</span>
+        </div>
+      </div>
+      <div class="mt-3 flex items-center gap-3 text-[10px] text-gray-500">
+        <span>Score: <span id="breadth-score" class="font-bold text-white">—</span></span>
+        <span>Mult: <span id="breadth-mult" class="font-bold text-white">—</span></span>
+        <span class="ml-auto">
+          <span class="text-green-400 font-semibold">≥70% NORMAL</span>
+          <span class="mx-1">·</span>
+          <span class="text-yellow-400 font-semibold">40-70% REDUZIDO (×0.7)</span>
+          <span class="mx-1">·</span>
+          <span class="text-red-400 font-semibold">&lt;40% BLOQUEADO ALTS</span>
+        </span>
+      </div>
+    </div>
+
     <!-- ── Filtros Ativos por Par ── -->
     <div class="card p-5">
       <div class="flex items-center justify-between mb-3">
@@ -428,8 +465,8 @@
   const STRATEGIES = [
     {
       name: 'Donchian Breakout', id: 'Don', icon: '🚀',
-      filters: ['ADX>20', 'OBV↑', 'RSI>45'],
-      desc: 'Breakout do canal Donchian 20 — 30min. Exige ADX > 20, OBV em nova máxima e RSI > 45.'
+      filters: ['RVOL≥1.5', 'ADX>20', 'OBV↑'],
+      desc: 'Breakout do canal Donchian 20 — 1H + confirmação 6H. RVOL≥1.5× (anti bull-trap), ADX>20, OBV crescente.'
     },
     {
       name: 'EMA Pullback', id: 'EMA', icon: '📈',
@@ -438,8 +475,8 @@
     },
     {
       name: 'MACD Momentum', id: 'MACD', icon: '⚡',
-      filters: ['MACD>0', 'RSI<75'],
-      desc: 'Cruzamento MACD acima de zero. Exige MACD line > 0 e RSI < 75 (sem sobrecompra extrema).'
+      filters: ['MACD>0', 'RSI<75', 'ADX↑'],
+      desc: 'Cruzamento MACD acima de zero. Exige MACD>0, RSI<75 e ADX rising (tendência em aceleração, não exaustão).'
     },
   ];
 
@@ -841,6 +878,55 @@
           ${tpBrl > 0 ? `<p class="text-[10px] mt-0.5" style="color:#818cf8">TP: falta R$ ${fmtBRL(tpFalta)} (${tpBrl > 0 ? ((tpFalta/tpBrl)*100).toFixed(0) : 0}%)</p>` : ''}
         </div>`;
       }).join('');
+    }
+
+    // ── Market Breadth panel ──────────────────────────────────────────────
+    const mb = s.market_breadth || {};
+    if (mb) {
+      const mbLabelEl = document.getElementById('breadth-label');
+      const mbLabel   = mb.label || 'N/A';
+      const mbScore   = mb.score;
+      const mbMult    = mb.size_multiplier ?? 1.0;
+      if (mbLabelEl) {
+        const lCls = mbLabel === 'STRONG'   ? 'bg-green-900 text-green-300'
+                   : mbLabel === 'MODERATE' ? 'bg-blue-900 text-blue-300'
+                   : mbLabel === 'WEAK'     ? 'bg-yellow-900 text-yellow-300'
+                   : mbLabel === 'DANGER'   ? 'bg-red-900 text-red-300'
+                   : 'bg-gray-700 text-gray-400';
+        mbLabelEl.className = `text-xs font-bold px-2 py-0.5 rounded ${lCls}`;
+        mbLabelEl.textContent = mbLabel;
+      }
+      const altsPct = mb.alts_above_ema50_pct;
+      const altsEl  = document.getElementById('breadth-alts-ema50');
+      if (altsEl) {
+        altsEl.textContent = altsPct != null ? Math.round(altsPct) + '%' : '—';
+        altsEl.style.color = altsPct == null ? '#9ca3af' : altsPct >= 60 ? '#4ade80' : altsPct >= 40 ? '#fb923c' : '#f87171';
+      }
+      const domEl = document.getElementById('breadth-btc-dom');
+      if (domEl) {
+        const dom = mb.btc_dominance;
+        domEl.textContent = dom != null ? dom.toFixed(1) + '%' : '—';
+        domEl.style.color = dom == null ? '#9ca3af' : dom >= 55 ? '#f87171' : dom >= 45 ? '#fb923c' : '#4ade80';
+      }
+      const fundEl = document.getElementById('breadth-funding');
+      if (fundEl) {
+        const fr = mb.funding_rate_btc;
+        fundEl.textContent = fr != null ? (fr * 100).toFixed(4) + '%' : '—';
+        fundEl.style.color = fr == null ? '#9ca3af' : fr > 0.05 ? '#f87171' : fr > 0.02 ? '#fb923c' : '#4ade80';
+      }
+      const oiEl = document.getElementById('breadth-oi');
+      if (oiEl) {
+        const oi = mb.oi_expansion_btc;
+        oiEl.textContent = oi != null ? (oi >= 0 ? '+' : '') + oi.toFixed(2) + '%' : '—';
+        oiEl.style.color = oi == null ? '#9ca3af' : oi >= 5 ? '#4ade80' : oi >= 0 ? '#60a5fa' : '#f87171';
+      }
+      const scoreEl = document.getElementById('breadth-score');
+      if (scoreEl) scoreEl.textContent = mbScore != null ? Math.round(mbScore * 100) + '%' : '—';
+      const multEl = document.getElementById('breadth-mult');
+      if (multEl) {
+        multEl.textContent = '×' + mbMult.toFixed(1);
+        multEl.style.color = mbMult >= 1.0 ? '#4ade80' : mbMult >= 0.7 ? '#fb923c' : '#f87171';
+      }
     }
 
     // ── Filtros Ativos table ──────────────────────────────────────────────
