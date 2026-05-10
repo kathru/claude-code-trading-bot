@@ -237,35 +237,35 @@
       <div id="candle-chart" style="overflow:hidden;"></div>
       <div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-[10px] text-gray-500">
         <div class="flex flex-col gap-0.5">
-          <p class="text-[9px] text-gray-600 uppercase tracking-wider mb-0.5 font-semibold">Candle Principal</p>
+          <p class="text-[9px] text-gray-600 uppercase tracking-wider mb-0.5 font-semibold">Candle · Preço</p>
           <span><span style="color:#06b6d4">—</span> EMA9</span>
           <span><span style="color:#818cf8">—</span> EMA21</span>
-          <span><span style="color:#c084fc">—</span> EMA50</span>
-          <span><span style="color:rgba(249,115,22,0.8)">- -</span> Donchian 20</span>
+          <span><span style="color:#c084fc">—</span> EMA50 (slope filtro)</span>
+          <span><span style="color:rgba(249,115,22,0.8)">- -</span> Donchian 20 (30min)</span>
           <span><span style="color:rgba(99,102,241,0.6)">···</span> Bollinger (20,2)</span>
-          <span><span style="color:rgba(74,222,128,0.5)">▮</span> Vol. compra / <span style="color:rgba(248,113,113,0.5)">▮</span> venda</span>
+          <span><span style="color:rgba(74,222,128,0.5)">▮</span> Vol ↑ / <span style="color:rgba(248,113,113,0.5)">▮</span> Vol ↓</span>
         </div>
         <div class="flex flex-col gap-0.5">
-          <p class="text-[9px] text-gray-600 uppercase tracking-wider mb-0.5 font-semibold">MACD</p>
+          <p class="text-[9px] text-gray-600 uppercase tracking-wider mb-0.5 font-semibold">MACD (12·26·9)</p>
           <span><span style="color:#3b82f6">—</span> Linha MACD</span>
           <span><span style="color:#f87171">—</span> Linha Sinal</span>
           <span><span style="color:rgba(74,222,128,0.7)">▮</span> Hist. positivo</span>
-          <span><span style="color:rgba(156,163,175,0.4)">—</span> Zero (filtro &gt;0)</span>
+          <span><span style="color:rgba(156,163,175,0.4)">—</span> Zero (filtro linha &gt; 0)</span>
         </div>
         <div class="flex flex-col gap-0.5">
-          <p class="text-[9px] text-gray-600 uppercase tracking-wider mb-0.5 font-semibold">Stoch · RSI</p>
-          <span><span style="color:#4ade80">—</span> Stoch %K</span>
-          <span><span style="color:#facc15">—</span> Stoch %D / RSI</span>
-          <span><span style="color:rgba(74,222,128,0.5)">- -</span> Oversold 20 / 30</span>
-          <span><span style="color:rgba(248,113,113,0.5)">- -</span> Overbought 75 / 70</span>
+          <p class="text-[9px] text-gray-600 uppercase tracking-wider mb-0.5 font-semibold">RSI (14)</p>
+          <span><span style="color:#facc15">—</span> RSI</span>
+          <span><span style="color:rgba(248,113,113,0.5)">- -</span> 75 → bloqueia MACD</span>
+          <span><span style="color:rgba(74,222,128,0.5)">- -</span> 30 → sobrevenda</span>
+          <span><span style="color:rgba(156,163,175,0.25)">—</span> 50 → neutro</span>
         </div>
         <div class="flex flex-col gap-0.5">
-          <p class="text-[9px] text-gray-600 uppercase tracking-wider mb-0.5 font-semibold">ADX — Regime</p>
-          <span><span style="color:#e879f9">—</span> ADX (força)</span>
-          <span><span style="color:rgba(74,222,128,0.6)">- -</span> 25 → Trending</span>
-          <span><span style="color:rgba(250,204,21,0.6)">- -</span> 20 → Ranging</span>
-          <span class="text-gray-600">Acima 20 = Donchian+EMA</span>
-          <span class="text-gray-600">Abaixo 20 = RANGING/CHOP</span>
+          <p class="text-[9px] text-gray-600 uppercase tracking-wider mb-0.5 font-semibold">OBV · ADX</p>
+          <span><span style="color:#38bdf8">—</span> OBV (confirma Donchian)</span>
+          <span><span style="color:#e879f9">—</span> ADX (força tendência)</span>
+          <span><span style="color:rgba(74,222,128,0.6)">- -</span> ADX 20 → TRENDING</span>
+          <span><span style="color:rgba(250,204,21,0.6)">- -</span> ADX 15 → CHOP</span>
+          <span class="text-gray-600">Bull=verde · Chop=amarelo · Bear=vermelho</span>
         </div>
       </div>
     </div>
@@ -1262,15 +1262,14 @@
   }
 
   // ─── Candle Chart ─────────────────────────────────────────────────────
-  let candleChart = null, macdChart = null, stochChart = null, rsiChart = null, adxChart = null;
+  let candleChart = null, macdChart = null, rsiChart = null, adxChart = null, obvChart = null;
   let candleSeries = null, macdFastSeries = null, macdSlowSeries = null, macdHistSeries = null;
-  let stochKSeries = null, stochDSeries = null, rsiSeries = null, adxSeries = null;
+  let rsiSeries = null, adxSeries = null, obvSeries = null, obvZeroSeries = null;
   let ema9Series = null, ema21Series = null, ema50Series = null;
   let donchUpperSeries = null, donchLowerSeries = null;
   let bbUpperSeries = null, bbLowerSeries = null, bbMidSeries = null;
   let volumeSeries = null;
   let macdZeroSeries = null;
-  let stochOBSeries = null, stochOSSeries = null;
   let rsiOBSeries = null, rsiOSSeries = null, rsiMidSeries = null;
   let adxTrendSeries = null, adxRangeSeries = null;
   let candlePair = 'BTC-USD', candleGranularity = 'ONE_HOUR';
@@ -1340,21 +1339,10 @@
     macdHistSeries = macdChart.addHistogramSeries({ priceLineVisible: false, lastValueVisible: false });
     macdZeroSeries = macdChart.addLineSeries({ color: 'rgba(156,163,175,0.35)', lineWidth: 1, lineStyle: 0, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
 
-    // ── 3. Stocástico (14,3) — oversold 20 / overbought 75 ──────────────
-    const { wrap: stochWrap, chartDiv: stochEl } = makeChartWrapper(
-      'Stocástico (14·3)', '— %K verde / %D amarelo | zona verde = sobrevenda (<20) | zona vermelha = sobrecompra (>75)',
-      macdWrap
-    );
-    stochChart = LightweightCharts.createChart(stochEl, { ...commonOpts, height: 80 });
-    stochKSeries  = stochChart.addLineSeries({ color: '#4ade80', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true });
-    stochDSeries  = stochChart.addLineSeries({ color: '#facc15', lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
-    stochOBSeries = stochChart.addLineSeries({ color: 'rgba(248,113,113,0.4)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-    stochOSSeries = stochChart.addLineSeries({ color: 'rgba(74,222,128,0.4)',  lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
-
-    // ── 4. RSI (14) — bloqueio acima de 70 no MACD ──────────────────────
+    // ── 3. RSI (14) — filtro MACD (RSI < 75) e EMA Pullback ─────────────
     const { wrap: rsiWrap, chartDiv: rsiEl } = makeChartWrapper(
-      'RSI (14)', '— acima de 70 = MACD bloqueado (sobrecomprado) | abaixo de 30 = sobrevenda',
-      stochWrap
+      'RSI (14)', '— MACD bloqueado se RSI > 75 (sobrecomprado) | abaixo de 30 = sobrevenda extrema',
+      macdWrap
     );
     rsiChart = LightweightCharts.createChart(rsiEl, { ...commonOpts, height: 80 });
     rsiSeries   = rsiChart.addLineSeries({ color: '#facc15', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true });
@@ -1362,18 +1350,27 @@
     rsiOSSeries = rsiChart.addLineSeries({ color: 'rgba(74,222,128,0.4)',  lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
     rsiMidSeries = rsiChart.addLineSeries({ color: 'rgba(156,163,175,0.25)', lineWidth: 1, lineStyle: 0, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
 
-    // ── 5. ADX (14) — regime de mercado: >25 trending, <20 ranging ──────
-    const { wrap: adxWrap, chartDiv: adxEl } = makeChartWrapper(
-      'ADX (14)', '— >20 = TRENDING (Donchian+EMA ativos) | <20 = RANGING/CHOP',
+    // ── 4. OBV — filtro de volume do Donchian (OBV em nova máxima = breakout real)
+    const { wrap: obvWrap, chartDiv: obvEl } = makeChartWrapper(
+      'OBV — On-Balance Volume', '— crescente = volume confirma breakout Donchian | decrescente = breakout falso (bull trap)',
       rsiWrap
     );
-    adxChart      = LightweightCharts.createChart(adxEl, { ...commonOpts, height: 80 });
-    adxSeries     = adxChart.addLineSeries({ color: '#e879f9', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true });
+    obvChart     = LightweightCharts.createChart(obvEl, { ...commonOpts, height: 80 });
+    obvSeries    = obvChart.addLineSeries({ color: '#38bdf8', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true });
+    obvZeroSeries = obvChart.addLineSeries({ color: 'rgba(156,163,175,0.25)', lineWidth: 1, lineStyle: 0, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+
+    // ── 5. ADX (14) — Market Regime Engine: >20 trending, <20 chop ──────
+    const { wrap: adxWrap, chartDiv: adxEl } = makeChartWrapper(
+      'ADX (14) — Regime de Mercado', '— roxo = força da tendência | verde >20 = TRENDING (Donchian+EMA) | amarelo 20 = CHOP',
+      obvWrap
+    );
+    adxChart       = LightweightCharts.createChart(adxEl, { ...commonOpts, height: 80 });
+    adxSeries      = adxChart.addLineSeries({ color: '#e879f9', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true });
     adxTrendSeries = adxChart.addLineSeries({ color: 'rgba(74,222,128,0.5)',  lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
     adxRangeSeries = adxChart.addLineSeries({ color: 'rgba(250,204,21,0.5)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
 
     // ── Sync scroll entre todos os charts ────────────────────────────────
-    const subCharts = [macdChart, stochChart, rsiChart, adxChart];
+    const subCharts = [macdChart, rsiChart, obvChart, adxChart];
     subCharts.forEach(ch => {
       candleChart.timeScale().subscribeVisibleTimeRangeChange(range => {
         try { ch.timeScale().setVisibleRange(range); } catch(e) {}
@@ -1494,22 +1491,7 @@
       // Linha zero — filtro "MACD line > 0"
       macdZeroSeries.setData(candles.map(c => ({ time: c.time, value: 0 })));
 
-      // ── Stocástico (14, 3) — oversold 20 / overbought 75 ─────────────
-      const kP = 14;
-      const kRaw = candles.map((c, i) => {
-        const sl = candles.slice(Math.max(0, i - kP + 1), i + 1);
-        const hi = Math.max(...sl.map(x => x.high)), lo = Math.min(...sl.map(x => x.low));
-        return hi === lo ? 50 : (c.close - lo) / (hi - lo) * 100;
-      });
-      const kSmooth = calcEMA(kRaw, 3);
-      const dSmooth = calcEMA(kSmooth, 3);
-      stochKSeries.setData(candles.map((c,i) => ({ time: c.time, value: kSmooth[i] })));
-      stochDSeries.setData(candles.map((c,i) => ({ time: c.time, value: dSmooth[i] })));
-      // Níveis oversold (20) e overbought (75) — parâmetros das estratégias v2
-      stochOSSeries.setData(candles.map(c => ({ time: c.time, value: 20 })));
-      stochOBSeries.setData(candles.map(c => ({ time: c.time, value: 75 })));
-
-      // ── RSI (14) — acima de 70 bloqueia MACD ─────────────────────────
+      // ── RSI (14) — acima de 75 bloqueia MACD, abaixo de 30 sobrevenda ──
       const rsiP = 14;
       const rsiVals = closes.map((_, i) => {
         if (i < rsiP) return 50;
@@ -1559,8 +1541,24 @@
         return adxRaw.map((v, i) => i < adxP * 2 ? 20 : v / adxP);
       })();
       adxSeries.setData(candles.map((c,i) => ({ time: c.time, value: Math.min(100, Math.max(0, adxVals[i])) })));
-      adxTrendSeries.setData(candles.map(c => ({ time: c.time, value: 25 }))); // trending threshold
-      adxRangeSeries.setData(candles.map(c => ({ time: c.time, value: 20 }))); // ranging threshold
+      adxTrendSeries.setData(candles.map(c => ({ time: c.time, value: 20 }))); // trending threshold
+      adxRangeSeries.setData(candles.map(c => ({ time: c.time, value: 15 }))); // chop threshold
+
+      // ── OBV — On-Balance Volume (filtro confirmação breakout Donchian) ──
+      // OBV crescente junto com preço = breakout real com volume institucional
+      // OBV estagnado/caindo = breakout "seco" = bull trap potencial
+      const obvVals = (() => {
+        let obv = 0;
+        return candles.map((c, i) => {
+          if (i > 0) {
+            if (c.close > candles[i-1].close)      obv += (c.volume || 0);
+            else if (c.close < candles[i-1].close) obv -= (c.volume || 0);
+          }
+          return obv;
+        });
+      })();
+      obvSeries.setData(candles.map((c,i) => ({ time: c.time, value: obvVals[i] })));
+      obvZeroSeries.setData(candles.map(c => ({ time: c.time, value: 0 })));
 
     } catch(e) { console.error('[Candles]', e); }
   }
