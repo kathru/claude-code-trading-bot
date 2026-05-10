@@ -24,6 +24,10 @@ from strategies.stoch_bounce           import StochBounce
 from strategies.rsi_divergence_detector import RSIDivergenceDetector
 from strategies.volatility_guard       import VolatilityGuard
 from strategies.trend_filter           import TrendFilter
+from strategies.market_regime          import (
+    detect_regime, calc_atr, atr_stop_loss,
+    obv_rising, mfi_bullish, mtf_trend_bullish
+)
 # Estratégias antigas preservadas para referência:
 # from strategies.rsi_divergence import RSIDivergence
 # from strategies.support_resistance import SupportResistance
@@ -258,6 +262,17 @@ trend_filter = TrendFilter(period=50)   # EMA50 1H — alinhado com EMA Pullback
 
 # ── Cooldown anti-whipsaw após SL (por slot) ─────────────────────
 sl_cooldowns: dict = {}   # {f"{strat}:{pair}": cycles_remaining}
+
+# ── Cooldown entre BUYs do mesmo par (1h mínimo entre compras) ───
+last_buy_time: dict = {}  # {f"{strat}:{pair}": timestamp}
+BUY_COOLDOWN_SECONDS = 3600  # 1 hora entre BUYs no mesmo par/estratégia
+
+# ── Limite de posições simultâneas abertas ───────────────────────
+MAX_OPEN_SLOTS = 8            # máximo de slots abertos ao mesmo tempo
+
+# ── Limite de trades por dia (circuit breaker) ──────────────────
+_daily_trade_count: dict = {}  # {"YYYY-MM-DD": count}
+MAX_DAILY_TRADES = 12         # máximo de trades por dia (evita overtrading)
 
 # ── Slots independentes: 4 estratégias × 3 pares + 3 manuais ────
 def _empty_slot():
@@ -939,6 +954,31 @@ async def trading_loop():
                   dynamic_pct = _calculate_dynamic_position_size(pair, candles_1h)
                   _dynamic_pcts.append(dynamic_pct)
 
+                  # ── Filtros de regime e confirmação multi-timeframe ──────
+                  df_30m_regime  = all_strategies[0].candles_to_df(candles_30m) if candles_30m else pd.DataFrame()
+                  df_1h_regime   = all_strategies[0].candles_to_df(candles_1h)  if candles_1h  else pd.DataFrame()
+                  df_6h_regime   = all_strategies[0].candles_to_df(candles_6h)  if candles_6h  else pd.DataFrame()
+
+                  # ADX: detecta regime no 1H (base para tendência)
+                  market_regime  = detect_regime(df_1h_regime) if len(df_1h_regime) > 30 else "neutral"
+
+                  # MTF: preço acima da EMA50 no 6H (confirma tendência maior)
+                  mtf_bullish    = mtf_trend_bullish(df_6h_regime) if len(df_6h_regime) > 50 else True
+
+                  # ATR: volatilidade atual do par no 1H (para SL dinâmico)
+                  current_atr    = calc_atr(df_1h_regime) if len(df_1h_regime) > 14 else 0.0
+
+                  # Circuit breaker diário
+                  today_str      = now_str[:10]
+                  daily_trades   = _daily_trade_count.get(today_str, 0)
+                  circuit_open   = daily_trades >= MAX_DAILY_TRADES
+
+                  # Posições simultâneas abertas (global)
+                  open_slots_count = sum(1 for s in strategy_slots.values() if s.get("qty", 0) > 0)
+
+                  logger.debug(f"[{pair}] regime={market_regime} mtf={mtf_bullish} "
+                               f"atr={current_atr:.4f} open_slots={open_slots_count} daily={daily_trades}")
+
                   for strat in all_strategies:
                       key    = f"{strat.name}:{pair}"
                       slot   = strategy_slots.setdefault(key, _empty_slot())
@@ -956,8 +996,22 @@ async def trading_loop():
                           slot["peak"] = max(slot["peak"], price)
                           gain_pct = (price - slot["entry"]) / slot["entry"] * 100
 
+                          # ── ATR Stop Loss dinâmico ──────────────────────────────
+                          # Usa ATR do 1H para SL baseado em volatilidade real do ativo
+                          # Substitui o percentual fixo por distância proporcional ao ruído
+                          if current_atr > 0 and slot["entry"] > 0:
+                              atr_sl_price = atr_stop_loss(
+                                  slot["entry"], df_1h_regime,
+                                  multiplier=2.0, min_pct=0.03, max_pct=0.12
+                              )
+                          else:
+                              atr_sl_price = slot["entry"] * (1 - current_sl_pct / 100)
+
                           # Break-even stop: após +1.5%, SL sobe para o ponto de entrada
-                          effective_sl = slot["entry"] if gain_pct >= BREAKEVEN_ACTIVATE_PCT else slot["entry"] * (1 - current_sl_pct / 100)
+                          if gain_pct >= BREAKEVEN_ACTIVATE_PCT:
+                              effective_sl = slot["entry"]
+                          else:
+                              effective_sl = atr_sl_price
                           effective_sl = max(effective_sl, slot.get("be_sl", 0))
                           slot["be_sl"] = effective_sl  # persiste o break-even stop
 
@@ -977,6 +1031,7 @@ async def trading_loop():
                                   logger.info(f"[{pair}][{strat.name}] SELL {label} gain={gain_pct:+.2f}% P&L ${pnl:+.2f}")
                                   if is_sl:
                                       sl_cooldowns[key] = SL_COOLDOWN_CYCLES
+                                  _daily_trade_count[today_str] = _daily_trade_count.get(today_str, 0) + 1
                                   # Sempre insere novo entry no topo — mesma lógica do BUY executado
                                   state["feed"].insert(0, {
                                       "time": now_str, "cycle": state["cycle"],
@@ -1048,28 +1103,55 @@ async def trading_loop():
                           slot["unrealized"] = (price - slot["entry"]) * slot["qty"] if slot["qty"] > 0 else 0.0
 
                       elif signal == "BUY" and not extreme_greed:
-                          cooldown = sl_cooldowns.get(key, 0)
-                          if cooldown > 0:
-                              sl_cooldowns[key] = cooldown - 1
+                          # ── Filtros de qualidade antes de executar BUY ─────────
+                          sl_cd = sl_cooldowns.get(key, 0)
+                          if sl_cd > 0:
+                              sl_cooldowns[key] = sl_cd - 1
+                              logger.debug(f"[{pair}][{strat.name}] BUY bloqueado — SL cooldown ({sl_cd})")
+
+                          elif circuit_open:
+                              logger.info(f"[{pair}][{strat.name}] BUY bloqueado — circuit breaker ({daily_trades}/{MAX_DAILY_TRADES} trades hoje)")
+
+                          elif open_slots_count >= MAX_OPEN_SLOTS:
+                              logger.info(f"[{pair}][{strat.name}] BUY bloqueado — max slots abertos ({open_slots_count}/{MAX_OPEN_SLOTS})")
+
+                          elif time.time() - last_buy_time.get(key, 0) < BUY_COOLDOWN_SECONDS:
+                              logger.debug(f"[{pair}][{strat.name}] BUY bloqueado — cooldown 1h ativo")
+
+                          elif not mtf_bullish and strat.name in ("EMA Pullback", "Donchian Breakout", "MACD Momentum"):
+                              # MTF: tendência só opera se 6H confirma uptrend (EMA50 > EMA200)
+                              logger.info(f"[{pair}][{strat.name}] BUY bloqueado — MTF 6H bearish")
+
+                          elif market_regime == "ranging" and strat.name in ("EMA Pullback", "Donchian Breakout"):
+                              # ADX < 20: mercado lateral — Donchian e EMA geram breakouts falsos
+                              logger.debug(f"[{pair}][{strat.name}] BUY bloqueado — regime ranging (ADX<20)")
+
+                          elif market_regime == "trending" and strat.name == "Stoch Bounce":
+                              # ADX > 25: tendência forte — mean reversion tem baixa eficácia
+                              logger.debug(f"[{pair}][{strat.name}] BUY bloqueado — regime trending (ADX>25)")
+
                           else:
+                              # ── Todos os filtros passaram: executa o BUY ────────
                               trade_usd = portfolio_total * dynamic_pct
                               if engine.balance_usd < trade_usd * 1.006:
-                                  # Se não tem 5% em caixa, usa o saldo restante (menos margem de taxa)
                                   trade_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
 
-                              if trade_usd > 1.0:  # Mínimo de $1 para trade
+                              if trade_usd > 1.0:
                                   qty = trade_usd / price
                                   if engine.buy(symbol, trade_usd, price, strat.name):
                                       slot["qty"]       = qty
                                       slot["entry"]     = price
                                       slot["peak"]      = price
                                       slot["pyramids"]  = 0
-                                      slot["entry_usd"] = trade_usd  # guarda tamanho original
+                                      slot["entry_usd"] = trade_usd
+                                      last_buy_time[key] = time.time()
+                                      _daily_trade_count[today_str] = daily_trades + 1
                                       _record_trade("BUY", pair, qty, price, trade_usd, strat.name)
                                       _count_buy(strat.name)
                                       pct_used = (trade_usd / engine.initial_balance) * 100 if engine.initial_balance > 0 else 0
                                       logger.info(f"[{pair}][{strat.name}] ✅ BUY {pct_used:.1f}% "
-                                                  f"R${trade_usd*usd_brl:.0f} @ ${price:,.2f}")
+                                                  f"R${trade_usd*usd_brl:.0f} @ ${price:,.2f} "
+                                                  f"[regime={market_regime} mtf={mtf_bullish}]")
                                       state["feed"].insert(0, {
                                           "time": now_str, "cycle": state["cycle"],
                                           "pair": pair, "strategy": strat.name,
