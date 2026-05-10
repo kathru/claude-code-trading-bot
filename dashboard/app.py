@@ -167,6 +167,35 @@ def _detect_market_regime(candles_1h: list, candles_6h: list) -> str:
         return "chop"
 
 
+def _get_fee_rates() -> tuple:
+    """Determina maker/taker fee pelo volume dos últimos 30 dias."""
+    cutoff  = time.time() - 30 * 86400
+    vol_30d = sum(t.get("usd", 0) for t in engine.trades if (t.get("ts") or 0) >= cutoff)
+    maker, taker = 0.0060, 0.0120
+    for min_vol, m, t_ in reversed(COINBASE_FEE_TIERS):
+        if vol_30d >= min_vol:
+            maker, taker = m, t_
+            break
+    return maker, taker
+
+def _current_taker_fee() -> float:
+    _, taker = _get_fee_rates(); return taker
+
+def _current_maker_fee() -> float:
+    maker, _ = _get_fee_rates(); return maker
+
+
+def _calc_confidence_score(signals: dict, regime: str, adx: float) -> float:
+    """Score 0-1 ponderado por regime. Ajusta tamanho da posição."""
+    weights = STRATEGY_WEIGHTS.get(regime, STRATEGY_WEIGHTS["neutral"])
+    max_w   = sum(weights.values()) or 1.0
+    buy_score = sum(weights.get(s, 1.0) for s, sig in signals.items() if sig == "BUY")
+    normalized = buy_score / max_w
+    if regime == "trending" and adx > 20:
+        normalized = min(1.0, normalized * (1 + min(0.25, (adx - 20) / 80)))
+    return normalized
+
+
 def _dynamic_sl(fg_value: int) -> float:
     """SL dinâmico entre SL_MIN e SL_MAX — proporcional ao Fear & Greed (inverso ao TP).
     Medo extremo → SL mais largo (mercado volátil, evita stop prematuro)
@@ -206,7 +235,7 @@ def _current_cycle() -> int:
     return (int(time.time()) + SP_OFFSET) % 86400 // CYCLE_INTERVAL
 
 
-PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD", "AVAX-USD", "LINK-USD", "DOGE-USD"]  # 6 pares para melhor diversificação
+PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD", "AVAX-USD", "LINK-USD", "RENDER-USD"]  # 6 pares — DOGE removido, RENDER adicionado
 
 # ── Portfolio em Real é FIXO em R$ 5.000 ────────────────────────
 TOTAL_BRL_INITIAL = 5000.0  # Portfolio inicial em BRL — FIXO, nunca muda
@@ -259,10 +288,42 @@ def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float =
 
 
 # ── Gestão de risco ──────────────────────────────────────────────
-SL_MIN                = 3.0  # SL mínimo: -3% (ganância extrema — sai rápido)
-SL_MAX                = 7.0  # SL máximo: -7% (medo extremo — mais espaço para respirar)
-TAKE_PROFIT_MIN       = 4.0   # fallback mínimo
-TAKE_PROFIT_MAX       = 18.0  # fallback máximo (bull trend)
+SL_MIN                = 3.0
+SL_MAX                = 7.0
+TAKE_PROFIT_MIN       = 4.0
+TAKE_PROFIT_MAX       = 18.0
+
+# ── Stop Loss por ativo (min%, max%) — ATR × 2.0 clampado neste range ──
+PAIR_SL_RANGE = {
+    "BTC-USD":    (0.02, 0.04),
+    "ETH-USD":    (0.03, 0.05),
+    "SOL-USD":    (0.05, 0.07),
+    "AVAX-USD":   (0.05, 0.07),
+    "LINK-USD":   (0.05, 0.07),
+    "RENDER-USD": (0.06, 0.09),
+}
+
+# ── Coinbase Advanced Trading — Standard Fee System (2026) ───────
+COINBASE_FEE_TIERS = [
+    (          0,  0.0060, 0.0120),  # $0–$10K
+    (     10_000,  0.0035, 0.0080),  # $10K–$50K
+    (     50_000,  0.0025, 0.0040),  # $50K–$100K
+    (    100_000,  0.0015, 0.0025),  # $100K–$1M
+    (  1_000_000,  0.0010, 0.0020),  # $1M–$15M
+    ( 15_000_000,  0.0007, 0.0016),  # $15M–$50M
+    ( 50_000_000,  0.0005, 0.0014),  # $50M–$100M
+    (100_000_000,  0.0002, 0.0010),  # $100M–$250M
+    (250_000_000,  0.0000, 0.0005),  # $250M+
+]
+
+# ── Score ponderado por regime ────────────────────────────────────
+STRATEGY_WEIGHTS = {
+    "trending": {"Donchian Breakout": 1.5, "EMA Pullback": 1.3, "MACD Momentum": 1.2},
+    "ranging":  {"Donchian Breakout": 0.5, "EMA Pullback": 0.9, "MACD Momentum": 0.8},
+    "neutral":  {"Donchian Breakout": 1.0, "EMA Pullback": 1.0, "MACD Momentum": 1.0},
+}
+SCORE_MIN_THRESHOLD = 0.60   # abaixo de 60% → BUY bloqueado
+SCORE_SIZE_BOOST    = 1.4    # score 85%+ → tamanho +40%
 
 # ── Trailing stop por ativo (activate%, stop_from_peak%) ─────────
 PAIR_TRAILING = {
@@ -288,7 +349,7 @@ _daily_trade_count: dict = {}  # {"YYYY-MM-DD": count}
 last_buy_time:      dict = {}  # {f"{strat}:{pair}": timestamp}
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
-PYRAMID_MAX          = 3     # máx. 3 adições (175% da entrada total)
+PYRAMID_MAX          = 1     # máx. 1 adição por posição
 PYRAMID_MIN_GAIN_PCT = 3.0   # pyramid somente após +3% de lucro E ADX > 25
 PYRAMID_SIZE_PCT     = 0.25  # cada pyramid = 25% do trade inicial
 
