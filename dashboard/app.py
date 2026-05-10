@@ -170,7 +170,7 @@ TOTAL_BRL_INITIAL = 5000.0  # Portfolio inicial em BRL — FIXO, nunca muda
 # Portfolio em USD varia com cotação: USD_atual = TOTAL_BRL_INITIAL / usd_brl_atual
 
 # ── Ciclo e candles ─────────────────────────────────────────────
-CYCLE_INTERVAL    = 180      # ciclo de 180s (3 minutos)
+CYCLE_INTERVAL    = 300      # ciclo de 300s (5 minutos)
 CANDLE_30M        = "THIRTY_MINUTE"  # Donchian, Stoch
 CANDLE_1H         = "ONE_HOUR"       # EMA Pullback, MACD
 CANDLE_6H         = "SIX_HOUR"
@@ -272,7 +272,7 @@ MAX_OPEN_SLOTS = 8            # máximo de slots abertos ao mesmo tempo
 
 # ── Limite de trades por dia (circuit breaker) ──────────────────
 _daily_trade_count: dict = {}  # {"YYYY-MM-DD": count}
-MAX_DAILY_TRADES = 12         # máximo de trades por dia (evita overtrading)
+MAX_DAILY_TRADES = 15         # máximo de trades por dia (evita overtrading)
 
 # ── Slots independentes: 4 estratégias × 3 pares + 3 manuais ────
 def _empty_slot():
