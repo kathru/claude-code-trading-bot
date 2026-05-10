@@ -170,7 +170,7 @@ TOTAL_BRL_INITIAL = 5000.0  # Portfolio inicial em BRL — FIXO, nunca muda
 # Portfolio em USD varia com cotação: USD_atual = TOTAL_BRL_INITIAL / usd_brl_atual
 
 # ── Ciclo e candles ─────────────────────────────────────────────
-CYCLE_INTERVAL    = 300      # ciclo de 300s (5 minutos)
+CYCLE_INTERVAL    = 900      # ciclo de 900s (15 minutos)
 CANDLE_30M        = "THIRTY_MINUTE"  # Donchian, Stoch
 CANDLE_1H         = "ONE_HOUR"       # EMA Pullback, MACD
 CANDLE_6H         = "SIX_HOUR"
@@ -216,8 +216,19 @@ def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float =
 
 
 # ── Gestão de risco ──────────────────────────────────────────────
-SL_MIN                = 3.0  # SL mínimo: -3% (ganância extrema — sai rápido)
-SL_MAX                = 7.0  # SL máximo: -7% (medo extremo — mais espaço para respirar)
+SL_MIN                = 3.0  # SL mínimo global (fallback)
+SL_MAX                = 8.0  # SL máximo global (fallback)
+
+# ── Stop Loss específico por ativo (min%, max%) ──────────────────
+# ATR × 2.0 é clampado dentro deste range por par
+PAIR_SL_RANGE = {
+    "BTC-USD":  (0.02, 0.04),  # BTC:  2–4%  (baixa volatilidade relativa)
+    "ETH-USD":  (0.03, 0.05),  # ETH:  3–5%
+    "SOL-USD":  (0.05, 0.07),  # SOL:  5–7%  (alta volatilidade)
+    "AVAX-USD": (0.05, 0.07),  # AVAX: 5–7%
+    "LINK-USD": (0.05, 0.07),  # LINK: 5–7%
+    "DOGE-USD": (0.06, 0.08),  # DOGE: 6–8%  (maior volatilidade)
+}
 TAKE_PROFIT_MIN       = 4.0  # TP mínimo: +4%
 TAKE_PROFIT_MAX       = 12.0 # TP máximo: +12%
 TRAILING_STOP_PCT     = 2.5  # trailing: -2.5% do pico
@@ -1021,16 +1032,19 @@ async def trading_loop():
                           slot["peak"] = max(slot["peak"], price)
                           gain_pct = (price - slot["entry"]) / slot["entry"] * 100
 
-                          # ── ATR Stop Loss dinâmico ──────────────────────────────
-                          # Usa ATR do 1H para SL baseado em volatilidade real do ativo
-                          # Substitui o percentual fixo por distância proporcional ao ruído
+                          # ── ATR Stop Loss dinâmico por ativo ────────────────────
+                          # Cada par tem seu próprio range de SL (min/max)
+                          # ATR × 2.0 é clampado dentro do range específico do ativo
+                          _sl_min, _sl_max = PAIR_SL_RANGE.get(pair, (SL_MIN/100, SL_MAX/100))
                           if current_atr > 0 and slot["entry"] > 0:
                               atr_sl_price = atr_stop_loss(
                                   slot["entry"], df_1h_regime,
-                                  multiplier=2.0, min_pct=0.03, max_pct=0.12
+                                  multiplier=2.0,
+                                  min_pct=_sl_min,
+                                  max_pct=_sl_max,
                               )
                           else:
-                              atr_sl_price = slot["entry"] * (1 - current_sl_pct / 100)
+                              atr_sl_price = slot["entry"] * (1 - _sl_max)
 
                           # Break-even stop: após +1.5%, SL sobe para o ponto de entrada
                           if gain_pct >= BREAKEVEN_ACTIVATE_PCT:
@@ -1261,9 +1275,11 @@ async def trading_loop():
                 # ATR SL level para o frontend exibir
                 atr_sl_price = None
                 atr_sl_pct_val = None
+                _sl_min_p, _sl_max_p = PAIR_SL_RANGE.get(pair, (SL_MIN/100, SL_MAX/100))
                 if entry_price and current_atr > 0:
                     _atr_sl = atr_stop_loss(entry_price, df_1h_regime,
-                                            multiplier=2.0, min_pct=0.03, max_pct=0.12)
+                                            multiplier=2.0,
+                                            min_pct=_sl_min_p, max_pct=_sl_max_p)
                     atr_sl_price   = round(_atr_sl, 4)
                     atr_sl_pct_val = round((entry_price - _atr_sl) / entry_price * 100, 2)
 
