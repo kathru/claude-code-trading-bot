@@ -44,6 +44,15 @@
     .regime-trending { background: rgba(34,197,94,0.15); color: #4ade80; border: 1px solid rgba(34,197,94,0.35); }
     .regime-ranging  { background: rgba(234,179,8,0.15);  color: #facc15; border: 1px solid rgba(234,179,8,0.35); }
     .regime-neutral  { background: rgba(107,114,128,0.15);color: #9ca3af; border: 1px solid rgba(107,114,128,0.3); }
+    /* Market Mode global banner */
+    .mode-bull  { background: rgba(34,197,94,0.12);  color: #4ade80; border: 1px solid rgba(34,197,94,0.35); }
+    .mode-chop  { background: rgba(234,179,8,0.12);  color: #facc15; border: 1px solid rgba(234,179,8,0.35); }
+    .mode-bear  { background: rgba(239,68,68,0.12);  color: #f87171; border: 1px solid rgba(239,68,68,0.35); }
+    /* Score gate badges */
+    .score-blocked  { background: rgba(239,68,68,0.15);  color: #f87171; border: 1px solid rgba(239,68,68,0.35); }
+    .score-reduced  { background: rgba(251,146,60,0.15); color: #fb923c; border: 1px solid rgba(251,146,60,0.35); }
+    .score-normal   { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.35); }
+    .score-aggr     { background: rgba(34,197,94,0.15);  color: #4ade80; border: 1px solid rgba(34,197,94,0.35); }
     /* Tooltip for strategy filters */
     .strat-tooltip { position: relative; }
     .strat-tooltip:hover .strat-tooltip-box { display: block; }
@@ -85,6 +94,11 @@
       <div class="text-right">
         <p class="text-[10px] text-gray-500 hidden sm:block">Próximo ciclo <span id="header-cycle-count" class="text-gray-600">#—</span></p>
         <p id="header-cycle-timer" class="text-sm text-indigo-400 font-mono font-bold">--</p>
+      </div>
+      <!-- Market Regime global — visível em todos os tamanhos -->
+      <div id="header-market-mode" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full mode-chop">
+        <span id="header-mode-icon" class="text-sm">↔</span>
+        <span id="header-mode-label" class="text-sm font-bold">CHOP</span>
       </div>
       <!-- Ativo — visível em todos os tamanhos -->
       <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/30">
@@ -136,7 +150,7 @@
         <h3 class="font-semibold text-white">Painel de estratégias</h3>
         <span id="strategy-panel-subtitle" class="text-xs text-gray-500">P&L em trades</span>
       </div>
-      <div id="strategy-panel" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+      <div id="strategy-panel" class="grid grid-cols-1 sm:grid-cols-3 gap-3"></div>
     </div>
 
     <!-- ── Cards de Criptos ── -->
@@ -148,13 +162,26 @@
         <h3 class="font-semibold text-white">Filtros Ativos</h3>
         <span class="text-xs text-gray-500">ADX · Score · MTF 6H · SL Range · ATR Stop — por ciclo</span>
       </div>
+      <!-- Banner de Regime Global -->
+      <div id="regime-banner" class="rounded-lg px-4 py-2.5 mb-3 flex items-center justify-between mode-chop">
+        <span id="regime-banner-text" class="text-sm font-bold">↔ CHOP — Operação Conservadora</span>
+        <span class="text-[10px] text-gray-400">Market Regime Engine</span>
+      </div>
+      <!-- Regras de operação -->
+      <div class="text-[10px] text-gray-500 mb-3 flex flex-wrap gap-x-4 gap-y-1">
+        <span>Min RR: <span class="text-indigo-400 font-semibold">2.5:1</span></span>
+        <span>Max Alts: <span class="text-yellow-400 font-semibold">2</span></span>
+        <span>Exp. Alts: <span class="text-orange-400 font-semibold">≤ 25%</span></span>
+        <span>SL Render: <span class="text-pink-400 font-semibold">6–9%</span></span>
+        <span>SL BTC: <span class="text-green-400 font-semibold">2–4%</span></span>
+      </div>
       <div class="overflow-x-auto">
         <table class="w-full text-xs">
           <thead>
             <tr class="text-gray-500 uppercase tracking-wider text-[10px] border-b border-gray-800">
               <th class="text-left pb-2 pr-4">Par</th>
               <th class="text-center pb-2 pr-4">Regime ADX</th>
-              <th class="text-center pb-2 pr-4">Score</th>
+              <th class="text-center pb-2 pr-4">Score / Gate</th>
               <th class="text-center pb-2 pr-4">MTF 6H</th>
               <th class="text-center pb-2 pr-4">SL Range</th>
               <th class="text-center pb-2 pr-4">ATR Stop</th>
@@ -166,6 +193,13 @@
             <!-- populated by JS -->
           </tbody>
         </table>
+      </div>
+      <!-- Legenda de Score Gate -->
+      <div class="mt-3 flex flex-wrap gap-2 text-[10px]">
+        <span class="score-blocked px-2 py-0.5 rounded font-bold">&lt;60% BLOQUEADO</span>
+        <span class="score-reduced px-2 py-0.5 rounded font-bold">60-75% REDUZIDO</span>
+        <span class="score-normal px-2 py-0.5 rounded font-bold">75-85% NORMAL</span>
+        <span class="score-aggr px-2 py-0.5 rounded font-bold">85%+ AGRESSIVO</span>
       </div>
     </div>
 
@@ -230,8 +264,8 @@
           <span><span style="color:#e879f9">—</span> ADX (força)</span>
           <span><span style="color:rgba(74,222,128,0.6)">- -</span> 25 → Trending</span>
           <span><span style="color:rgba(250,204,21,0.6)">- -</span> 20 → Ranging</span>
-          <span class="text-gray-600">Acima 25 = Donchian+EMA</span>
-          <span class="text-gray-600">Abaixo 20 = só Stoch</span>
+          <span class="text-gray-600">Acima 20 = Donchian+EMA</span>
+          <span class="text-gray-600">Abaixo 20 = RANGING/CHOP</span>
         </div>
       </div>
     </div>
@@ -318,10 +352,10 @@
           <p class="text-[10px] text-gray-600 mt-0.5">Risco/retorno positivo</p>
         </div>
         <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
-          <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">TP Dinâmico</p>
-          <p id="kpi-tp" class="text-xl font-bold text-indigo-400">—</p>
-          <p id="kpi-tp-range" class="text-[10px] text-gray-600 mt-0.5">—</p>
-          <p class="text-[10px] text-gray-600 mt-0.5">Ajustado por volatilidade</p>
+          <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Market Regime</p>
+          <p id="kpi-market-mode" class="text-xl font-bold text-yellow-400">—</p>
+          <p id="kpi-market-mode-tp" class="text-[10px] text-indigo-400 mt-0.5">TP: —</p>
+          <p class="text-[10px] text-gray-600 mt-0.5">bull / chop / bear</p>
         </div>
         <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
           <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Dynamic Trade Size</p>
@@ -331,7 +365,7 @@
         <!-- NEW KPI: Circuit Breaker -->
         <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
           <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Circuit Breaker</p>
-          <p id="kpi-circuit-breaker" class="text-xl font-bold text-cyan-400">—/12</p>
+          <p id="kpi-circuit-breaker" class="text-xl font-bold text-cyan-400">—/30</p>
           <p id="kpi-circuit-breaker-sub" class="text-[10px] text-gray-600 mt-0.5">trades hoje</p>
         </div>
         <!-- NEW KPI: Slots Abertos -->
@@ -394,27 +428,22 @@
   const STRATEGIES = [
     {
       name: 'Donchian Breakout', id: 'Don', icon: '🚀',
-      filters: ['ADX>25', 'OBV↑'],
-      desc: 'Breakout do canal Donchian 20. Exige ADX > 25 (trending) e OBV em nova máxima.'
+      filters: ['ADX>20', 'OBV↑', 'RSI>45'],
+      desc: 'Breakout do canal Donchian 20. Exige ADX > 20 (trending), OBV em nova máxima e RSI > 45.'
     },
     {
       name: 'EMA Pullback', id: 'EMA', icon: '📈',
-      filters: ['EMA50↑', 'Vol✓'],
+      filters: ['Slope EMA50', 'Vol✓'],
       desc: 'Pullback para EMA. Exige slope da EMA50 positivo e volume baixo no pullback, alto na retomada.'
     },
     {
       name: 'MACD Momentum', id: 'MACD', icon: '⚡',
-      filters: ['MACD>0', 'RSI<70'],
-      desc: 'Cruzamento MACD acima de zero. Exige MACD line > 0 e RSI < 70.'
-    },
-    {
-      name: 'Stoch Bounce', id: 'Stoch', icon: '🎯',
-      filters: ['BB<15%', 'OS<20'],
-      desc: 'Bounce em sobrevenda. Exige Bollinger Bandwidth < 15%, oversold < 20, overbought > 75.'
+      filters: ['MACD>0', 'RSI<75'],
+      desc: 'Cruzamento MACD acima de zero. Exige MACD line > 0 e RSI < 75 (sem sobrecompra extrema).'
     },
   ];
 
-  // ─── Helpers de regime ──────────────────────────────────────────────────
+  // ─── Helpers de regime (pair-level ADX regime) ──────────────────────────
   function regimeCls(r) {
     if (!r || r === '—') return 'regime-neutral';
     const ru = r.toUpperCase();
@@ -427,27 +456,45 @@
     return r.toUpperCase();
   }
 
-  // ─── Inferir regime a partir dos sinais disponíveis ────────────────────
-  // Heurística: se Donchian ou MACD (tendência) == BUY e Stoch == HOLD → TRENDING
-  // Se Stoch == BUY e estratégias de tendência == HOLD → RANGING
-  // Caso contrário → NEUTRAL
+  // ─── Market Mode global (bull/chop/bear) helpers ────────────────────────
+  function marketModeCls(m) {
+    if (!m) return 'mode-chop';
+    const mu = m.toLowerCase();
+    if (mu === 'bull') return 'mode-bull';
+    if (mu === 'bear') return 'mode-bear';
+    return 'mode-chop';
+  }
+  function marketModeIcon(m) {
+    if (!m) return '↔';
+    const mu = m.toLowerCase();
+    if (mu === 'bull') return '🐂';
+    if (mu === 'bear') return '🐻';
+    return '↔';
+  }
+  function marketModeDesc(m) {
+    if (!m) return 'CHOP — Operação Conservadora';
+    const mu = m.toLowerCase();
+    if (mu === 'bull') return 'BULL — Operação Agressiva';
+    if (mu === 'bear') return 'BEAR — Novas compras BLOQUEADAS';
+    return 'CHOP — Operação Conservadora';
+  }
+
+  // ─── Inferir regime (pair-level) a partir dos sinais disponíveis ─────────
+  // Prefere campo sig.regime do backend; fallback por heurística de estratégias
   function inferRegime(sig) {
     if (!sig || !sig.strategies) return 'NEUTRAL';
-    const don   = sig.strategies['Donchian Breakout'] || 'HOLD';
-    const ema   = sig.strategies['EMA Pullback']      || 'HOLD';
-    const macd  = sig.strategies['MACD Momentum']     || 'HOLD';
-    const stoch = sig.strategies['Stoch Bounce']      || 'HOLD';
+    // Prefer backend explicit regime field
+    if (sig.regime) return sig.regime.toUpperCase();
+
+    const don  = sig.strategies['Donchian Breakout'] || 'HOLD';
+    const ema  = sig.strategies['EMA Pullback']      || 'HOLD';
+    const macd = sig.strategies['MACD Momentum']     || 'HOLD';
 
     const trendBuys   = [don, ema, macd].filter(v => v === 'BUY').length;
     const trendActive = [don, ema, macd].some(v => v !== 'HOLD');
-    const stochActive = stoch === 'BUY';
-
-    // If backend sends explicit regime field, prefer it
-    if (sig.regime) return sig.regime.toUpperCase();
 
     if (trendBuys >= 2) return 'TRENDING';
-    if (trendActive && !stochActive) return 'TRENDING';
-    if (stochActive && !trendActive) return 'RANGING';
+    if (trendActive) return 'TRENDING';
     return 'NEUTRAL';
   }
 
@@ -472,7 +519,7 @@
         <span class="text-xs text-gray-600 uppercase tracking-wider">Regime de Mercado</span>
         <span id="regime-${c.sym}" class="regime-neutral text-[10px] font-bold px-2.5 py-0.5 rounded-full">—</span>
       </div>
-      <div class="grid grid-cols-4 gap-1 mb-2">
+      <div class="grid grid-cols-3 gap-1 mb-2">
         ${STRATEGIES.map(s => `
         <div id="slot-${c.sym}-${s.id}" class="signal-hold rounded-lg px-1 py-1.5 text-center text-[9px]">
           <p class="opacity-60 mb-0.5">${s.icon} ${s.id}</p>
@@ -632,8 +679,6 @@
     if (feeRateEl) feeRateEl.textContent = feeRate;
 
     // ── Preços, sinais e regime dos cards de cripto ───────────────────────
-    const regimeCounts = { TRENDING: 0, RANGING: 0, NEUTRAL: 0 };
-
     CRYPTOS.forEach(c => {
       const price = (s.prices || {})[c.pair];
       const sig   = (s.signals || {})[c.pair];
@@ -646,11 +691,10 @@
         chgEl.className = 'text-sm ' + (chg >= 0 ? 'text-green-400' : 'text-red-400');
       }
 
-      // Regime badge per pair
+      // Regime badge per pair — usa sig.regime do backend se disponível
       const regimeEl = document.getElementById('regime-' + c.sym);
       if (regimeEl) {
         const regime = sig ? inferRegime(sig) : 'NEUTRAL';
-        regimeCounts[regime] = (regimeCounts[regime] || 0) + 1;
         regimeEl.textContent  = regime;
         regimeEl.className    = regimeCls(regime) + ' text-[10px] font-bold px-2.5 py-0.5 rounded-full';
       }
@@ -822,17 +866,19 @@
         const regime = sig && sig.regime ? sig.regime.toUpperCase() : (sig ? inferRegime(sig) : 'NEUTRAL');
         const rCls   = regimeCls(regime);
 
-        // ── Score de confiança ───────────────────────────────────────
+        // ── Score de confiança + Gate ────────────────────────────────
         const score    = scores[c.pair] != null ? scores[c.pair] : null;
-        let scoreTxt   = '—', scoreCls = 'text-gray-500', scoreBar = '';
+        let scoreCell  = '<span class="text-gray-500 text-[10px]">—</span>';
         if (score != null) {
           const pct = Math.round(score * 100);
-          scoreCls  = pct >= 60 ? 'text-green-400' : pct >= 35 ? 'text-yellow-400' : 'text-orange-400';
-          scoreTxt  = pct + '%';
-          const barW = Math.round(pct * 40 / 100);  // max 40px
-          const barCol = pct >= 60 ? '#4ade80' : pct >= 35 ? '#facc15' : '#fb923c';
-          scoreBar = `<div style="width:40px;height:3px;background:#21262d;border-radius:2px;margin:2px auto 0;">
-            <div style="width:${barW}px;height:3px;background:${barCol};border-radius:2px;"></div></div>`;
+          const barW   = Math.round(pct * 40 / 100);
+          let gateCls, gateLabel, barCol;
+          if (pct < 60)       { gateCls = 'score-blocked'; gateLabel = 'BLOQUEADO'; barCol = '#f87171'; }
+          else if (pct < 75)  { gateCls = 'score-reduced'; gateLabel = 'REDUZIDO';  barCol = '#fb923c'; }
+          else if (pct < 85)  { gateCls = 'score-normal';  gateLabel = 'NORMAL';    barCol = '#60a5fa'; }
+          else                { gateCls = 'score-aggr';    gateLabel = 'AGRESSIVO'; barCol = '#4ade80'; }
+          const bar = `<div style="width:40px;height:3px;background:#21262d;border-radius:2px;margin:2px auto 0;"><div style="width:${barW}px;height:3px;background:${barCol};border-radius:2px;"></div></div>`;
+          scoreCell = `<span class="${gateCls} text-[9px] font-bold px-1.5 py-0.5 rounded">${pct}% ${gateLabel}</span>${bar}`;
         }
 
         // ── MTF 6H ───────────────────────────────────────────────────
@@ -877,8 +923,7 @@
             <span class="${rCls} text-[10px] font-bold px-2 py-0.5 rounded-full">${regime}</span>
           </td>
           <td class="py-2.5 pr-4 text-center">
-            <span class="${scoreCls} text-[10px] font-bold font-mono">${scoreTxt}</span>
-            ${scoreBar}
+            ${scoreCell}
           </td>
           <td class="py-2.5 pr-4 text-center">
             <span class="${mtfCls} text-[10px] font-medium">${mtfTxt}</span>
@@ -995,7 +1040,7 @@
     } else {
       const stratShort = {
         'Donchian Breakout': 'DONCH', 'EMA Pullback': 'EMA',
-        'MACD Momentum': 'MACD', 'Stoch Bounce': 'STOCH',
+        'MACD Momentum': 'MACD',
       };
       // Map note text to readable filter block reasons
       const filterReasonMap = {
@@ -1013,10 +1058,14 @@
         'circuit': 'CircBrk',
         'circuit_breaker': 'CircBrk',
         'slots': 'MaxSlots',
-        'rsi': 'RSI>70',
+        'rsi': 'RSI>75',
         'macd': 'MACD<0',
         'slope': 'Slope❌',
         'ema_slope': 'Slope❌',
+        'score': 'Score❌',
+        'regime': 'Bear🚫',
+        'bear': 'Bear🚫',
+        'market_mode': 'Bear🚫',
       };
 
       feedList.innerHTML = feed.slice(0, 60).map(f => {
@@ -1109,10 +1158,18 @@
     if (el('kpi-avg-win'))  el('kpi-avg-win').textContent  = hasWins   ? '+R$ ' + fmtBRL(avgW * usdBrl) : (hasSells ? 'Sem ganhos' : '—');
     if (el('kpi-avg-loss')) el('kpi-avg-loss').textContent = hasLosses ? '-R$ ' + fmtBRL(Math.abs(avgL) * usdBrl) : (hasSells ? 'Sem perdas' : '—');
 
-    // TP Dinâmico
-    if (el('kpi-tp') && tp.current != null) {
-      el('kpi-tp').textContent      = tp.current.toFixed(1) + '%';
-      el('kpi-tp-range').textContent = `Min ${tp.min}% · Max ${tp.max}%`;
+    // Market Regime KPI (substitui TP Dinâmico)
+    if (el('kpi-market-mode')) {
+      const mm   = (s.market_mode || '').toLowerCase();
+      const mmUp = mm ? mm.toUpperCase() : '—';
+      el('kpi-market-mode').textContent = mmUp || '—';
+      el('kpi-market-mode').style.color = mm === 'bull' ? '#4ade80' : mm === 'bear' ? '#f87171' : '#facc15';
+      const tpEl = el('kpi-market-mode-tp');
+      if (tpEl && tp.current != null) {
+        tpEl.textContent = `TP: ${tp.current.toFixed(1)}% · ${mm === 'bull' ? 'agressivo' : mm === 'bear' ? 'conservador' : 'neutro'}`;
+      } else if (tpEl) {
+        tpEl.textContent = tp.current != null ? `TP: ${tp.current.toFixed(1)}%` : 'TP: —';
+      }
     }
 
     // Tamanho Trade
@@ -1122,7 +1179,7 @@
 
     // ── NEW: Circuit Breaker ──────────────────────────────────────────────
     if (el('kpi-circuit-breaker')) {
-      const maxTrades = s.max_daily_trades || 12;
+      const maxTrades = s.max_daily_trades || 30;
       const tdToday   = s.trades_today != null ? s.trades_today
         : (s.trades || []).filter(t => (t.time||'').startsWith(new Date().toISOString().slice(0,10))).length;
       el('kpi-circuit-breaker').textContent = tdToday + '/' + maxTrades;
@@ -1143,13 +1200,12 @@
       if (subOS) subOS.textContent = openCount >= maxSlots ? '🔴 Cheio' : 'simultâneos';
     }
 
-    // ── NEW: Regime Predominante ──────────────────────────────────────────
+    // ── NEW: Regime ADX Predominante (pair-level) ────────────────────────
     if (el('kpi-regime')) {
       const sigs    = s.signals || {};
       const rCounts = { TRENDING: 0, RANGING: 0, NEUTRAL: 0 };
       CRYPTOS.forEach(c => {
         const sg = sigs[c.pair];
-        // Usa regime real do backend se disponível
         const r = sg && sg.regime
           ? sg.regime.toUpperCase()
           : (sg ? inferRegime(sg) : 'NEUTRAL');
@@ -1158,6 +1214,27 @@
       const dominant = Object.entries(rCounts).sort((a,b) => b[1]-a[1])[0][0];
       el('kpi-regime').textContent = dominant;
       el('kpi-regime').style.color = dominant==='TRENDING' ? '#4ade80' : dominant==='RANGING' ? '#facc15' : '#9ca3af';
+    }
+
+    // ── Market Mode global — header badge + banner ───────────────────────
+    const mm = (s.market_mode || '').toLowerCase();
+    if (mm) {
+      // Header badge
+      const hdrMode = el('header-market-mode');
+      const hdrIcon = el('header-mode-icon');
+      const hdrLabel = el('header-mode-label');
+      if (hdrMode) {
+        hdrMode.className = `hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full ${marketModeCls(mm)}`;
+        if (hdrIcon)  hdrIcon.textContent  = marketModeIcon(mm);
+        if (hdrLabel) hdrLabel.textContent = mm.toUpperCase();
+      }
+      // Regime banner above filters table
+      const banner = el('regime-banner');
+      const bannerText = el('regime-banner-text');
+      if (banner) {
+        banner.className = `rounded-lg px-4 py-2.5 mb-3 flex items-center justify-between ${marketModeCls(mm)}`;
+        if (bannerText) bannerText.textContent = `${marketModeIcon(mm)} ${marketModeDesc(mm)}`;
+      }
     }
 
     // Candles
@@ -1247,7 +1324,7 @@
     // Donchian 20 (canal)
     donchUpperSeries = candleChart.addLineSeries({ color: 'rgba(249,115,22,0.7)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
     donchLowerSeries = candleChart.addLineSeries({ color: 'rgba(249,115,22,0.7)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false });
-    // Bollinger Bands (filtro Stoch Bounce: bandwidth < 15%)
+    // Bollinger Bands (volatilidade, referência visual)
     bbUpperSeries = candleChart.addLineSeries({ color: 'rgba(99,102,241,0.5)', lineWidth: 1, lineStyle: 3, priceLineVisible: false, lastValueVisible: false });
     bbLowerSeries = candleChart.addLineSeries({ color: 'rgba(99,102,241,0.5)', lineWidth: 1, lineStyle: 3, priceLineVisible: false, lastValueVisible: false });
     bbMidSeries   = candleChart.addLineSeries({ color: 'rgba(99,102,241,0.25)', lineWidth: 1, lineStyle: 0, priceLineVisible: false, lastValueVisible: false });
@@ -1287,7 +1364,7 @@
 
     // ── 5. ADX (14) — regime de mercado: >25 trending, <20 ranging ──────
     const { wrap: adxWrap, chartDiv: adxEl } = makeChartWrapper(
-      'ADX (14)', '— >25 = TRENDING (Donchian+EMA ativos) | <20 = RANGING (apenas Stoch Bounce)',
+      'ADX (14)', '— >20 = TRENDING (Donchian+EMA ativos) | <20 = RANGING/CHOP',
       rsiWrap
     );
     adxChart      = LightweightCharts.createChart(adxEl, { ...commonOpts, height: 80 });
@@ -1395,7 +1472,7 @@
         time: c.time, value: Math.min(...lows.slice(Math.max(0, i - dcP + 1), i + 1))
       })));
 
-      // ── Bollinger Bands (20, 2) — filtro bandwidth Stoch Bounce ──────
+      // ── Bollinger Bands (20, 2) — referência de volatilidade ────────
       const bbP = 20, bbMult = 2;
       const bbMid  = rollingMean(closes, bbP);
       const bbStd  = rollingStd(closes, bbP);
@@ -1449,7 +1526,7 @@
       rsiMidSeries.setData(candles.map(c => ({ time: c.time, value: 50 })));
 
       // ── ADX (14) — detecta regime de mercado ─────────────────────────
-      // ADX > 25 → trending (Donchian+EMA ativos) | < 20 → ranging (só Stoch)
+      // ADX > 20 → trending (Donchian+EMA ativos) | < 20 → ranging/chop
       const adxP = 14;
       const adxVals = (() => {
         const tr = candles.map((c, i) => {
