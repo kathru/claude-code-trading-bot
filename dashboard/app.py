@@ -372,7 +372,7 @@ MAX_OPEN_SLOTS = 8            # máximo de slots abertos ao mesmo tempo
 
 # ── Limite de trades por dia (circuit breaker) ──────────────────
 _daily_trade_count: dict = {}  # {"YYYY-MM-DD": count}
-MAX_DAILY_TRADES = 15         # máximo de trades por dia (evita overtrading)
+MAX_DAILY_TRADES = 30         # máximo de trades por dia (evita overtrading)
 
 # ── Slots independentes: 4 estratégias × 3 pares + 3 manuais ────
 def _empty_slot():
