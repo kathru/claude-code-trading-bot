@@ -215,35 +215,41 @@ def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float =
     return size
 
 
-# ── Coinbase Advanced Trading — Tabela de Fees (2026) ────────────
-# Fonte: help.coinbase.com/en/exchange/trading-and-funding/exchange-fees
-# Volume 30 dias em USD → (maker_fee, taker_fee)
+# ── Coinbase Advanced Trading — Standard Fee System (2026) ───────
+# Fonte: coinbase.com/advanced-trade/fees
+# Modelo maker-taker: maker adiciona liquidez (limit order no book),
+#                     taker remove liquidez (market order / execução imediata)
+#
+# Em paper trading:
+#   BUY  → sempre Taker (executa imediatamente ao preço de mercado)
+#   SELL por SL/Sinal → Taker (execução imediata / urgente)
+#   SELL por TP → Maker (simula limit order — aguarda preço-alvo)
+#
+# Volume 30 dias (USD) → (maker_fee, taker_fee)
 COINBASE_FEE_TIERS = [
-    (         0,  0.0060, 0.0120),  # $0       – $1K
-    (     1_000,  0.0040, 0.0080),  # $1K      – $10K
-    (    10_000,  0.0035, 0.0075),  # $10K     – $50K
-    (    50_000,  0.0030, 0.0070),  # $50K     – $100K
-    (   100_000,  0.0025, 0.0065),  # $100K    – $250K
-    (   250_000,  0.0020, 0.0060),  # $250K    – $1M
-    ( 1_000_000,  0.0010, 0.0055),  # $1M      – $10M
-    (10_000_000,  0.0005, 0.0050),  # $10M     – $250M
-    (250_000_000, 0.0000, 0.0005),  # $250M+
+    (          0,  0.0060, 0.0120),  # $0        – $10K  (conta nova)
+    (     10_000,  0.0035, 0.0080),  # $10K      – $50K
+    (     50_000,  0.0025, 0.0040),  # $50K      – $100K
+    (    100_000,  0.0015, 0.0025),  # $100K     – $1M
+    (  1_000_000,  0.0010, 0.0020),  # $1M       – $15M
+    ( 15_000_000,  0.0007, 0.0016),  # $15M      – $50M
+    ( 50_000_000,  0.0005, 0.0014),  # $50M      – $100M
+    (100_000_000,  0.0002, 0.0010),  # $100M     – $250M
+    (250_000_000,  0.0000, 0.0005),  # $250M+
 ]
 
 def _get_fee_rates() -> tuple:
     """
-    Calcula maker/taker fee com base no volume USD dos últimos 30 dias.
-    Em paper trading, todas as ordens são taker (execução imediata a mercado).
-    Retorna (maker_fee, taker_fee) como decimais (ex: 0.006 = 0.6%).
+    Determina maker/taker fee do tier correto pelo volume dos últimos 30 dias.
+    Retorna (maker_fee, taker_fee) como decimais (0.006 = 0.60%).
     """
-    cutoff = time.time() - 30 * 86400  # 30 dias atrás
+    cutoff = time.time() - 30 * 86400
     vol_30d = sum(
         t.get("usd", 0)
         for t in engine.trades
         if (t.get("ts") or 0) >= cutoff
     )
-    # Encontra o tier adequado (percorre do maior para o menor)
-    maker, taker = 0.0060, 0.0120  # tier mínimo (fallback)
+    maker, taker = 0.0060, 0.0120  # fallback: tier mínimo
     for min_vol, m, t_ in reversed(COINBASE_FEE_TIERS):
         if vol_30d >= min_vol:
             maker, taker = m, t_
@@ -251,9 +257,14 @@ def _get_fee_rates() -> tuple:
     return maker, taker
 
 def _current_taker_fee() -> float:
-    """Retorna somente o taker fee atual (usado em todos os trades de paper trading)."""
+    """Taker fee atual — usado em BUY e SELL por SL/sinal (execução imediata)."""
     _, taker = _get_fee_rates()
     return taker
+
+def _current_maker_fee() -> float:
+    """Maker fee atual — usado em SELL por TP (simula limit order no book)."""
+    maker, _ = _get_fee_rates()
+    return maker
 
 # ── Gestão de risco ──────────────────────────────────────────────
 SL_MIN                = 3.0  # SL mínimo global (fallback)
@@ -1179,15 +1190,18 @@ async def trading_loop():
                           tr_act = gain_pct >= TRAILING_ACTIVATE_PCT
                           tr_hit = tr_act and price <= slot["peak"] * (1 - TRAILING_STOP_PCT / 100)
 
-                          def _sell_slot(qty, label, is_sl=False):
+                          def _sell_slot(qty, label, is_sl=False, is_tp=False):
                               # ── Regra: só vende com lucro, exceto Stop Loss ──────────
-                              # Venda por sinal/trailing/greed abaixo do preço de entrada = bloqueada
                               if not is_sl and slot["entry"] > 0 and price <= slot["entry"]:
                                   logger.debug(f"[{pair}][{strat.name}] SELL bloqueado — "
-                                               f"preço {price:.4f} abaixo da entrada {slot['entry']:.4f} "
+                                               f"preço {price:.4f} <= entrada {slot['entry']:.4f} "
                                                f"(gain={gain_pct:+.2f}%) — apenas SL permitido")
                                   return
-                              net = qty * price * (1 - _current_taker_fee())
+                              # ── Maker vs Taker fee ───────────────────────────────────
+                              # TP: simula limit order (maker) — fee menor
+                              # SL / sinal / trailing: market order urgente (taker) — fee maior
+                              fee_rate = _current_maker_fee() if is_tp else _current_taker_fee()
+                              net = qty * price * (1 - fee_rate)
                               sold = engine.sell(symbol, qty, price, f"{strat.name}:{label}")
                               if sold:
                                   pnl = net - slot["entry"] * qty
@@ -1224,7 +1238,7 @@ async def trading_loop():
                           pyramid_sl_hit = (slot.get("pyramids", 0) > 0 and gain_pct <= -1.5)
 
                           if tp_hit:
-                              _sell_slot(slot["qty"], f"TP+{current_tp_pct:.0f}%")
+                              _sell_slot(slot["qty"], f"TP+{current_tp_pct:.0f}%", is_tp=True)
                           elif sl_hit:
                               lbl = f"BE-stop" if gain_pct >= 0 else f"SL-{current_sl_pct:.1f}%"
                               _sell_slot(slot["qty"], lbl, is_sl=True)
@@ -1237,7 +1251,7 @@ async def trading_loop():
                               half_qty = slot["qty"] / 2
                               half_usd = half_qty * price
                               if half_usd >= 1.0:   # mínimo $1 — evita trades de pó
-                                  _sell_slot(half_qty, f"TP_HALF+2.5%")
+                                  _sell_slot(half_qty, f"TP_HALF+2.5%", is_tp=True)
                           elif extreme_greed or signal == "SELL":
                               # Saída gradual: TRADE_PCT% do patrimonio por ciclo
                               max_qty = portfolio_total * TRADE_PCT / price
