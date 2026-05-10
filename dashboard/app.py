@@ -532,6 +532,8 @@ async def index():
 
 
 
+
+
 @app.get("/candles/{pair}")
 async def get_candles(pair: str, granularity: str = "FIVE_MINUTE", limit: int = 150):
     try:
