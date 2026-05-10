@@ -35,17 +35,22 @@ logger = logging.getLogger("news_sync")
 DATA_DIR        = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 NEWS_EVENTS_FILE = os.path.join(DATA_DIR, "news_events.json")
 
-# Eventos de alto impacto a monitorar
-HIGH_IMPACT_KEYWORDS = [
-    "CPI", "Consumer Price", "Inflation",
+# Keywords que sozinhos (sem precisar de impact=high) já são críticos
+CRITICAL_KEYWORDS = [
     "FOMC", "Federal Reserve", "Fed Rate", "Interest Rate Decision",
-    "Nonfarm Payroll", "Non-Farm Payroll", "NFP", "Employment",
-    "PPI", "Producer Price",
-    "GDP", "Gross Domestic Product",
-    "Retail Sales",
-    "PCE", "Personal Consumption",
-    "ISM", "PMI Manufacturing",
+    "Nonfarm Payroll", "Non-Farm Payroll", "NFP",
     "Bitcoin", "Crypto", "SEC", "ETF",
+]
+
+# Keywords que só bloqueiam se impact=high (eventos macro importantes mas não críticos sozinhos)
+HIGH_IMPACT_KEYWORDS = [
+    "CPI", "Consumer Price Index",
+    "PPI", "Producer Price Index",
+    "PCE Price Index",
+    "GDP Growth Rate",
+    "Retail Sales MoM",
+    "Core Inflation Rate",
+    "Inflation Rate MoM", "Inflation Rate YoY",
 ]
 
 # Países a monitorar
@@ -77,11 +82,22 @@ def _get_window(event_name: str):
 
 
 def _is_high_impact(event_name: str, impact: str = "") -> bool:
-    """Verifica se o evento é de alto impacto."""
-    if impact.lower() == "high":
-        return True
+    """
+    Verifica se o evento deve bloquear operações.
+    Critério duplo:
+      1. Evento CRÍTICO por nome (FOMC, NFP, Bitcoin ETF…) → sempre bloqueia
+      2. Evento HIGH_IMPACT por nome + impact=high da API → bloqueia
+    Evita bloquear eventos medium/low que aparecem com nomes macro genéricos.
+    """
     name_upper = event_name.upper()
-    return any(kw.upper() in name_upper for kw in HIGH_IMPACT_KEYWORDS)
+    # Críticos por nome — sempre bloqueiam independente do impact
+    if any(kw.upper() in name_upper for kw in CRITICAL_KEYWORDS):
+        return True
+    # Outros macro: só bloqueia se a API também classifica como high
+    if impact.lower() == "high":
+        if any(kw.upper() in name_upper for kw in HIGH_IMPACT_KEYWORDS):
+            return True
+    return False
 
 
 # ── Finnhub ────────────────────────────────────────────────────────────────
