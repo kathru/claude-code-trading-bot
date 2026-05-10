@@ -215,6 +215,46 @@ def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float =
     return size
 
 
+# ── Coinbase Advanced Trading — Tabela de Fees (2026) ────────────
+# Fonte: help.coinbase.com/en/exchange/trading-and-funding/exchange-fees
+# Volume 30 dias em USD → (maker_fee, taker_fee)
+COINBASE_FEE_TIERS = [
+    (         0,  0.0060, 0.0120),  # $0       – $1K
+    (     1_000,  0.0040, 0.0080),  # $1K      – $10K
+    (    10_000,  0.0035, 0.0075),  # $10K     – $50K
+    (    50_000,  0.0030, 0.0070),  # $50K     – $100K
+    (   100_000,  0.0025, 0.0065),  # $100K    – $250K
+    (   250_000,  0.0020, 0.0060),  # $250K    – $1M
+    ( 1_000_000,  0.0010, 0.0055),  # $1M      – $10M
+    (10_000_000,  0.0005, 0.0050),  # $10M     – $250M
+    (250_000_000, 0.0000, 0.0005),  # $250M+
+]
+
+def _get_fee_rates() -> tuple:
+    """
+    Calcula maker/taker fee com base no volume USD dos últimos 30 dias.
+    Em paper trading, todas as ordens são taker (execução imediata a mercado).
+    Retorna (maker_fee, taker_fee) como decimais (ex: 0.006 = 0.6%).
+    """
+    cutoff = time.time() - 30 * 86400  # 30 dias atrás
+    vol_30d = sum(
+        t.get("usd", 0)
+        for t in engine.trades
+        if (t.get("ts") or 0) >= cutoff
+    )
+    # Encontra o tier adequado (percorre do maior para o menor)
+    maker, taker = 0.0060, 0.0120  # tier mínimo (fallback)
+    for min_vol, m, t_ in reversed(COINBASE_FEE_TIERS):
+        if vol_30d >= min_vol:
+            maker, taker = m, t_
+            break
+    return maker, taker
+
+def _current_taker_fee() -> float:
+    """Retorna somente o taker fee atual (usado em todos os trades de paper trading)."""
+    _, taker = _get_fee_rates()
+    return taker
+
 # ── Gestão de risco ──────────────────────────────────────────────
 SL_MIN                = 3.0  # SL mínimo global (fallback)
 SL_MAX                = 8.0  # SL máximo global (fallback)
@@ -714,7 +754,7 @@ async def manual_sell(pair: str, qty: float = 0, brl: float = 0):
         sell_qty = min(usd_value / price, held)
     else:
         sell_qty = min(qty, held) if qty > 0 else held   # 0 = vender tudo
-    usd = sell_qty * price * (1 - 0.006)
+    usd = sell_qty * price * (1 - _current_taker_fee())
     if not engine.sell(symbol, sell_qty, price, "manual"):
         return {"ok": False, "error": "Falha na venda"}
     # Venda total: zera slot manual
@@ -991,7 +1031,7 @@ async def trading_loop():
                         vslot = strategy_slots.get(vkey, _empty_slot())
                         if vslot["qty"] > 0:
                             vqty = min(vslot["qty"], max_usd / price if price > 0 else vslot["qty"])
-                            vnet = vqty * price * (1 - 0.006)
+                            vnet = vqty * price * (1 - _current_taker_fee())
                             if engine.sell(symbol, vqty, price, f"vol_guard:{strat.name}"):
                                 pnl_vg = vnet - vslot["entry"] * vqty
                                 vslot["realized"] += pnl_vg
@@ -1147,7 +1187,7 @@ async def trading_loop():
                                                f"preço {price:.4f} abaixo da entrada {slot['entry']:.4f} "
                                                f"(gain={gain_pct:+.2f}%) — apenas SL permitido")
                                   return
-                              net = qty * price * (1 - 0.006)
+                              net = qty * price * (1 - _current_taker_fee())
                               sold = engine.sell(symbol, qty, price, f"{strat.name}:{label}")
                               if sold:
                                   pnl = net - slot["entry"] * qty
@@ -1222,7 +1262,7 @@ async def trading_loop():
                                   logger.debug(f"[{pair}][{strat.name}] PYRAMID size={dyn_pyr_size:.0%} "
                                                f"(atr={current_atr:.4f})")
                                   if engine.balance_usd < pyr_usd * 1.006:
-                                      pyr_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
+                                      pyr_usd = max(0, engine.balance_usd - (engine.balance_usd * _current_taker_fee()))
 
                                   if pyr_usd > 1.0:  # Mínimo de $1 para pyramid
                                       add_qty = pyr_usd / price
@@ -1279,7 +1319,7 @@ async def trading_loop():
                               logger.info(f"[{pair}][{strat.name}] score={pair_score:.2f} "
                                           f"mult={score_multiplier:.2f} size={trade_usd*usd_brl:.0f}BRL")
                               if engine.balance_usd < trade_usd * 1.006:
-                                  trade_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
+                                  trade_usd = max(0, engine.balance_usd - (engine.balance_usd * _current_taker_fee()))
 
                               if trade_usd > 1.0:
                                   qty = trade_usd / price
@@ -1326,7 +1366,7 @@ async def trading_loop():
                            f"SL-{current_sl_pct:.1f}%"  if slh else
                            f"TRAILING-{TRAILING_STOP_PCT:.1f}%" if trh else None)
                     if rsn:
-                        net = ms["qty"] * price * (1 - 0.006)
+                        net = ms["qty"] * price * (1 - _current_taker_fee())
                         if engine.sell(symbol, ms["qty"], price, f"manual:{rsn}"):
                             ms["realized"] += net - ms["entry"] * ms["qty"]
                             _record_trade("SELL", pair, ms["qty"], price, net, f"manual:{rsn}")
@@ -1419,6 +1459,14 @@ async def trading_loop():
         state["kpis"] = _calculate_kpis()
         if _dynamic_pcts:
             state["trade_pct"] = round(sum(_dynamic_pcts) / len(_dynamic_pcts), 4)
+
+        # ── Fee dinâmico — atualiza estado para o frontend ───────────
+        _maker, _taker = _get_fee_rates()
+        _vol_30d = sum(t.get("usd", 0) for t in engine.trades
+                       if (t.get("ts") or 0) >= time.time() - 30 * 86400)
+        state["fee_taker"]  = round(_taker * 100, 4)   # ex: 1.20
+        state["fee_maker"]  = round(_maker * 100, 4)   # ex: 0.60
+        state["fee_vol_30d"] = round(_vol_30d, 2)       # volume USD 30 dias
 
         await broadcast(state)
         await asyncio.sleep(CYCLE_INTERVAL)
