@@ -146,17 +146,19 @@
     <div class="card p-5">
       <div class="flex items-center justify-between mb-3">
         <h3 class="font-semibold text-white">Filtros Ativos</h3>
-        <span class="text-xs text-gray-500">ADX · MTF 6H · ATR — atualizados por ciclo</span>
+        <span class="text-xs text-gray-500">ADX · Score · MTF 6H · SL Range · ATR Stop — por ciclo</span>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-xs">
           <thead>
-            <tr class="text-gray-500 uppercase tracking-wider text-[10px]">
+            <tr class="text-gray-500 uppercase tracking-wider text-[10px] border-b border-gray-800">
               <th class="text-left pb-2 pr-4">Par</th>
               <th class="text-center pb-2 pr-4">Regime ADX</th>
+              <th class="text-center pb-2 pr-4">Score</th>
               <th class="text-center pb-2 pr-4">MTF 6H</th>
+              <th class="text-center pb-2 pr-4">SL Range</th>
               <th class="text-center pb-2 pr-4">ATR Stop</th>
-              <th class="text-center pb-2 pr-4">Circuit Breaker</th>
+              <th class="text-center pb-2 pr-4">Trades Hoje</th>
               <th class="text-center pb-2">Slots</th>
             </tr>
           </thead>
@@ -791,61 +793,98 @@
     // ── Filtros Ativos table ──────────────────────────────────────────────
     const filtersBody = document.getElementById('filters-table-body');
     if (filtersBody) {
-      // Count open slots
-      const openSlots = Object.values(allSlots).filter(sl => (sl.qty || 0) > 0).length;
-      // Circuit breaker: prefer s.trades_today; fallback count today from trades
-      const tradesToday = s.trades_today != null
-        ? s.trades_today
-        : (s.trades || []).filter(t => {
-            const d = new Date((t.time || ''));
-            const n = new Date();
-            return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
-          }).length;
+      const maxSlots    = s.max_open_slots  || 4;
+      const maxTrades   = s.max_daily_trades || 15;
+      const openSlots   = s.open_slots_count != null
+        ? s.open_slots_count
+        : Object.values(allSlots).filter(sl => (sl.qty || 0) > 0).length;
+      const tradesToday = s.trades_today != null ? s.trades_today : 0;
+      const scores      = s.scores || {};
+
+      // SL range fixo por ativo (espelha PAIR_SL_RANGE do backend)
+      const PAIR_SL = {
+        'BTC-USD':  '2–4%', 'ETH-USD':  '3–5%',
+        'SOL-USD':  '5–7%', 'AVAX-USD': '5–7%',
+        'LINK-USD': '5–7%', 'DOGE-USD': '6–8%',
+      };
 
       filtersBody.innerHTML = CRYPTOS.map(c => {
         const sig    = (s.signals || {})[c.pair];
-        const regime = sig ? inferRegime(sig) : 'NEUTRAL';
+        const regime = sig && sig.regime ? sig.regime.toUpperCase() : (sig ? inferRegime(sig) : 'NEUTRAL');
         const rCls   = regimeCls(regime);
-        // MTF: prefer sig.mtf_ok field; fallback heuristic from trend
-        let mtfOk = '—';
-        let mtfCls = 'text-gray-500';
-        if (sig) {
-          if (sig.mtf_ok === true)  { mtfOk = 'EMA50>200 ✓'; mtfCls = 'text-green-400'; }
-          else if (sig.mtf_ok === false) { mtfOk = 'EMA50<200 ✗'; mtfCls = 'text-red-400'; }
-          else {
-            // heuristic: if trend is BUY → likely MTF ok
-            const t = sig.trend || 'HOLD';
-            if (t === 'BUY') { mtfOk = '↑ (estimado)'; mtfCls = 'text-yellow-400'; }
-            else if (t === 'SELL') { mtfOk = '↓ (estimado)'; mtfCls = 'text-orange-400'; }
-          }
-        }
-        // ATR SL: prefer sig.atr_sl_pct; fallback "—"
-        let atrTxt = '—';
-        let atrCls = 'text-gray-500';
-        if (sig && sig.atr_sl_pct != null) {
-          atrTxt = sig.atr_sl_pct.toFixed(1) + '%';
-          atrCls = sig.atr_sl_pct > 8 ? 'text-red-400' : sig.atr_sl_pct > 5 ? 'text-orange-400' : 'text-green-400';
+
+        // ── Score de confiança ───────────────────────────────────────
+        const score    = scores[c.pair] != null ? scores[c.pair] : null;
+        let scoreTxt   = '—', scoreCls = 'text-gray-500', scoreBar = '';
+        if (score != null) {
+          const pct = Math.round(score * 100);
+          scoreCls  = pct >= 60 ? 'text-green-400' : pct >= 35 ? 'text-yellow-400' : 'text-orange-400';
+          scoreTxt  = pct + '%';
+          const barW = Math.round(pct * 40 / 100);  // max 40px
+          const barCol = pct >= 60 ? '#4ade80' : pct >= 35 ? '#facc15' : '#fb923c';
+          scoreBar = `<div style="width:40px;height:3px;background:#21262d;border-radius:2px;margin:2px auto 0;">
+            <div style="width:${barW}px;height:3px;background:${barCol};border-radius:2px;"></div></div>`;
         }
 
-        return `<tr class="border-t border-gray-800">
-          <td class="py-2 pr-4">
-            <span class="font-semibold text-white">${c.sym}</span>
+        // ── MTF 6H ───────────────────────────────────────────────────
+        let mtfTxt = '—', mtfCls = 'text-gray-500';
+        if (sig) {
+          if (sig.mtf_ok === true)       { mtfTxt = '✓ OK';   mtfCls = 'text-green-400'; }
+          else if (sig.mtf_ok === false) { mtfTxt = '✗ Bear'; mtfCls = 'text-red-400';   }
+          else {
+            const t = sig.trend || 'HOLD';
+            if (t === 'BUY')  { mtfTxt = '↑ est.'; mtfCls = 'text-yellow-400'; }
+            else              { mtfTxt = '— est.'; mtfCls = 'text-gray-500'; }
+          }
+        }
+
+        // ── SL Range (fixo por ativo) ────────────────────────────────
+        const slRange    = PAIR_SL[c.pair] || '—';
+        const slRangeCls = c.pair === 'BTC-USD' ? 'text-green-400'
+                         : c.pair === 'ETH-USD' ? 'text-cyan-400'
+                         : c.pair === 'DOGE-USD' ? 'text-red-400' : 'text-orange-400';
+
+        // ── ATR Stop (dinâmico, dentro do range) ─────────────────────
+        let atrTxt = '—', atrCls = 'text-gray-500';
+        if (sig && sig.atr_sl_pct != null) {
+          atrTxt = sig.atr_sl_pct.toFixed(1) + '%';
+          atrCls = sig.atr_sl_pct > 6 ? 'text-red-400' : sig.atr_sl_pct > 4 ? 'text-orange-400' : 'text-green-400';
+        }
+
+        // ── Circuit Breaker ──────────────────────────────────────────
+        const cbCls = tradesToday >= maxTrades - 2 ? 'text-red-400'
+                    : tradesToday >= maxTrades * 0.6 ? 'text-orange-400' : 'text-green-400';
+
+        // ── Slots ────────────────────────────────────────────────────
+        const slotsCls = openSlots >= maxSlots ? 'text-red-400'
+                       : openSlots >= maxSlots - 1 ? 'text-orange-400' : 'text-cyan-400';
+
+        return `<tr class="border-t border-gray-800/60 hover:bg-gray-800/20 transition-colors">
+          <td class="py-2.5 pr-4">
+            <span class="font-bold text-white text-xs">${c.sym}</span>
             <span class="text-gray-600 text-[10px] ml-1">${c.pair}</span>
           </td>
-          <td class="py-2 pr-4 text-center">
+          <td class="py-2.5 pr-4 text-center">
             <span class="${rCls} text-[10px] font-bold px-2 py-0.5 rounded-full">${regime}</span>
           </td>
-          <td class="py-2 pr-4 text-center">
-            <span class="${mtfCls} text-[10px] font-medium">${mtfOk}</span>
+          <td class="py-2.5 pr-4 text-center">
+            <span class="${scoreCls} text-[10px] font-bold font-mono">${scoreTxt}</span>
+            ${scoreBar}
           </td>
-          <td class="py-2 pr-4 text-center">
+          <td class="py-2.5 pr-4 text-center">
+            <span class="${mtfCls} text-[10px] font-medium">${mtfTxt}</span>
+          </td>
+          <td class="py-2.5 pr-4 text-center">
+            <span class="${slRangeCls} text-[10px] font-mono font-bold">${slRange}</span>
+          </td>
+          <td class="py-2.5 pr-4 text-center">
             <span class="${atrCls} text-[10px] font-mono font-bold">${atrTxt}</span>
           </td>
-          <td class="py-2 pr-4 text-center">
-            <span class="${tradesToday >= 10 ? 'text-red-400' : tradesToday >= 6 ? 'text-orange-400' : 'text-green-400'} text-[10px] font-mono font-bold">${tradesToday}/12</span>
+          <td class="py-2.5 pr-4 text-center">
+            <span class="${cbCls} text-[10px] font-mono font-bold">${tradesToday}/${maxTrades}</span>
           </td>
-          <td class="py-2 text-center">
-            <span class="${openSlots >= 7 ? 'text-red-400' : openSlots >= 5 ? 'text-orange-400' : 'text-cyan-400'} text-[10px] font-mono font-bold">${openSlots}/8</span>
+          <td class="py-2.5 text-center">
+            <span class="${slotsCls} text-[10px] font-mono font-bold">${openSlots}/${maxSlots}</span>
           </td>
         </tr>`;
       }).join('');
