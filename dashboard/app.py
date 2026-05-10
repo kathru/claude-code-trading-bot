@@ -685,11 +685,16 @@ async def manual_sell(pair: str, qty: float = 0, brl: float = 0):
 
 
 @app.post("/admin/reset-portfolio")
-async def reset_portfolio(token: str = ""):
-    """Reset completo: R$4.000 total — R$1.000/cripto + R$1.000 caixa."""
+async def reset_portfolio(token: str = "", brl: float = 0.0):
+    """Reset completo com portfolio inicial em BRL (padrão: TOTAL_BRL_INITIAL)."""
     expected = os.getenv("RESET_TOKEN", "reset2026")
     if token != expected:
         return {"ok": False, "error": "Token inválido"}
+
+    # Permite sobrescrever o valor inicial via parâmetro
+    global TOTAL_BRL_INITIAL
+    if brl > 0:
+        TOTAL_BRL_INITIAL = float(brl)
 
     # ── Busca preços e câmbio ────────────────────────────────────
     usd_brl = _fetch_usd_brl()
@@ -756,7 +761,7 @@ async def reset_portfolio(token: str = ""):
         "total_usd": round(total_usd, 2),
         "cash_usd":  round(total_usd, 2),
         "cash_brl":  round(TOTAL_BRL_INITIAL, 2),
-        "note":      "Portfolio em R$ 4.000 (fixo) — variação USD/BRL não afeta P&L",
+        "note":      f"Portfolio em R$ {TOTAL_BRL_INITIAL:,.0f} (fixo) — variação USD/BRL não afeta P&L",
         "slots":     "todos zerados — estratégias operam por sinal",
     }
     logger.info(f"✅ RESET COMPLETO — {summary}")
