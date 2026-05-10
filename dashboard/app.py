@@ -291,7 +291,7 @@ last_buy_time: dict = {}  # {f"{strat}:{pair}": timestamp}
 BUY_COOLDOWN_SECONDS = 3600  # 1 hora entre BUYs no mesmo par/estratégia
 
 # ── Limite de posições simultâneas abertas ───────────────────────
-MAX_OPEN_SLOTS = 8            # máximo de slots abertos ao mesmo tempo
+MAX_OPEN_SLOTS = 4            # máximo de slots abertos ao mesmo tempo
 
 # ── Limite de trades por dia (circuit breaker) ──────────────────
 _daily_trade_count: dict = {}  # {"YYYY-MM-DD": count}
