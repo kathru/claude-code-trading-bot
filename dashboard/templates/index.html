@@ -365,7 +365,7 @@
         <!-- NEW KPI: Circuit Breaker -->
         <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
           <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Circuit Breaker</p>
-          <p id="kpi-circuit-breaker" class="text-xl font-bold text-cyan-400">—/30</p>
+          <p id="kpi-circuit-breaker" class="text-xl font-bold text-cyan-400">—/10</p>
           <p id="kpi-circuit-breaker-sub" class="text-[10px] text-gray-600 mt-0.5">trades hoje</p>
         </div>
         <!-- NEW KPI: Slots Abertos -->
@@ -1135,9 +1135,6 @@
     const hasWins   = (kpis.win_count    || 0) > 0;
     const hasLosses = (kpis.loss_count   || 0) > 0;
 
-    // Total Trades
-    setKpi('kpi-total-trades', kpis.total_trades ?? 0);
-
     // Win Rate
     const wr = kpis.win_rate || 0;
     if (el('kpi-win-rate')) {
@@ -1179,7 +1176,7 @@
 
     // ── NEW: Circuit Breaker ──────────────────────────────────────────────
     if (el('kpi-circuit-breaker')) {
-      const maxTrades = s.max_daily_trades || 30;
+      const maxTrades = s.max_daily_trades || 10;
       const tdToday   = s.trades_today != null ? s.trades_today
         : (s.trades || []).filter(t => (t.time||'').startsWith(new Date().toISOString().slice(0,10))).length;
       el('kpi-circuit-breaker').textContent = tdToday + '/' + maxTrades;

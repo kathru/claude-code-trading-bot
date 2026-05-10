@@ -208,8 +208,8 @@ def _current_cycle() -> int:
 
 PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD", "AVAX-USD", "LINK-USD", "DOGE-USD"]  # 6 pares para melhor diversificação
 
-# ── Portfolio em Real é FIXO em R$ 4.000 ────────────────────────
-TOTAL_BRL_INITIAL = 4000.0  # Portfolio inicial em BRL — FIXO, nunca muda
+# ── Portfolio em Real é FIXO em R$ 5.000 ────────────────────────
+TOTAL_BRL_INITIAL = 5000.0  # Portfolio inicial em BRL — FIXO, nunca muda
 # Portfolio em USD varia com cotação: USD_atual = TOTAL_BRL_INITIAL / usd_brl_atual
 
 # ── Ciclo e candles ─────────────────────────────────────────────
@@ -588,6 +588,19 @@ state = {
     "strategy_pnl":     strategy_pnl,
     "fear_greed":       {"value": 50, "label": "Neutral"},
     "kpis":             _calculate_kpis(),  # Métricas de performance
+    # ── Campos de controle — inicializados para evitar undefined no frontend ──
+    "market_mode":      "chop",             # bull / chop / bear
+    "scores":           {p: 0.0 for p in PAIRS},
+    "trades_today":     0,
+    "max_daily_trades": MAX_DAILY_TRADES,
+    "open_slots_count": 0,
+    "max_open_slots":   MAX_OPEN_SLOTS,
+    "trade_pct":        TRADE_PCT,
+    "tp_objective":     {"min": 5.0, "max": 18.0, "current": 8.0, "regime": "chop"},
+    "sl_objective":     {"min": SL_MIN, "max": SL_MAX, "current": 5.0},
+    "fee_taker":        round(_current_taker_fee() * 100, 4),
+    "fee_maker":        round(_current_maker_fee() * 100, 4),
+    "fee_vol_30d":      0.0,
 }
 
 
