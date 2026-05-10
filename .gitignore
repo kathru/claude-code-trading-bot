@@ -5,6 +5,9 @@
 code.env
 settings.json
 
+# Claude Code internal
+.claude/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -18,10 +21,13 @@ venv/
 dist/
 build/
 
+# Test / Coverage
+coverage_report/
+.pytest_cache/
+
 # Logs
 *.log
 logs/
-__pycache__/
 
 # Estado persistido (dados locais)
 data/
