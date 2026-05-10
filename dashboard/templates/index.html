@@ -447,10 +447,6 @@
         <span class="text-xs text-gray-600 uppercase tracking-wider">Regime de Mercado</span>
         <span id="regime-${c.sym}" class="regime-neutral text-[10px] font-bold px-2.5 py-0.5 rounded-full">—</span>
       </div>
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-xs text-gray-600 uppercase tracking-wider">Tendência EMA 9·21·50</span>
-        <span id="trend-${c.sym}" class="signal-hold text-xs font-bold px-3 py-0.5 rounded-full">—</span>
-      </div>
       <div class="grid grid-cols-4 gap-1 mb-2">
         ${STRATEGIES.map(s => `
         <div id="slot-${c.sym}-${s.id}" class="signal-hold rounded-lg px-1 py-1.5 text-center text-[9px]">
@@ -631,13 +627,6 @@
       }
 
       if (sig) {
-        const trendEl = document.getElementById('trend-' + c.sym);
-        if (trendEl) {
-          const t = sig.trend || 'HOLD';
-          trendEl.textContent = t === 'BUY' ? '↑ EMA ALINHADA' : t === 'SELL' ? '↓ EMA CRUZADA' : '— NEUTRO';
-          trendEl.className = signalClass(t) + ' text-xs font-bold px-3 py-0.5 rounded-full';
-        }
-
         // Slots por estratégia
         const slots = s.slots || {};
         STRATEGIES.forEach(st => {
