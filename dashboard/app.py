@@ -163,7 +163,7 @@ def _current_cycle() -> int:
     return (int(time.time()) + SP_OFFSET) % 86400 // CYCLE_INTERVAL
 
 
-PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD", "AVAX-USD", "LINK-USD", "DOGE-USD"]  # 6 pares para melhor diversificação
+PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD", "AVAX-USD", "LINK-USD", "RENDER-USD"]  # 6 pares — DOGE removido, RENDER adicionado
 
 # ── Portfolio em Real é FIXO em R$ 4.000 ────────────────────────
 TOTAL_BRL_INITIAL = 5000.0  # Portfolio inicial em BRL — FIXO, nunca muda
@@ -222,12 +222,12 @@ SL_MAX                = 8.0  # SL máximo global (fallback)
 # ── Stop Loss específico por ativo (min%, max%) ──────────────────
 # ATR × 2.0 é clampado dentro deste range por par
 PAIR_SL_RANGE = {
-    "BTC-USD":  (0.02, 0.04),  # BTC:  2–4%  (baixa volatilidade relativa)
-    "ETH-USD":  (0.03, 0.05),  # ETH:  3–5%
-    "SOL-USD":  (0.05, 0.07),  # SOL:  5–7%  (alta volatilidade)
-    "AVAX-USD": (0.05, 0.07),  # AVAX: 5–7%
-    "LINK-USD": (0.05, 0.07),  # LINK: 5–7%
-    "DOGE-USD": (0.06, 0.08),  # DOGE: 6–8%  (maior volatilidade)
+    "BTC-USD":    (0.02, 0.04),  # BTC:    2–4%  (baixa volatilidade relativa)
+    "ETH-USD":    (0.03, 0.05),  # ETH:    3–5%
+    "SOL-USD":    (0.05, 0.07),  # SOL:    5–7%  (alta volatilidade)
+    "AVAX-USD":   (0.05, 0.07),  # AVAX:   5–7%
+    "LINK-USD":   (0.05, 0.07),  # LINK:   5–7%
+    "RENDER-USD": (0.06, 0.09),  # RENDER: 6–9%  (altcoin volátil)
 }
 TAKE_PROFIT_MIN       = 4.0  # TP mínimo: +4%
 TAKE_PROFIT_MAX       = 12.0 # TP máximo: +12%
@@ -368,7 +368,7 @@ last_buy_time: dict = {}  # {f"{strat}:{pair}": timestamp}
 BUY_COOLDOWN_SECONDS = 3600  # 1 hora entre BUYs no mesmo par/estratégia
 
 # ── Limite de posições simultâneas abertas ───────────────────────
-MAX_OPEN_SLOTS = 4            # máximo de slots abertos ao mesmo tempo
+MAX_OPEN_SLOTS = 8            # máximo de slots abertos ao mesmo tempo
 
 # ── Limite de trades por dia (circuit breaker) ──────────────────
 _daily_trade_count: dict = {}  # {"YYYY-MM-DD": count}

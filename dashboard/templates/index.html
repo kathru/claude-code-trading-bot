@@ -183,7 +183,7 @@
             <button onclick="setCandlePair('SOL-USD')" data-pair="SOL-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold">SOL</button>
             <button onclick="setCandlePair('AVAX-USD')" data-pair="AVAX-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold">AVAX</button>
             <button onclick="setCandlePair('LINK-USD')" data-pair="LINK-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold">LINK</button>
-            <button onclick="setCandlePair('DOGE-USD')" data-pair="DOGE-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold">DOGE</button>
+            <button onclick="setCandlePair('RENDER-USD')" data-pair="RENDER-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold">RENDER</button>
           </div>
           <span class="text-gray-700 shrink-0">|</span>
           <div class="flex gap-1 shrink-0">
@@ -388,7 +388,7 @@
     { sym: 'SOL',  name: 'Solana',    pair: 'SOL-USD', icon: '◎',  color: 'text-purple-400', bg: 'bg-purple-500/20' },
     { sym: 'AVAX', name: 'Avalanche', pair: 'AVAX-USD',icon: '◈',  color: 'text-yellow-400', bg: 'bg-yellow-500/20' },
     { sym: 'LINK', name: 'Chainlink', pair: 'LINK-USD',icon: '⬡',  color: 'text-blue-300',   bg: 'bg-blue-400/20'   },
-    { sym: 'DOGE', name: 'Dogecoin',  pair: 'DOGE-USD',icon: 'Ð',  color: 'text-amber-400',  bg: 'bg-amber-500/20'  },
+    { sym: 'RENDER', name: 'Render',  pair: 'RENDER-USD',icon: '⬡',  color: 'text-pink-400',  bg: 'bg-pink-500/20'  },
   ];
 
   const STRATEGIES = [
@@ -805,7 +805,7 @@
       const PAIR_SL = {
         'BTC-USD':  '2–4%', 'ETH-USD':  '3–5%',
         'SOL-USD':  '5–7%', 'AVAX-USD': '5–7%',
-        'LINK-USD': '5–7%', 'DOGE-USD': '6–8%',
+        'LINK-USD': '5–7%', 'RENDER-USD': '6–9%',
       };
 
       filtersBody.innerHTML = CRYPTOS.map(c => {
@@ -842,7 +842,7 @@
         const slRange    = PAIR_SL[c.pair] || '—';
         const slRangeCls = c.pair === 'BTC-USD' ? 'text-green-400'
                          : c.pair === 'ETH-USD' ? 'text-cyan-400'
-                         : c.pair === 'DOGE-USD' ? 'text-red-400' : 'text-orange-400';
+                         : c.pair === 'RENDER-USD' ? 'text-pink-400' : 'text-orange-400';
 
         // ── ATR Stop (dinâmico, dentro do range) ─────────────────────
         let atrTxt = '—', atrCls = 'text-gray-500';
@@ -899,7 +899,7 @@
     // ── Allocation Chart ─────────────────────────────────────────────────
     const prices = s.prices || {};
     const labels = ['BRL'], values = [usdAvail * usdBrl], colors = ['#6366f1'];
-    const allocMap = { BTC: '#f97316', ETH: '#3b82f6', SOL: '#a855f7', AVAX: '#eab308', LINK: '#60a5fa', DOGE: '#f59e0b' };
+    const allocMap = { BTC: '#f97316', ETH: '#3b82f6', SOL: '#a855f7', AVAX: '#eab308', LINK: '#60a5fa', RENDER: '#ec4899' };
     CRYPTOS.forEach(c => {
       const qty2 = _holdings[c.sym] || 0;
       if (qty2 > 0 && prices[c.pair]) {
