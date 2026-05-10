@@ -234,7 +234,71 @@ TAKE_PROFIT_MAX       = 12.0 # TP máximo: +12%
 TRAILING_STOP_PCT     = 2.5  # trailing: -2.5% do pico
 TRAILING_ACTIVATE_PCT = 2.0  # trailing ativa após +2%
 BREAKEVEN_ACTIVATE_PCT = 1.5 # após +1.5%, SL sobe para entrada (risco zero)
-SL_COOLDOWN_CYCLES    = 3    # após SL, aguarda 3 ciclos (9min) antes de re-entrar
+SL_COOLDOWN_CYCLES    = 3    # após SL, aguarda 3 ciclos antes de re-entrar
+
+# ── Sistema de Scoring por Regime ────────────────────────────────
+# Pesos de cada estratégia por regime de mercado.
+# trending: estratégias de seguimento de tendência têm maior peso
+# ranging : estratégias de reversão à média têm maior peso
+# O score final (0–1) ajusta o tamanho da posição dinamicamente.
+STRATEGY_WEIGHTS = {
+    "trending": {
+        "Donchian Breakout":     1.5,  # breakout funciona bem em trending
+        "EMA Pullback":          1.3,  # pullback em tendência é clássico
+        "MACD Momentum":         1.2,  # momentum confirma tendência
+        "Stoch Bounce":          0.6,  # mean reversion menos confiável em trending
+        "RSI Divergence Detect": 0.8,
+    },
+    "ranging": {
+        "Donchian Breakout":     0.5,  # breakouts falsos em lateral
+        "EMA Pullback":          0.9,  # pullbacks funcionam em ranging
+        "MACD Momentum":         0.8,
+        "Stoch Bounce":          1.5,  # mean reversion excelente em ranging
+        "RSI Divergence Detect": 1.3,  # divergências são precisas em ranging
+    },
+    "neutral": {
+        "Donchian Breakout":     1.0,
+        "EMA Pullback":          1.0,
+        "MACD Momentum":         1.0,
+        "Stoch Bounce":          1.0,
+        "RSI Divergence Detect": 1.0,
+    },
+}
+# Score mínimo para abrir posição (0–1). Abaixo disso reduz tamanho mas não bloqueia.
+SCORE_MIN_THRESHOLD  = 0.15   # abaixo de 15% da confiança máxima → usa tamanho mínimo
+SCORE_SIZE_BOOST     = 1.4    # score máximo pode aumentar tamanho em até 40%
+
+
+def _calc_confidence_score(signals: dict, regime: str, adx: float) -> float:
+    """
+    Calcula score de confiança (0–1) baseado nos sinais de todas as estratégias,
+    ponderados pelo regime de mercado atual.
+
+    - trending + ADX alto → amplifica peso de Donchian/EMA/MACD
+    - ranging             → amplifica peso de Stoch/RSI Divergência
+    - Score normalizado × fator ADX → score final entre 0 e 1
+
+    Uso: ajusta o tamanho da posição (não bloqueia, apenas calibra).
+    """
+    weights = STRATEGY_WEIGHTS.get(regime, STRATEGY_WEIGHTS["neutral"])
+    max_w   = sum(weights.values())
+    if max_w == 0:
+        return 0.5
+
+    # Soma dos pesos das estratégias com sinal BUY
+    buy_score = sum(
+        weights.get(strat, 1.0)
+        for strat, sig in signals.items()
+        if sig == "BUY"
+    )
+    normalized = buy_score / max_w  # 0 a 1
+
+    # ADX amplifica o score em mercados de tendência (ADX 20→40 aumenta até +25%)
+    if regime == "trending" and adx > 20:
+        adx_boost = min(0.25, (adx - 20) / 80)  # máx +25% quando ADX=40
+        normalized = min(1.0, normalized * (1 + adx_boost))
+
+    return normalized
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
 PYRAMID_MAX          = 1     # máx. 1 adição por posição (exposição máx: 1.25–1.35×)
@@ -1012,7 +1076,16 @@ async def trading_loop():
                   # Posições simultâneas abertas (global)
                   open_slots_count = sum(1 for s in strategy_slots.values() if s.get("qty", 0) > 0)
 
-                  logger.debug(f"[{pair}] regime={market_regime} mtf={mtf_bullish} "
+                  # ── Score de confiança ponderado por regime ──────────────────
+                  # Calcula ADX para o amplificador do score
+                  from strategies.market_regime import calc_adx as _calc_adx_local
+                  _adx_val = _calc_adx_local(df_1h_regime) if len(df_1h_regime) > 30 else 20.0
+                  pair_score = _calc_confidence_score(signals_this_cycle, market_regime, _adx_val)
+                  # Envia para o estado para exibição no dashboard
+                  state.setdefault("scores", {})[pair] = round(pair_score, 3)
+
+                  logger.debug(f"[{pair}] regime={market_regime} adx={_adx_val:.1f} "
+                               f"score={pair_score:.2f} mtf={mtf_bullish} "
                                f"atr={current_atr:.4f} open_slots={open_slots_count} daily={daily_trades}")
 
                   for strat in all_strategies:
@@ -1179,7 +1252,15 @@ async def trading_loop():
 
                           else:
                               # ── Todos os filtros passaram: executa o BUY ────────
-                              trade_usd = portfolio_total * dynamic_pct
+                              # Score ajusta o tamanho: alta confiança = maior posição
+                              # score=1.0 → +40% boost | score=0.15 → tamanho mínimo (2%)
+                              score_multiplier = max(
+                                  0.02 / dynamic_pct,          # nunca abaixo do mínimo de 2%
+                                  SCORE_MIN_THRESHOLD + pair_score * (SCORE_SIZE_BOOST - SCORE_MIN_THRESHOLD)
+                              )
+                              trade_usd = portfolio_total * min(TRADE_PCT, dynamic_pct * score_multiplier)
+                              logger.info(f"[{pair}][{strat.name}] score={pair_score:.2f} "
+                                          f"mult={score_multiplier:.2f} size={trade_usd*usd_brl:.0f}BRL")
                               if engine.balance_usd < trade_usd * 1.006:
                                   trade_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
 
