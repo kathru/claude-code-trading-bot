@@ -20,8 +20,7 @@ from paper_trading.engine import PaperTradingEngine, TAKER_FEE
 from strategies.donchian_breakout      import DonchianBreakout
 from strategies.ema_pullback           import EMAPullback
 from strategies.macd_momentum          import MACDMomentum
-from strategies.stoch_bounce           import StochBounce
-from strategies.rsi_divergence_detector import RSIDivergenceDetector
+# StochBounce e RSIDivergenceDetector removidos — excesso de fees
 from strategies.volatility_guard       import VolatilityGuard
 from strategies.trend_filter           import TrendFilter
 # Estratégias antigas preservadas para referência:
@@ -108,16 +107,64 @@ _last_prices: dict = {}      # {pair: float}
 
 
 def _dynamic_tp(fg_value: int) -> float:
-    """TP dinâmico entre TAKE_PROFIT_MIN e MAX inversamente proporcional ao Fear & Greed.
-    Medo   → alvo maior (deixa winners correrem mais)
-    Ganância → alvo menor (realiza antes da euforia acabar)
+    """Legacy fallback — use _dynamic_tp_by_regime when market_mode is known."""
+    if fg_value >= 70: return 7.0
+    if fg_value <= 25: return 10.0
+    return 8.0
+
+def _dynamic_tp_by_regime(market_mode: str, fg_value: int) -> float:
     """
-    rng = TAKE_PROFIT_MAX - TAKE_PROFIT_MIN
-    if   fg_value <= 25: return TAKE_PROFIT_MAX
-    elif fg_value <= 40: return round(TAKE_PROFIT_MIN + rng * 0.67, 1)
-    elif fg_value <= 60: return round(TAKE_PROFIT_MIN + rng * 0.50, 1)
-    elif fg_value <= 74: return round(TAKE_PROFIT_MIN + rng * 0.25, 1)
-    else:                return TAKE_PROFIT_MIN
+    TP dinâmico por regime de mercado + Fear & Greed:
+      bull      → 12–18% (deixar winners correrem em tendência forte)
+      chop/neutral → 8–10% (realizar mais cedo em lateral)
+      bear      → 5% (proteção — sair logo)
+      extreme greed (F&G ≥ 70) → 6–8% independente do regime
+    """
+    if fg_value >= 70:             # Ganância extrema → sair rápido
+        return 7.0
+    if market_mode == "bear":
+        return 5.0
+    if market_mode == "bull":
+        return 18.0 if fg_value <= 40 else 14.0   # 12–18%
+    # chop / neutral
+    return 10.0 if fg_value <= 40 else 8.0        # 8–10%
+
+def _detect_market_regime(candles_1h: list, candles_6h: list) -> str:
+    """
+    Detecta o regime global de mercado baseado no BTC:
+      'bull' → BTC acima EMA200 no 6H + ADX > 25 + EMA50 > EMA200
+      'bear' → BTC abaixo EMA200 no 6H
+      'chop' → ADX < 20 (mercado lateral sem direção clara)
+    """
+    if not candles_6h or len(candles_6h) < 50:
+        return "chop"
+    try:
+        import pandas as _pd
+        df = _pd.DataFrame(candles_6h, columns=["start","low","high","open","close","volume"])
+        closes = df["close"].astype(float)
+        ema50  = closes.ewm(span=50,  adjust=False).mean()
+        ema200 = closes.ewm(span=200, adjust=False).mean()
+        price  = float(closes.iloc[-1])
+        e50    = float(ema50.iloc[-1])
+        e200   = float(ema200.iloc[-1])
+
+        if price < e200:
+            return "bear"
+
+        # Calcular ADX rápido no 1H
+        if candles_1h and len(candles_1h) >= 30:
+            df1h = _pd.DataFrame(candles_1h, columns=["start","low","high","open","close","volume"])
+            adx_val = calc_adx(df1h.rename(columns={"low":"low","high":"high","close":"close"}))
+        else:
+            adx_val = 20.0
+
+        if adx_val < 20:
+            return "chop"
+        if price > e200 and e50 > e200:
+            return "bull"
+        return "chop"
+    except Exception:
+        return "chop"
 
 
 def _dynamic_sl(fg_value: int) -> float:
@@ -214,16 +261,28 @@ def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float =
 # ── Gestão de risco ──────────────────────────────────────────────
 SL_MIN                = 3.0  # SL mínimo: -3% (ganância extrema — sai rápido)
 SL_MAX                = 7.0  # SL máximo: -7% (medo extremo — mais espaço para respirar)
-TAKE_PROFIT_MIN       = 4.0  # TP mínimo: +4%
-TAKE_PROFIT_MAX       = 12.0 # TP máximo: +12%
-TRAILING_STOP_PCT     = 2.5  # trailing: -2.5% do pico
-TRAILING_ACTIVATE_PCT = 2.0  # trailing ativa após +2%
+TAKE_PROFIT_MIN       = 4.0   # fallback mínimo
+TAKE_PROFIT_MAX       = 18.0  # fallback máximo (bull trend)
+
+# ── Trailing stop por ativo (activate%, stop_from_peak%) ─────────
+PAIR_TRAILING = {
+    "BTC-USD":    (4.0, 5.0),   # BTC/ETH — menos voláteis
+    "ETH-USD":    (4.0, 5.0),
+    "SOL-USD":    (6.0, 7.0),   # Alts — mais voláteis
+    "AVAX-USD":   (6.0, 7.0),
+    "LINK-USD":   (6.0, 7.0),
+    "RENDER-USD": (6.0, 8.0),
+}
+
+# ── Classificação de pares ─────────────────────────────────────────
+ALT_PAIRS = {"SOL-USD", "AVAX-USD", "LINK-USD", "RENDER-USD"}
+BTC_PAIRS  = {"BTC-USD", "ETH-USD"}
 BREAKEVEN_ACTIVATE_PCT = 1.5 # após +1.5%, SL sobe para entrada (risco zero)
-SL_COOLDOWN_CYCLES    = 3    # após SL, aguarda 3 ciclos (9min) antes de re-entrar
+SL_COOLDOWN_CYCLES    = 12   # SL normal: 3h = 12 ciclos de 15min
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
 PYRAMID_MAX          = 3     # máx. 3 adições (175% da entrada total)
-PYRAMID_MIN_GAIN_PCT = 1.0   # só adiciona se ≥ +1.0% no lucro — confirma tendência antes de escalar
+PYRAMID_MIN_GAIN_PCT = 3.0   # pyramid somente após +3% de lucro E ADX > 25
 PYRAMID_SIZE_PCT     = 0.25  # cada pyramid = 25% do trade inicial
 
 # ── Fear & Greed ─────────────────────────────────────────────────
@@ -235,21 +294,20 @@ client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
 
 # ── 5 estratégias AGRESSIVAS 65/35 independentes ──────────────────────
+# 3 estratégias de tendência — foco em qualidade, menos fees
 all_strategies = [
-    DonchianBreakout(period=20, rsi_min=45.0, vol_mult=1.0),  # RSI 45 (menos filtro) + volume normal (1.0 sem spike req)
-    EMAPullback(fast=9, mid=21, slow=50, touch_tolerance_pct=0.3),  # 0.3 — toque real na EMA, evita falsos positivos
-    MACDMomentum(fast=12, slow=26, signal=9, ema_filter=12),  # Reduzido para 12 — resposta rápida
-    StochBounce(k_period=9, d_period=3, oversold=30, overbought=75, ma_filter=50),  # k=9 mais rápido, oversold 30 mais oportunidades, overbought 75 saída mais rápida
-    RSIDivergenceDetector(period=14, lookback_periods=5),  # Detector de divergência RSI — confirma reversões
+    DonchianBreakout(period=20, rsi_min=45.0, vol_mult=1.0,
+                     adx_min=20.0, obv_lookback=5),
+    EMAPullback(fast=9, mid=21, slow=50, touch_tolerance_pct=0.5,
+                slope_bars=5, vol_pullback_mult=1.2, vol_breakout_mult=1.0),
+    MACDMomentum(fast=12, slow=26, signal=9, ema_filter=12, rsi_max=75.0),
 ]
 
 # Mapa de candles por estratégia
 STRAT_CANDLES = {
-    "Donchian Breakout":     CANDLE_30M,
-    "EMA Pullback":          CANDLE_1H,
-    "MACD Momentum":         CANDLE_1H,
-    "Stoch Bounce":          CANDLE_30M,
-    "RSI Divergence Detect": CANDLE_30M,
+    "Donchian Breakout": CANDLE_30M,
+    "EMA Pullback":      CANDLE_1H,
+    "MACD Momentum":     CANDLE_1H,
 }
 
 # Guard de risco global — só dispara em crashes REAIS (>25% vol = mercado caindo)
@@ -258,6 +316,7 @@ trend_filter = TrendFilter(period=50)   # EMA50 1H — alinhado com EMA Pullback
 
 # ── Cooldown anti-whipsaw após SL (por slot) ─────────────────────
 sl_cooldowns: dict = {}   # {f"{strat}:{pair}": cycles_remaining}
+sl_history:   dict = {}   # {f"{strat}:{pair}": [timestamps dos SLs]}
 
 # ── Slots independentes: 4 estratégias × 3 pares + 3 manuais ────
 def _empty_slot():
@@ -780,10 +839,22 @@ async def trading_loop():
             fg = _fg_cache
         state["fear_greed"] = {"value": fg["value"], "label": fg["label"]}
         fg_value       = fg["value"]
-        current_tp_pct = _dynamic_tp(fg_value)
         current_sl_pct = _dynamic_sl(fg_value)
-        state["tp_objective"] = {"min": TAKE_PROFIT_MIN, "max": TAKE_PROFIT_MAX, "current": current_tp_pct}
-        state["sl_objective"] = {"min": SL_MIN,          "max": SL_MAX,          "current": current_sl_pct}
+        state["sl_objective"] = {"min": SL_MIN, "max": SL_MAX, "current": current_sl_pct}
+
+        # ── Market Regime Engine — detecta bull/chop/bear via BTC ────
+        try:
+            _btc_1h = _candle_cache.get(f"BTC-USD:{CANDLE_1H}", {}).get("data", [])
+            _btc_6h = _candle_cache.get(f"BTC-USD:{CANDLE_6H}", {}).get("data", [])
+            market_mode = _detect_market_regime(_btc_1h, _btc_6h)
+        except Exception:
+            market_mode = "chop"
+        state["market_mode"] = market_mode
+
+        # TP dinâmico pelo regime (substitui _dynamic_tp simples)
+        current_tp_pct = _dynamic_tp_by_regime(market_mode, fg_value)
+        state["tp_objective"] = {"min": 5.0, "max": 18.0, "current": current_tp_pct,
+                                 "regime": market_mode}
 
         _dynamic_pcts = []   # acumula dynamic_pct de cada par para média no final
 
@@ -961,8 +1032,10 @@ async def trading_loop():
 
                           tp_hit = price >= slot["entry"] * (1 + current_tp_pct / 100)
                           sl_hit = price <= effective_sl
-                          tr_act = gain_pct >= TRAILING_ACTIVATE_PCT
-                          tr_hit = tr_act and price <= slot["peak"] * (1 - TRAILING_STOP_PCT / 100)
+                          # ── Trailing por ativo ──────────────────────────────────
+                          _tr_act_pct, _tr_stop_pct = PAIR_TRAILING.get(pair, (4.0, 5.0))
+                          tr_act = gain_pct >= _tr_act_pct
+                          tr_hit = tr_act and price <= slot["peak"] * (1 - _tr_stop_pct / 100)
 
                           def _sell_slot(qty, label, is_sl=False):
                               net = qty * price * (1 - 0.006)
@@ -974,7 +1047,21 @@ async def trading_loop():
                                   _record_trade("SELL", pair, qty, price, net, f"{strat.name}:{label}")
                                   logger.info(f"[{pair}][{strat.name}] SELL {label} gain={gain_pct:+.2f}% P&L ${pnl:+.2f}")
                                   if is_sl:
-                                      sl_cooldowns[key] = SL_COOLDOWN_CYCLES
+                                      # ── Cooldown inteligente pós-SL ─────────────────────
+                                      now_ts = time.time()
+                                      hist = sl_history.setdefault(key, [])
+                                      hist.append(now_ts)
+                                      # Limpar entradas > 24h
+                                      sl_history[key] = [t for t in hist if now_ts - t < 86400]
+                                      recent_3h = [t for t in sl_history[key] if now_ts - t < 10800]
+                                      if len(sl_history[key]) >= 2:
+                                          sl_cooldowns[key] = 48  # 2+ SLs em 24h → 12h block
+                                          logger.info(f"[{pair}][{strat.name}] BLOCK 12h — {len(sl_history[key])} SLs em 24h")
+                                      elif len(recent_3h) >= 2:
+                                          sl_cooldowns[key] = 24  # SL consecutivo → 6h
+                                          logger.info(f"[{pair}][{strat.name}] COOLDOWN 6h — SL consecutivo")
+                                      else:
+                                          sl_cooldowns[key] = SL_COOLDOWN_CYCLES  # normal → 3h
                                   # Sempre insere novo entry no topo — mesma lógica do BUY executado
                                   state["feed"].insert(0, {
                                       "time": now_str, "cycle": state["cycle"],
@@ -1005,7 +1092,7 @@ async def trading_loop():
                           elif pyramid_sl_hit:
                               _sell_slot(slot["qty"], f"SL-pyramid-1.5%", is_sl=True)
                           elif tr_hit:
-                              _sell_slot(slot["qty"], f"TRAILING-{TRAILING_STOP_PCT:.1f}%")
+                              _sell_slot(slot["qty"], f"TRAILING-{_tr_stop_pct:.1f}%")
                           # ── TP parcial (+2.5%) para estratégias com pyramid ──────
                           elif gain_pct >= 2.5 and slot.get("pyramids", 0) > 0:
                               half_qty = slot["qty"] / 2
@@ -1019,7 +1106,7 @@ async def trading_loop():
                               if sell_q > 1e-8:
                                   lbl = f"GREED{fg_value}" if extreme_greed else "SELL"
                                   _sell_slot(sell_q, lbl)
-                          elif signal == "BUY" and gain_pct >= PYRAMID_MIN_GAIN_PCT:
+                          elif signal == "BUY" and gain_pct >= PYRAMID_MIN_GAIN_PCT and _adx_val > 25:
                               pdone = slot.get("pyramids", 0)
                               if pdone < PYRAMID_MAX:
                                   # Pyramid proporcional à entrada original — não varia com dynamic_pct atual
@@ -1046,28 +1133,81 @@ async def trading_loop():
                           slot["unrealized"] = (price - slot["entry"]) * slot["qty"] if slot["qty"] > 0 else 0.0
 
                       elif signal == "BUY" and not extreme_greed:
-                          cooldown = sl_cooldowns.get(key, 0)
-                          if cooldown > 0:
-                              sl_cooldowns[key] = cooldown - 1
-                          else:
-                              trade_usd = portfolio_total * dynamic_pct
-                              if engine.balance_usd < trade_usd * 1.006:
-                                  # Se não tem 5% em caixa, usa o saldo restante (menos margem de taxa)
-                                  trade_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
+                          # ── Gates de qualidade — avaliados em sequência ──────────
+                          _buy_blocked = None
 
-                              if trade_usd > 1.0:  # Mínimo de $1 para trade
+                          # G1: Bear market bloqueia TODOS os BUYs
+                          if market_mode == "bear":
+                              _buy_blocked = f"bear market"
+
+                          # G2: Score mínimo 60%
+                          elif pair_score < 0.60:
+                              _buy_blocked = f"score {pair_score:.0%} < 60%"
+
+                          # G3: Min Risk/Reward 2.5:1
+                          else:
+                              _sl_max_pct = PAIR_SL_RANGE.get(pair, (0.05, 0.08))[1]
+                              _rr = (current_tp_pct / 100) / _sl_max_pct
+                              if _rr < 2.5:
+                                  _buy_blocked = f"RR={_rr:.2f} < 2.5:1"
+
+                          # G4: Correlação de alts
+                          if _buy_blocked is None and pair in ALT_PAIRS:
+                              _open_alts = sum(1 for k2, s2 in strategy_slots.items()
+                                               if s2.get("qty", 0) > 0
+                                               and k2.split(":")[-1] in ALT_PAIRS)
+                              _alt_sym = {p.split("-")[0] for p in ALT_PAIRS}
+                              _alt_val = sum(
+                                  s2["qty"] * (_last_prices.get(k2.split(":")[-1], {}).get("price") or 0)
+                                  for k2, s2 in strategy_slots.items()
+                                  if s2.get("qty", 0) > 0 and k2.split(":")[-1] in _alt_sym
+                              )
+                              _alt_exp = _alt_val / portfolio_total if portfolio_total > 0 else 0
+                              if _open_alts >= 2:
+                                  _buy_blocked = f"max 2 alts ({_open_alts} abertas)"
+                              elif _alt_exp >= 0.25:
+                                  _buy_blocked = f"alt exposure {_alt_exp:.0%} >= 25%"
+
+                          # G5: SL cooldown
+                          cooldown = sl_cooldowns.get(key, 0)
+                          if _buy_blocked is None and cooldown > 0:
+                              sl_cooldowns[key] = cooldown - 1
+                              _buy_blocked = f"SL cooldown ({cooldown} ciclos)"
+
+                          if _buy_blocked:
+                              logger.debug(f"[{pair}][{strat.name}] BUY bloqueado — {_buy_blocked}")
+                          else:
+                              # ── Multiplicador de tamanho por score + regime ──────
+                              if market_mode == "chop":
+                                  _score_mult = min(0.6, pair_score)
+                              elif pair_score >= 0.85:
+                                  _score_mult = 1.4
+                              elif pair_score >= 0.75:
+                                  _score_mult = 1.0
+                              else:
+                                  _score_mult = 0.5
+                              if market_mode == "bull":
+                                  _score_mult = min(1.4, _score_mult * 1.1)
+
+                              trade_usd = portfolio_total * min(TRADE_PCT, dynamic_pct * _score_mult)
+                              fee_margin = _current_taker_fee()
+                              if engine.balance_usd < trade_usd * (1 + fee_margin):
+                                  trade_usd = max(0, engine.balance_usd * (1 - fee_margin))
+
+                              if trade_usd > 1.0:
                                   qty = trade_usd / price
                                   if engine.buy(symbol, trade_usd, price, strat.name):
                                       slot["qty"]       = qty
                                       slot["entry"]     = price
                                       slot["peak"]      = price
                                       slot["pyramids"]  = 0
-                                      slot["entry_usd"] = trade_usd  # guarda tamanho original
+                                      slot["entry_usd"] = trade_usd
                                       _record_trade("BUY", pair, qty, price, trade_usd, strat.name)
                                       _count_buy(strat.name)
                                       pct_used = (trade_usd / engine.initial_balance) * 100 if engine.initial_balance > 0 else 0
                                       logger.info(f"[{pair}][{strat.name}] ✅ BUY {pct_used:.1f}% "
-                                                  f"R${trade_usd*usd_brl:.0f} @ ${price:,.2f}")
+                                                  f"R${trade_usd*usd_brl:.0f} @ ${price:,.2f} "
+                                                  f"[{market_mode} score={pair_score:.0%} RR={_rr:.1f}]")
                                       state["feed"].insert(0, {
                                           "time": now_str, "cycle": state["cycle"],
                                           "pair": pair, "strategy": strat.name,
@@ -1077,7 +1217,7 @@ async def trading_loop():
                                       })
                                       state["feed"] = state["feed"][:100]
                               else:
-                                  logger.info(f"[{pair}][{strat.name}] BUY negado — saldo insuficiente (< $1)")
+                                  logger.info(f"[{pair}][{strat.name}] BUY negado — saldo insuficiente")
 
                 # ── Slot manual: SL/TP/Trailing (fecha 100%) ──────────────────
                 ms = strategy_slots.get(f"manual:{pair}")
@@ -1095,7 +1235,7 @@ async def trading_loop():
                     rsn = (f"TP+{current_tp_pct:.0f}%" if tph else
                            f"BE-stop"                   if slh and g >= 0 else
                            f"SL-{current_sl_pct:.1f}%"  if slh else
-                           f"TRAILING-{TRAILING_STOP_PCT:.1f}%" if trh else None)
+                           f"TRAILING-{_tr_stop_pct:.1f}%" if trh else None)
                     if rsn:
                         net = ms["qty"] * price * (1 - 0.006)
                         if engine.sell(symbol, ms["qty"], price, f"manual:{rsn}"):
