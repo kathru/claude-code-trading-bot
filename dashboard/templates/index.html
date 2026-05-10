@@ -306,14 +306,14 @@
         <!-- NEW KPI: Circuit Breaker -->
         <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
           <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Circuit Breaker</p>
-          <p id="kpi-circuit-breaker" class="text-xl font-bold text-orange-400">—/12</p>
-          <p class="text-[10px] text-gray-600 mt-0.5">Trades hoje · máx 12</p>
+          <p id="kpi-circuit-breaker" class="text-xl font-bold text-cyan-400">—/12</p>
+          <p id="kpi-circuit-breaker-sub" class="text-[10px] text-gray-600 mt-0.5">trades hoje</p>
         </div>
         <!-- NEW KPI: Slots Abertos -->
         <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
           <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Slots Abertos</p>
           <p id="kpi-open-slots" class="text-xl font-bold text-cyan-400">—/8</p>
-          <p class="text-[10px] text-gray-600 mt-0.5">Posições · máx 8</p>
+          <p id="kpi-open-slots-sub" class="text-[10px] text-gray-600 mt-0.5">simultâneos</p>
         </div>
         <!-- NEW KPI: Regime Predominante -->
         <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
@@ -1062,36 +1062,42 @@
 
     // ── NEW: Circuit Breaker ──────────────────────────────────────────────
     if (el('kpi-circuit-breaker')) {
-      const tdToday = s.trades_today != null
-        ? s.trades_today
-        : (s.trades || []).filter(t => {
-            const d = new Date((t.time || ''));
-            const n = new Date();
-            return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
-          }).length;
-      el('kpi-circuit-breaker').textContent = tdToday + '/12';
-      el('kpi-circuit-breaker').style.color = tdToday >= 10 ? '#f87171' : tdToday >= 6 ? '#fb923c' : '#fb923c';
+      const maxTrades = s.max_daily_trades || 12;
+      const tdToday   = s.trades_today != null ? s.trades_today
+        : (s.trades || []).filter(t => (t.time||'').startsWith(new Date().toISOString().slice(0,10))).length;
+      el('kpi-circuit-breaker').textContent = tdToday + '/' + maxTrades;
+      el('kpi-circuit-breaker').style.color = tdToday >= maxTrades - 2 ? '#f87171' : tdToday >= maxTrades * 0.6 ? '#fb923c' : '#22d3ee';
+      const subCB = el('kpi-circuit-breaker-sub');
+      if (subCB) subCB.textContent = tdToday >= maxTrades ? '🔴 Bloqueado' : 'trades hoje';
     }
 
     // ── NEW: Slots Abertos ────────────────────────────────────────────────
     if (el('kpi-open-slots')) {
-      const openCount = Object.values(allSlots).filter(sl => (sl.qty || 0) > 0).length;
-      el('kpi-open-slots').textContent = openCount + '/8';
-      el('kpi-open-slots').style.color = openCount >= 7 ? '#f87171' : openCount >= 5 ? '#fb923c' : '#22d3ee';
+      const maxSlots  = s.max_open_slots || 8;
+      const openCount = s.open_slots_count != null
+        ? s.open_slots_count
+        : Object.values(allSlots).filter(sl => (sl.qty || 0) > 0).length;
+      el('kpi-open-slots').textContent = openCount + '/' + maxSlots;
+      el('kpi-open-slots').style.color = openCount >= maxSlots - 1 ? '#f87171' : openCount >= maxSlots * 0.6 ? '#fb923c' : '#22d3ee';
+      const subOS = el('kpi-open-slots-sub');
+      if (subOS) subOS.textContent = openCount >= maxSlots ? '🔴 Cheio' : 'simultâneos';
     }
 
     // ── NEW: Regime Predominante ──────────────────────────────────────────
     if (el('kpi-regime')) {
-      const sigs = s.signals || {};
+      const sigs    = s.signals || {};
       const rCounts = { TRENDING: 0, RANGING: 0, NEUTRAL: 0 };
       CRYPTOS.forEach(c => {
         const sg = sigs[c.pair];
-        const r  = sg ? inferRegime(sg) : 'NEUTRAL';
+        // Usa regime real do backend se disponível
+        const r = sg && sg.regime
+          ? sg.regime.toUpperCase()
+          : (sg ? inferRegime(sg) : 'NEUTRAL');
         rCounts[r] = (rCounts[r] || 0) + 1;
       });
-      const dominant = Object.entries(rCounts).sort((a, b) => b[1] - a[1])[0][0];
+      const dominant = Object.entries(rCounts).sort((a,b) => b[1]-a[1])[0][0];
       el('kpi-regime').textContent = dominant;
-      el('kpi-regime').style.color = dominant === 'TRENDING' ? '#4ade80' : dominant === 'RANGING' ? '#facc15' : '#9ca3af';
+      el('kpi-regime').style.color = dominant==='TRENDING' ? '#4ade80' : dominant==='RANGING' ? '#facc15' : '#9ca3af';
     }
 
     // Candles

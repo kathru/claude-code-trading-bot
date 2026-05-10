@@ -1225,6 +1225,15 @@ async def trading_loop():
                 rsi_val     = get_rsi_value(candles_1h)
                 entry_price = engine.entry_prices.get(symbol)
                 change_pct  = ((price - entry_price) / entry_price * 100) if entry_price else None
+                # ATR SL level para o frontend exibir
+                atr_sl_price = None
+                atr_sl_pct_val = None
+                if entry_price and current_atr > 0:
+                    _atr_sl = atr_stop_loss(entry_price, df_1h_regime,
+                                            multiplier=2.0, min_pct=0.03, max_pct=0.12)
+                    atr_sl_price   = round(_atr_sl, 4)
+                    atr_sl_pct_val = round((entry_price - _atr_sl) / entry_price * 100, 2)
+
                 state["signals"][pair] = {
                     "strategies":  pair_signals,
                     "trend":       trend,
@@ -1234,7 +1243,19 @@ async def trading_loop():
                     "change_pct":  round(change_pct,  2) if change_pct is not None else None,
                     "sl_level":    round(entry_price * (1 - current_sl_pct / 100), 2) if entry_price else None,
                     "tp_level":    round(entry_price * (1 + current_tp_pct / 100), 2) if entry_price else None,
+                    # Novos campos para o dashboard
+                    "regime":      market_regime,           # 'trending' | 'ranging' | 'neutral'
+                    "mtf_ok":      mtf_bullish,             # True/False — EMA50 > EMA200 no 6H
+                    "atr_sl_level": atr_sl_price,           # preço do ATR stop
+                    "atr_sl_pct":  atr_sl_pct_val,          # % de distância do ATR stop
+                    "atr_value":   round(current_atr, 6) if current_atr else None,
                 }
+
+                # Trades de hoje para circuit breaker no frontend
+                state["trades_today"] = _daily_trade_count.get(now_str[:10], 0)
+                state["max_daily_trades"] = MAX_DAILY_TRADES
+                state["open_slots_count"] = open_slots_count
+                state["max_open_slots"]   = MAX_OPEN_SLOTS
                 log_cycle(logger, state["cycle"], pair, price, pair_signals, trend)
 
             except Exception as e:
