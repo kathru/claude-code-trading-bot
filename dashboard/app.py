@@ -238,13 +238,36 @@ FG_TTL         = 3600 # cache de 1 hora (índice atualiza 1×/dia)
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
 
-# ── 5 estratégias AGRESSIVAS 65/35 independentes ──────────────────────
+# ── 5 estratégias — agressivas com qualidade ────────────────────────────
 all_strategies = [
-    DonchianBreakout(period=20, rsi_min=45.0, vol_mult=1.0),  # RSI 45 (menos filtro) + volume normal (1.0 sem spike req)
-    EMAPullback(fast=9, mid=21, slow=50, touch_tolerance_pct=0.3),  # 0.3 — toque real na EMA, evita falsos positivos
-    MACDMomentum(fast=12, slow=26, signal=9, ema_filter=12),  # Reduzido para 12 — resposta rápida
-    StochBounce(k_period=9, d_period=3, oversold=30, overbought=75, ma_filter=50),  # k=9 mais rápido, oversold 30 mais oportunidades, overbought 75 saída mais rápida
-    RSIDivergenceDetector(period=14, lookback_periods=5),  # Detector de divergência RSI — confirma reversões
+    DonchianBreakout(
+        period=20,
+        rsi_min=45.0,       # RSI 45: menos restritivo, mais oportunidades
+        vol_mult=1.0,       # sem exigência de spike de volume
+        adx_min=20.0,       # ADX 20: aceita tendências moderadas (era 25 — muito restritivo)
+        obv_lookback=5,     # OBV lookback curto: mais responsivo (era 10)
+    ),
+    EMAPullback(
+        fast=9, mid=21, slow=50,
+        touch_tolerance_pct=0.5,    # 0.5%: mais tolerante ao toque na EMA (era 0.3)
+        slope_bars=5,
+        vol_pullback_mult=1.2,      # relaxado: pullback pode ter volume até 1.2× (era 0.8)
+        vol_breakout_mult=1.0,      # relaxado: retomada acima da média (era 1.2)
+    ),
+    MACDMomentum(
+        fast=12, slow=26, signal=9,
+        ema_filter=12,      # EMA12: resposta rápida
+        rsi_max=75.0,       # RSI 75: mais espaço antes de considerar sobrecomprado (era 70)
+    ),
+    StochBounce(
+        k_period=9,         # k=9: mais rápido e responsivo
+        d_period=3,
+        oversold=25.0,      # 25: mais oportunidades (era 20 — muito restritivo)
+        overbought=75.0,
+        ma_filter=50,
+        bb_bandwidth_max=0.22,  # 22%: crypto é naturalmente volátil (era 15% — bloqueava demais)
+    ),
+    RSIDivergenceDetector(period=14, lookback_periods=5),
 ]
 
 # Mapa de candles por estratégia
@@ -1118,17 +1141,15 @@ async def trading_loop():
                           elif time.time() - last_buy_time.get(key, 0) < BUY_COOLDOWN_SECONDS:
                               logger.debug(f"[{pair}][{strat.name}] BUY bloqueado — cooldown 1h ativo")
 
-                          elif not mtf_bullish and strat.name in ("EMA Pullback", "Donchian Breakout", "MACD Momentum"):
-                              # MTF: tendência só opera se 6H confirma uptrend (EMA50 > EMA200)
+                          elif not mtf_bullish and strat.name in ("EMA Pullback", "Donchian Breakout"):
+                              # MTF: Donchian e EMA só operam se 6H confirma uptrend
+                              # MACD e Stoch ficam livres do filtro MTF (mais oportunidades)
                               logger.info(f"[{pair}][{strat.name}] BUY bloqueado — MTF 6H bearish")
 
-                          elif market_regime == "ranging" and strat.name in ("EMA Pullback", "Donchian Breakout"):
-                              # ADX < 20: mercado lateral — Donchian e EMA geram breakouts falsos
+                          elif market_regime == "ranging" and strat.name == "Donchian Breakout":
+                              # ADX < 20: só bloqueia Donchian (mais propenso a bull traps laterais)
+                              # EMA Pullback pode operar em ranging (pullbacks funcionam em laterais)
                               logger.debug(f"[{pair}][{strat.name}] BUY bloqueado — regime ranging (ADX<20)")
-
-                          elif market_regime == "trending" and strat.name == "Stoch Bounce":
-                              # ADX > 25: tendência forte — mean reversion tem baixa eficácia
-                              logger.debug(f"[{pair}][{strat.name}] BUY bloqueado — regime trending (ADX>25)")
 
                           else:
                               # ── Todos os filtros passaram: executa o BUY ────────
