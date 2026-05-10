@@ -1279,16 +1279,17 @@ async def trading_loop():
 
 @app.on_event("startup")
 async def startup():
-    # ── Fix Bug 2: Sincronizar initial_balance com cotação BRL atual ──────
+    # ── Sincronizar initial_balance com cotação BRL atual ──────────────────
+    # Força busca nova ignorando cache (ts=0) para garantir cotação real no startup
+    _usd_brl_cache["ts"] = 0.0
     usd_brl_now = _fetch_usd_brl()
     correct_initial_usd = TOTAL_BRL_INITIAL / usd_brl_now
-    if abs(engine.initial_balance - correct_initial_usd) > 1.0:
-        logger.info(f"[STARTUP] Sincronizando initial_balance: {engine.initial_balance:.4f} → {correct_initial_usd:.4f} (R${TOTAL_BRL_INITIAL} @ {usd_brl_now:.4f})")
-        engine.initial_balance = correct_initial_usd
-        # Só ajusta balance_usd se não houver posições abertas (reset limpo)
-        if not engine.holdings:
-            engine.balance_usd = correct_initial_usd
-        engine._save_state()
+    logger.info(f"[STARTUP] USD/BRL={usd_brl_now:.4f} → initial_balance={correct_initial_usd:.4f} USD (R${TOTAL_BRL_INITIAL})")
+    engine.initial_balance = correct_initial_usd
+    # Ajusta balance_usd se não houver posições abertas (sessão limpa)
+    if not engine.holdings:
+        engine.balance_usd = correct_initial_usd
+    engine._save_state()
     state["usd_brl"] = usd_brl_now
 
     # Inicializa preços antes de iniciar trading loop
