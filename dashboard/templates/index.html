@@ -221,6 +221,8 @@
           </div>
           <span class="text-gray-700 shrink-0">|</span>
           <div class="flex gap-1 shrink-0">
+            <button onclick="setCandleTF('ONE_MINUTE',1)"      data-tf="ONE_MINUTE"     class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold">1m</button>
+            <button onclick="setCandleTF('FIVE_MINUTE',5)"     data-tf="FIVE_MINUTE"    class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold">5m</button>
             <button onclick="setCandleTF('FIFTEEN_MINUTE',15)" data-tf="FIFTEEN_MINUTE" class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold">15m</button>
             <button onclick="setCandleTF('ONE_HOUR',60)"      data-tf="ONE_HOUR"       class="candle-tf-btn active px-2.5 py-1 rounded text-xs font-semibold">1h</button>
             <button onclick="setCandleTF('SIX_HOUR',360)"     data-tf="SIX_HOUR"       class="candle-tf-btn px-2.5 py-1 rounded text-xs font-semibold">6h</button>
@@ -427,7 +429,7 @@
     {
       name: 'Donchian Breakout', id: 'Don', icon: '🚀',
       filters: ['ADX>20', 'OBV↑', 'RSI>45'],
-      desc: 'Breakout do canal Donchian 20 — 1H. Exige ADX > 20, OBV em nova máxima e RSI > 45.'
+      desc: 'Breakout do canal Donchian 20 — 30min. Exige ADX > 20, OBV em nova máxima e RSI > 45.'
     },
     {
       name: 'EMA Pullback', id: 'EMA', icon: '📈',

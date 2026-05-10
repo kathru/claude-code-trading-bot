@@ -310,9 +310,9 @@ all_strategies = [
     MACDMomentum(fast=12, slow=26, signal=9, ema_filter=12, rsi_max=75.0),
 ]
 
-# Mapa de candles por estratégia — todas usam 1H agora
+# Mapa de candles por estratégia
 STRAT_CANDLES = {
-    "Donchian Breakout": CANDLE_1H,   # migrado de 30M → 1H
+    "Donchian Breakout": CANDLE_30M,  # 30min — breakouts de curto prazo
     "EMA Pullback":      CANDLE_1H,
     "MACD Momentum":     CANDLE_1H,
 }
@@ -963,9 +963,16 @@ async def trading_loop():
 
                 else:
                   # ── PASSO 1: coleta TODOS os sinais antes de agir ─────────
-                  # Todas as estratégias usam 1H agora (Donchian migrado de 30M)
+                  try:
+                      candles_30m = await asyncio.wait_for(
+                          loop.run_in_executor(None, _get_candles, pair, CANDLE_30M, 250),
+                          timeout=8.0
+                      )
+                  except asyncio.TimeoutError:
+                      logger.warning(f"[{pair}] Candles 30M timeout - usando cache")
+                      candles_30m = _candle_cache.get(f"{pair}:{CANDLE_30M}", {}).get("data", [])
                   candle_map  = {
-                      "Donchian Breakout": candles_1h,
+                      "Donchian Breakout": candles_30m,
                       "EMA Pullback":      candles_1h,
                       "MACD Momentum":     candles_1h,
                   }
