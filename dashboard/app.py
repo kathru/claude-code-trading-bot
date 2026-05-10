@@ -1144,13 +1144,16 @@ async def trading_loop():
                                   if is_sl:
                                       sl_cooldowns[key] = SL_COOLDOWN_CYCLES
                                   _daily_trade_count[today_str] = _daily_trade_count.get(today_str, 0) + 1
-                                  # Sempre insere novo entry no topo — mesma lógica do BUY executado
+                                  # Note igual ao BUY: valor em BRL + % P&L
+                                  cost_usd    = slot["entry"] * qty
+                                  pnl_pct_val = (pnl / cost_usd * 100) if cost_usd > 0 else 0
+                                  sell_note   = f"R${net*usd_brl:.0f} ({pnl_pct_val:+.1f}%)"
                                   state["feed"].insert(0, {
                                       "time": now_str, "cycle": state["cycle"],
                                       "pair": pair, "strategy": strat.name,
                                       "signal": "SELL", "price": price,
                                       "executed": True,
-                                      "note": label,
+                                      "note": sell_note,
                                   })
                                   state["feed"] = state["feed"][:100]
                                   # ← Só atualiza o slot SE a venda foi executada no engine
