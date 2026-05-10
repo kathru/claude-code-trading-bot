@@ -1230,14 +1230,15 @@ async def trading_loop():
                     ms["be_sl"] = ms_eff_sl
                     tph = price >= ms["entry"] * (1 + current_tp_pct / 100)
                     slh = price <= ms_eff_sl
-                    tra = g >= TRAILING_ACTIVATE_PCT
-                    trh = tra and price <= ms["peak"] * (1 - TRAILING_STOP_PCT / 100)
+                    _ms_tr_act, _ms_tr_stop = PAIR_TRAILING.get(pair, (4.0, 5.0))
+                    tra = g >= _ms_tr_act
+                    trh = tra and price <= ms["peak"] * (1 - _ms_tr_stop / 100)
                     rsn = (f"TP+{current_tp_pct:.0f}%" if tph else
                            f"BE-stop"                   if slh and g >= 0 else
                            f"SL-{current_sl_pct:.1f}%"  if slh else
-                           f"TRAILING-{_tr_stop_pct:.1f}%" if trh else None)
+                           f"TRAILING-{_ms_tr_stop:.1f}%" if trh else None)
                     if rsn:
-                        net = ms["qty"] * price * (1 - 0.006)
+                        net = ms["qty"] * price * (1 - _current_taker_fee())
                         if engine.sell(symbol, ms["qty"], price, f"manual:{rsn}"):
                             ms["realized"] += net - ms["entry"] * ms["qty"]
                             _record_trade("SELL", pair, ms["qty"], price, net, f"manual:{rsn}")
