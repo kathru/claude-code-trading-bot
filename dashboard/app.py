@@ -24,10 +24,6 @@ from strategies.stoch_bounce           import StochBounce
 from strategies.rsi_divergence_detector import RSIDivergenceDetector
 from strategies.volatility_guard       import VolatilityGuard
 from strategies.trend_filter           import TrendFilter
-from strategies.market_regime          import (
-    detect_regime, calc_atr, atr_stop_loss,
-    obv_rising, mfi_bullish, mtf_trend_bullish
-)
 # Estratégias antigas preservadas para referência:
 # from strategies.rsi_divergence import RSIDivergence
 # from strategies.support_resistance import SupportResistance
@@ -163,14 +159,14 @@ def _current_cycle() -> int:
     return (int(time.time()) + SP_OFFSET) % 86400 // CYCLE_INTERVAL
 
 
-PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD", "AVAX-USD", "LINK-USD", "RENDER-USD"]  # 6 pares — DOGE removido, RENDER adicionado
+PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD", "AVAX-USD", "LINK-USD", "DOGE-USD"]  # 6 pares para melhor diversificação
 
 # ── Portfolio em Real é FIXO em R$ 4.000 ────────────────────────
-TOTAL_BRL_INITIAL = 5000.0  # Portfolio inicial em BRL — FIXO, nunca muda
+TOTAL_BRL_INITIAL = 4000.0  # Portfolio inicial em BRL — FIXO, nunca muda
 # Portfolio em USD varia com cotação: USD_atual = TOTAL_BRL_INITIAL / usd_brl_atual
 
 # ── Ciclo e candles ─────────────────────────────────────────────
-CYCLE_INTERVAL    = 900      # ciclo de 900s (15 minutos)
+CYCLE_INTERVAL    = 180      # ciclo de 180s (3 minutos)
 CANDLE_30M        = "THIRTY_MINUTE"  # Donchian, Stoch
 CANDLE_1H         = "ONE_HOUR"       # EMA Pullback, MACD
 CANDLE_6H         = "SIX_HOUR"
@@ -215,148 +211,20 @@ def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float =
     return size
 
 
-# ── Coinbase Advanced Trading — Standard Fee System (2026) ───────
-# Fonte: coinbase.com/advanced-trade/fees
-# Modelo maker-taker: maker adiciona liquidez (limit order no book),
-#                     taker remove liquidez (market order / execução imediata)
-#
-# Em paper trading:
-#   BUY  → sempre Taker (executa imediatamente ao preço de mercado)
-#   SELL por SL/Sinal → Taker (execução imediata / urgente)
-#   SELL por TP → Maker (simula limit order — aguarda preço-alvo)
-#
-# Volume 30 dias (USD) → (maker_fee, taker_fee)
-COINBASE_FEE_TIERS = [
-    (          0,  0.0060, 0.0120),  # $0        – $10K  (conta nova)
-    (     10_000,  0.0035, 0.0080),  # $10K      – $50K
-    (     50_000,  0.0025, 0.0040),  # $50K      – $100K
-    (    100_000,  0.0015, 0.0025),  # $100K     – $1M
-    (  1_000_000,  0.0010, 0.0020),  # $1M       – $15M
-    ( 15_000_000,  0.0007, 0.0016),  # $15M      – $50M
-    ( 50_000_000,  0.0005, 0.0014),  # $50M      – $100M
-    (100_000_000,  0.0002, 0.0010),  # $100M     – $250M
-    (250_000_000,  0.0000, 0.0005),  # $250M+
-]
-
-def _get_fee_rates() -> tuple:
-    """
-    Determina maker/taker fee do tier correto pelo volume dos últimos 30 dias.
-    Retorna (maker_fee, taker_fee) como decimais (0.006 = 0.60%).
-    """
-    cutoff = time.time() - 30 * 86400
-    vol_30d = sum(
-        t.get("usd", 0)
-        for t in engine.trades
-        if (t.get("ts") or 0) >= cutoff
-    )
-    maker, taker = 0.0060, 0.0120  # fallback: tier mínimo
-    for min_vol, m, t_ in reversed(COINBASE_FEE_TIERS):
-        if vol_30d >= min_vol:
-            maker, taker = m, t_
-            break
-    return maker, taker
-
-def _current_taker_fee() -> float:
-    """Taker fee atual — usado em BUY e SELL por SL/sinal (execução imediata)."""
-    _, taker = _get_fee_rates()
-    return taker
-
-def _current_maker_fee() -> float:
-    """Maker fee atual — usado em SELL por TP (simula limit order no book)."""
-    maker, _ = _get_fee_rates()
-    return maker
-
 # ── Gestão de risco ──────────────────────────────────────────────
-SL_MIN                = 3.0  # SL mínimo global (fallback)
-SL_MAX                = 8.0  # SL máximo global (fallback)
-
-# ── Stop Loss específico por ativo (min%, max%) ──────────────────
-# ATR × 2.0 é clampado dentro deste range por par
-PAIR_SL_RANGE = {
-    "BTC-USD":    (0.02, 0.04),  # BTC:    2–4%  (baixa volatilidade relativa)
-    "ETH-USD":    (0.03, 0.05),  # ETH:    3–5%
-    "SOL-USD":    (0.05, 0.07),  # SOL:    5–7%  (alta volatilidade)
-    "AVAX-USD":   (0.05, 0.07),  # AVAX:   5–7%
-    "LINK-USD":   (0.05, 0.07),  # LINK:   5–7%
-    "RENDER-USD": (0.06, 0.09),  # RENDER: 6–9%  (altcoin volátil)
-}
+SL_MIN                = 3.0  # SL mínimo: -3% (ganância extrema — sai rápido)
+SL_MAX                = 7.0  # SL máximo: -7% (medo extremo — mais espaço para respirar)
 TAKE_PROFIT_MIN       = 4.0  # TP mínimo: +4%
 TAKE_PROFIT_MAX       = 12.0 # TP máximo: +12%
 TRAILING_STOP_PCT     = 2.5  # trailing: -2.5% do pico
 TRAILING_ACTIVATE_PCT = 2.0  # trailing ativa após +2%
 BREAKEVEN_ACTIVATE_PCT = 1.5 # após +1.5%, SL sobe para entrada (risco zero)
-SL_COOLDOWN_CYCLES    = 3    # após SL, aguarda 3 ciclos antes de re-entrar
-
-# ── Sistema de Scoring por Regime ────────────────────────────────
-# Pesos de cada estratégia por regime de mercado.
-# trending: estratégias de seguimento de tendência têm maior peso
-# ranging : estratégias de reversão à média têm maior peso
-# O score final (0–1) ajusta o tamanho da posição dinamicamente.
-STRATEGY_WEIGHTS = {
-    "trending": {
-        "Donchian Breakout":     1.5,  # breakout funciona bem em trending
-        "EMA Pullback":          1.3,  # pullback em tendência é clássico
-        "MACD Momentum":         1.2,  # momentum confirma tendência
-        "Stoch Bounce":          0.6,  # mean reversion menos confiável em trending
-        "RSI Divergence Detect": 0.8,
-    },
-    "ranging": {
-        "Donchian Breakout":     0.5,  # breakouts falsos em lateral
-        "EMA Pullback":          0.9,  # pullbacks funcionam em ranging
-        "MACD Momentum":         0.8,
-        "Stoch Bounce":          1.5,  # mean reversion excelente em ranging
-        "RSI Divergence Detect": 1.3,  # divergências são precisas em ranging
-    },
-    "neutral": {
-        "Donchian Breakout":     1.0,
-        "EMA Pullback":          1.0,
-        "MACD Momentum":         1.0,
-        "Stoch Bounce":          1.0,
-        "RSI Divergence Detect": 1.0,
-    },
-}
-# Score mínimo para abrir posição (0–1). Abaixo disso reduz tamanho mas não bloqueia.
-SCORE_MIN_THRESHOLD  = 0.15   # abaixo de 15% da confiança máxima → usa tamanho mínimo
-SCORE_SIZE_BOOST     = 1.4    # score máximo pode aumentar tamanho em até 40%
-
-
-def _calc_confidence_score(signals: dict, regime: str, adx: float) -> float:
-    """
-    Calcula score de confiança (0–1) baseado nos sinais de todas as estratégias,
-    ponderados pelo regime de mercado atual.
-
-    - trending + ADX alto → amplifica peso de Donchian/EMA/MACD
-    - ranging             → amplifica peso de Stoch/RSI Divergência
-    - Score normalizado × fator ADX → score final entre 0 e 1
-
-    Uso: ajusta o tamanho da posição (não bloqueia, apenas calibra).
-    """
-    weights = STRATEGY_WEIGHTS.get(regime, STRATEGY_WEIGHTS["neutral"])
-    max_w   = sum(weights.values())
-    if max_w == 0:
-        return 0.5
-
-    # Soma dos pesos das estratégias com sinal BUY
-    buy_score = sum(
-        weights.get(strat, 1.0)
-        for strat, sig in signals.items()
-        if sig == "BUY"
-    )
-    normalized = buy_score / max_w  # 0 a 1
-
-    # ADX amplifica o score em mercados de tendência (ADX 20→40 aumenta até +25%)
-    if regime == "trending" and adx > 20:
-        adx_boost = min(0.25, (adx - 20) / 80)  # máx +25% quando ADX=40
-        normalized = min(1.0, normalized * (1 + adx_boost))
-
-    return normalized
+SL_COOLDOWN_CYCLES    = 3    # após SL, aguarda 3 ciclos (9min) antes de re-entrar
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
-PYRAMID_MAX          = 1     # máx. 1 adição por posição (exposição máx: 1.25–1.35×)
-PYRAMID_MIN_GAIN_PCT = 1.0   # só adiciona se ≥ +1.0% no lucro
-PYRAMID_SIZE_MIN     = 0.25  # pyramid mínimo: 25% (alta volatilidade — mais cautela)
-PYRAMID_SIZE_MAX     = 0.35  # pyramid máximo: 35% (baixa volatilidade — aproveita mais)
-PYRAMID_SIZE_PCT     = 0.25  # fallback estático (substituído pelo dinâmico abaixo)
+PYRAMID_MAX          = 3     # máx. 3 adições (175% da entrada total)
+PYRAMID_MIN_GAIN_PCT = 1.0   # só adiciona se ≥ +1.0% no lucro — confirma tendência antes de escalar
+PYRAMID_SIZE_PCT     = 0.25  # cada pyramid = 25% do trade inicial
 
 # ── Fear & Greed ─────────────────────────────────────────────────
 FG_FEAR_MAX    = 25   # Medo Extremo: entrada direta, sem restrições
@@ -366,36 +234,13 @@ FG_TTL         = 3600 # cache de 1 hora (índice atualiza 1×/dia)
 client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
 
-# ── 5 estratégias — agressivas com qualidade ────────────────────────────
+# ── 5 estratégias AGRESSIVAS 65/35 independentes ──────────────────────
 all_strategies = [
-    DonchianBreakout(
-        period=20,
-        rsi_min=45.0,       # RSI 45: menos restritivo, mais oportunidades
-        vol_mult=1.0,       # sem exigência de spike de volume
-        adx_min=20.0,       # ADX 20: aceita tendências moderadas (era 25 — muito restritivo)
-        obv_lookback=5,     # OBV lookback curto: mais responsivo (era 10)
-    ),
-    EMAPullback(
-        fast=9, mid=21, slow=50,
-        touch_tolerance_pct=0.5,    # 0.5%: mais tolerante ao toque na EMA (era 0.3)
-        slope_bars=5,
-        vol_pullback_mult=1.2,      # relaxado: pullback pode ter volume até 1.2× (era 0.8)
-        vol_breakout_mult=1.0,      # relaxado: retomada acima da média (era 1.2)
-    ),
-    MACDMomentum(
-        fast=12, slow=26, signal=9,
-        ema_filter=12,      # EMA12: resposta rápida
-        rsi_max=75.0,       # RSI 75: mais espaço antes de considerar sobrecomprado (era 70)
-    ),
-    StochBounce(
-        k_period=9,         # k=9: mais rápido e responsivo
-        d_period=3,
-        oversold=25.0,      # 25: mais oportunidades (era 20 — muito restritivo)
-        overbought=75.0,
-        ma_filter=50,
-        bb_bandwidth_max=0.22,  # 22%: crypto é naturalmente volátil (era 15% — bloqueava demais)
-    ),
-    RSIDivergenceDetector(period=14, lookback_periods=5),
+    DonchianBreakout(period=20, rsi_min=45.0, vol_mult=1.0),  # RSI 45 (menos filtro) + volume normal (1.0 sem spike req)
+    EMAPullback(fast=9, mid=21, slow=50, touch_tolerance_pct=0.3),  # 0.3 — toque real na EMA, evita falsos positivos
+    MACDMomentum(fast=12, slow=26, signal=9, ema_filter=12),  # Reduzido para 12 — resposta rápida
+    StochBounce(k_period=9, d_period=3, oversold=30, overbought=75, ma_filter=50),  # k=9 mais rápido, oversold 30 mais oportunidades, overbought 75 saída mais rápida
+    RSIDivergenceDetector(period=14, lookback_periods=5),  # Detector de divergência RSI — confirma reversões
 ]
 
 # Mapa de candles por estratégia
@@ -413,17 +258,6 @@ trend_filter = TrendFilter(period=50)   # EMA50 1H — alinhado com EMA Pullback
 
 # ── Cooldown anti-whipsaw após SL (por slot) ─────────────────────
 sl_cooldowns: dict = {}   # {f"{strat}:{pair}": cycles_remaining}
-
-# ── Cooldown entre BUYs do mesmo par (1h mínimo entre compras) ───
-last_buy_time: dict = {}  # {f"{strat}:{pair}": timestamp}
-BUY_COOLDOWN_SECONDS = 3600  # 1 hora entre BUYs no mesmo par/estratégia
-
-# ── Limite de posições simultâneas abertas ───────────────────────
-MAX_OPEN_SLOTS = 8            # máximo de slots abertos ao mesmo tempo
-
-# ── Limite de trades por dia (circuit breaker) ──────────────────
-_daily_trade_count: dict = {}  # {"YYYY-MM-DD": count}
-MAX_DAILY_TRADES = 30         # máximo de trades por dia (evita overtrading)
 
 # ── Slots independentes: 4 estratégias × 3 pares + 3 manuais ────
 def _empty_slot():
@@ -688,21 +522,12 @@ state = {
     "strategy_pnl":     strategy_pnl,
     "fear_greed":       {"value": 50, "label": "Neutral"},
     "kpis":             _calculate_kpis(),  # Métricas de performance
-    # ── Campos de controle — inicializados para evitar undefined no frontend ──
-    "scores":           {p: 0.0 for p in PAIRS},   # score de confiança por par
-    "trades_today":     0,
-    "max_daily_trades": MAX_DAILY_TRADES,
-    "open_slots_count": 0,
-    "max_open_slots":   MAX_OPEN_SLOTS,
-    "trade_pct":        TRADE_PCT,
 }
 
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
     return FileResponse(HTML_FILE)
-
-
 
 
 
@@ -765,7 +590,7 @@ async def manual_sell(pair: str, qty: float = 0, brl: float = 0):
         sell_qty = min(usd_value / price, held)
     else:
         sell_qty = min(qty, held) if qty > 0 else held   # 0 = vender tudo
-    usd = sell_qty * price * (1 - _current_taker_fee())
+    usd = sell_qty * price * (1 - 0.006)
     if not engine.sell(symbol, sell_qty, price, "manual"):
         return {"ok": False, "error": "Falha na venda"}
     # Venda total: zera slot manual
@@ -1042,7 +867,7 @@ async def trading_loop():
                         vslot = strategy_slots.get(vkey, _empty_slot())
                         if vslot["qty"] > 0:
                             vqty = min(vslot["qty"], max_usd / price if price > 0 else vslot["qty"])
-                            vnet = vqty * price * (1 - _current_taker_fee())
+                            vnet = vqty * price * (1 - 0.006)
                             if engine.sell(symbol, vqty, price, f"vol_guard:{strat.name}"):
                                 pnl_vg = vnet - vslot["entry"] * vqty
                                 vslot["realized"] += pnl_vg
@@ -1112,40 +937,6 @@ async def trading_loop():
                   dynamic_pct = _calculate_dynamic_position_size(pair, candles_1h)
                   _dynamic_pcts.append(dynamic_pct)
 
-                  # ── Filtros de regime e confirmação multi-timeframe ──────
-                  df_30m_regime  = all_strategies[0].candles_to_df(candles_30m) if candles_30m else pd.DataFrame()
-                  df_1h_regime   = all_strategies[0].candles_to_df(candles_1h)  if candles_1h  else pd.DataFrame()
-                  df_6h_regime   = all_strategies[0].candles_to_df(candles_6h)  if candles_6h  else pd.DataFrame()
-
-                  # ADX: detecta regime no 1H (base para tendência)
-                  market_regime  = detect_regime(df_1h_regime) if len(df_1h_regime) > 30 else "neutral"
-
-                  # MTF: preço acima da EMA50 no 6H (confirma tendência maior)
-                  mtf_bullish    = mtf_trend_bullish(df_6h_regime) if len(df_6h_regime) > 50 else True
-
-                  # ATR: volatilidade atual do par no 1H (para SL dinâmico)
-                  current_atr    = calc_atr(df_1h_regime) if len(df_1h_regime) > 14 else 0.0
-
-                  # Circuit breaker diário
-                  today_str      = now_str[:10]
-                  daily_trades   = _daily_trade_count.get(today_str, 0)
-                  circuit_open   = daily_trades >= MAX_DAILY_TRADES
-
-                  # Posições simultâneas abertas (global)
-                  open_slots_count = sum(1 for s in strategy_slots.values() if s.get("qty", 0) > 0)
-
-                  # ── Score de confiança ponderado por regime ──────────────────
-                  # Calcula ADX para o amplificador do score
-                  from strategies.market_regime import calc_adx as _calc_adx_local
-                  _adx_val = _calc_adx_local(df_1h_regime) if len(df_1h_regime) > 30 else 20.0
-                  pair_score = _calc_confidence_score(signals_this_cycle, market_regime, _adx_val)
-                  # Envia para o estado para exibição no dashboard
-                  state.setdefault("scores", {})[pair] = round(pair_score, 3)
-
-                  logger.debug(f"[{pair}] regime={market_regime} adx={_adx_val:.1f} "
-                               f"score={pair_score:.2f} mtf={mtf_bullish} "
-                               f"atr={current_atr:.4f} open_slots={open_slots_count} daily={daily_trades}")
-
                   for strat in all_strategies:
                       key    = f"{strat.name}:{pair}"
                       slot   = strategy_slots.setdefault(key, _empty_slot())
@@ -1163,25 +954,8 @@ async def trading_loop():
                           slot["peak"] = max(slot["peak"], price)
                           gain_pct = (price - slot["entry"]) / slot["entry"] * 100
 
-                          # ── ATR Stop Loss dinâmico por ativo ────────────────────
-                          # Cada par tem seu próprio range de SL (min/max)
-                          # ATR × 2.0 é clampado dentro do range específico do ativo
-                          _sl_min, _sl_max = PAIR_SL_RANGE.get(pair, (SL_MIN/100, SL_MAX/100))
-                          if current_atr > 0 and slot["entry"] > 0:
-                              atr_sl_price = atr_stop_loss(
-                                  slot["entry"], df_1h_regime,
-                                  multiplier=2.0,
-                                  min_pct=_sl_min,
-                                  max_pct=_sl_max,
-                              )
-                          else:
-                              atr_sl_price = slot["entry"] * (1 - _sl_max)
-
                           # Break-even stop: após +1.5%, SL sobe para o ponto de entrada
-                          if gain_pct >= BREAKEVEN_ACTIVATE_PCT:
-                              effective_sl = slot["entry"]
-                          else:
-                              effective_sl = atr_sl_price
+                          effective_sl = slot["entry"] if gain_pct >= BREAKEVEN_ACTIVATE_PCT else slot["entry"] * (1 - current_sl_pct / 100)
                           effective_sl = max(effective_sl, slot.get("be_sl", 0))
                           slot["be_sl"] = effective_sl  # persiste o break-even stop
 
@@ -1190,18 +964,8 @@ async def trading_loop():
                           tr_act = gain_pct >= TRAILING_ACTIVATE_PCT
                           tr_hit = tr_act and price <= slot["peak"] * (1 - TRAILING_STOP_PCT / 100)
 
-                          def _sell_slot(qty, label, is_sl=False, is_tp=False):
-                              # ── Regra: só vende com lucro, exceto Stop Loss ──────────
-                              if not is_sl and slot["entry"] > 0 and price <= slot["entry"]:
-                                  logger.debug(f"[{pair}][{strat.name}] SELL bloqueado — "
-                                               f"preço {price:.4f} <= entrada {slot['entry']:.4f} "
-                                               f"(gain={gain_pct:+.2f}%) — apenas SL permitido")
-                                  return
-                              # ── Maker vs Taker fee ───────────────────────────────────
-                              # TP: simula limit order (maker) — fee menor
-                              # SL / sinal / trailing: market order urgente (taker) — fee maior
-                              fee_rate = _current_maker_fee() if is_tp else _current_taker_fee()
-                              net = qty * price * (1 - fee_rate)
+                          def _sell_slot(qty, label, is_sl=False):
+                              net = qty * price * (1 - 0.006)
                               sold = engine.sell(symbol, qty, price, f"{strat.name}:{label}")
                               if sold:
                                   pnl = net - slot["entry"] * qty
@@ -1211,17 +975,13 @@ async def trading_loop():
                                   logger.info(f"[{pair}][{strat.name}] SELL {label} gain={gain_pct:+.2f}% P&L ${pnl:+.2f}")
                                   if is_sl:
                                       sl_cooldowns[key] = SL_COOLDOWN_CYCLES
-                                  _daily_trade_count[today_str] = _daily_trade_count.get(today_str, 0) + 1
-                                  # Note igual ao BUY: valor em BRL + % P&L
-                                  cost_usd    = slot["entry"] * qty
-                                  pnl_pct_val = (pnl / cost_usd * 100) if cost_usd > 0 else 0
-                                  sell_note   = f"R${net*usd_brl:.0f} ({pnl_pct_val:+.1f}%)"
+                                  # Sempre insere novo entry no topo — mesma lógica do BUY executado
                                   state["feed"].insert(0, {
                                       "time": now_str, "cycle": state["cycle"],
                                       "pair": pair, "strategy": strat.name,
                                       "signal": "SELL", "price": price,
                                       "executed": True,
-                                      "note": sell_note,
+                                      "note": label,
                                   })
                                   state["feed"] = state["feed"][:100]
                                   # ← Só atualiza o slot SE a venda foi executada no engine
@@ -1238,7 +998,7 @@ async def trading_loop():
                           pyramid_sl_hit = (slot.get("pyramids", 0) > 0 and gain_pct <= -1.5)
 
                           if tp_hit:
-                              _sell_slot(slot["qty"], f"TP+{current_tp_pct:.0f}%", is_tp=True)
+                              _sell_slot(slot["qty"], f"TP+{current_tp_pct:.0f}%")
                           elif sl_hit:
                               lbl = f"BE-stop" if gain_pct >= 0 else f"SL-{current_sl_pct:.1f}%"
                               _sell_slot(slot["qty"], lbl, is_sl=True)
@@ -1251,7 +1011,7 @@ async def trading_loop():
                               half_qty = slot["qty"] / 2
                               half_usd = half_qty * price
                               if half_usd >= 1.0:   # mínimo $1 — evita trades de pó
-                                  _sell_slot(half_qty, f"TP_HALF+2.5%", is_tp=True)
+                                  _sell_slot(half_qty, f"TP_HALF+2.5%")
                           elif extreme_greed or signal == "SELL":
                               # Saída gradual: TRADE_PCT% do patrimonio por ciclo
                               max_qty = portfolio_total * TRADE_PCT / price
@@ -1262,21 +1022,11 @@ async def trading_loop():
                           elif signal == "BUY" and gain_pct >= PYRAMID_MIN_GAIN_PCT:
                               pdone = slot.get("pyramids", 0)
                               if pdone < PYRAMID_MAX:
-                                  # Tamanho do pyramid dinâmico por volatilidade (ATR):
-                                  # Alta vol → 25% (cautela) | Baixa vol → 35% (aproveita mais)
-                                  if current_atr > 0 and price > 0:
-                                      atr_pct = current_atr / price  # ATR como % do preço
-                                      # Normaliza: ATR típico crypto ~0.5% (baixa) a ~3% (alta)
-                                      ratio = max(0.0, min(1.0, (atr_pct - 0.005) / (0.03 - 0.005)))
-                                      dyn_pyr_size = PYRAMID_SIZE_MAX - ratio * (PYRAMID_SIZE_MAX - PYRAMID_SIZE_MIN)
-                                  else:
-                                      dyn_pyr_size = PYRAMID_SIZE_PCT  # fallback
+                                  # Pyramid proporcional à entrada original — não varia com dynamic_pct atual
                                   base_usd = slot.get("entry_usd") or (portfolio_total * dynamic_pct)
-                                  pyr_usd  = base_usd * dyn_pyr_size
-                                  logger.debug(f"[{pair}][{strat.name}] PYRAMID size={dyn_pyr_size:.0%} "
-                                               f"(atr={current_atr:.4f})")
+                                  pyr_usd  = base_usd * PYRAMID_SIZE_PCT
                                   if engine.balance_usd < pyr_usd * 1.006:
-                                      pyr_usd = max(0, engine.balance_usd - (engine.balance_usd * _current_taker_fee()))
+                                      pyr_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
 
                                   if pyr_usd > 1.0:  # Mínimo de $1 para pyramid
                                       add_qty = pyr_usd / price
@@ -1296,61 +1046,28 @@ async def trading_loop():
                           slot["unrealized"] = (price - slot["entry"]) * slot["qty"] if slot["qty"] > 0 else 0.0
 
                       elif signal == "BUY" and not extreme_greed:
-                          # ── Filtros de qualidade antes de executar BUY ─────────
-                          sl_cd = sl_cooldowns.get(key, 0)
-                          if sl_cd > 0:
-                              sl_cooldowns[key] = sl_cd - 1
-                              logger.debug(f"[{pair}][{strat.name}] BUY bloqueado — SL cooldown ({sl_cd})")
-
-                          elif circuit_open:
-                              logger.info(f"[{pair}][{strat.name}] BUY bloqueado — circuit breaker ({daily_trades}/{MAX_DAILY_TRADES} trades hoje)")
-
-                          elif open_slots_count >= MAX_OPEN_SLOTS:
-                              logger.info(f"[{pair}][{strat.name}] BUY bloqueado — max slots abertos ({open_slots_count}/{MAX_OPEN_SLOTS})")
-
-                          elif time.time() - last_buy_time.get(key, 0) < BUY_COOLDOWN_SECONDS:
-                              logger.debug(f"[{pair}][{strat.name}] BUY bloqueado — cooldown 1h ativo")
-
-                          elif not mtf_bullish and strat.name in ("EMA Pullback", "Donchian Breakout"):
-                              # MTF: Donchian e EMA só operam se 6H confirma uptrend
-                              # MACD e Stoch ficam livres do filtro MTF (mais oportunidades)
-                              logger.info(f"[{pair}][{strat.name}] BUY bloqueado — MTF 6H bearish")
-
-                          elif market_regime == "ranging" and strat.name == "Donchian Breakout":
-                              # ADX < 20: só bloqueia Donchian (mais propenso a bull traps laterais)
-                              # EMA Pullback pode operar em ranging (pullbacks funcionam em laterais)
-                              logger.debug(f"[{pair}][{strat.name}] BUY bloqueado — regime ranging (ADX<20)")
-
+                          cooldown = sl_cooldowns.get(key, 0)
+                          if cooldown > 0:
+                              sl_cooldowns[key] = cooldown - 1
                           else:
-                              # ── Todos os filtros passaram: executa o BUY ────────
-                              # Score ajusta o tamanho: alta confiança = maior posição
-                              # score=1.0 → +40% boost | score=0.15 → tamanho mínimo (2%)
-                              score_multiplier = max(
-                                  0.02 / dynamic_pct,          # nunca abaixo do mínimo de 2%
-                                  SCORE_MIN_THRESHOLD + pair_score * (SCORE_SIZE_BOOST - SCORE_MIN_THRESHOLD)
-                              )
-                              trade_usd = portfolio_total * min(TRADE_PCT, dynamic_pct * score_multiplier)
-                              logger.info(f"[{pair}][{strat.name}] score={pair_score:.2f} "
-                                          f"mult={score_multiplier:.2f} size={trade_usd*usd_brl:.0f}BRL")
+                              trade_usd = portfolio_total * dynamic_pct
                               if engine.balance_usd < trade_usd * 1.006:
-                                  trade_usd = max(0, engine.balance_usd - (engine.balance_usd * _current_taker_fee()))
+                                  # Se não tem 5% em caixa, usa o saldo restante (menos margem de taxa)
+                                  trade_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
 
-                              if trade_usd > 1.0:
+                              if trade_usd > 1.0:  # Mínimo de $1 para trade
                                   qty = trade_usd / price
                                   if engine.buy(symbol, trade_usd, price, strat.name):
                                       slot["qty"]       = qty
                                       slot["entry"]     = price
                                       slot["peak"]      = price
                                       slot["pyramids"]  = 0
-                                      slot["entry_usd"] = trade_usd
-                                      last_buy_time[key] = time.time()
-                                      _daily_trade_count[today_str] = daily_trades + 1
+                                      slot["entry_usd"] = trade_usd  # guarda tamanho original
                                       _record_trade("BUY", pair, qty, price, trade_usd, strat.name)
                                       _count_buy(strat.name)
                                       pct_used = (trade_usd / engine.initial_balance) * 100 if engine.initial_balance > 0 else 0
                                       logger.info(f"[{pair}][{strat.name}] ✅ BUY {pct_used:.1f}% "
-                                                  f"R${trade_usd*usd_brl:.0f} @ ${price:,.2f} "
-                                                  f"[regime={market_regime} mtf={mtf_bullish}]")
+                                                  f"R${trade_usd*usd_brl:.0f} @ ${price:,.2f}")
                                       state["feed"].insert(0, {
                                           "time": now_str, "cycle": state["cycle"],
                                           "pair": pair, "strategy": strat.name,
@@ -1380,7 +1097,7 @@ async def trading_loop():
                            f"SL-{current_sl_pct:.1f}%"  if slh else
                            f"TRAILING-{TRAILING_STOP_PCT:.1f}%" if trh else None)
                     if rsn:
-                        net = ms["qty"] * price * (1 - _current_taker_fee())
+                        net = ms["qty"] * price * (1 - 0.006)
                         if engine.sell(symbol, ms["qty"], price, f"manual:{rsn}"):
                             ms["realized"] += net - ms["entry"] * ms["qty"]
                             _record_trade("SELL", pair, ms["qty"], price, net, f"manual:{rsn}")
@@ -1424,17 +1141,6 @@ async def trading_loop():
                 rsi_val     = get_rsi_value(candles_1h)
                 entry_price = engine.entry_prices.get(symbol)
                 change_pct  = ((price - entry_price) / entry_price * 100) if entry_price else None
-                # ATR SL level para o frontend exibir
-                atr_sl_price = None
-                atr_sl_pct_val = None
-                _sl_min_p, _sl_max_p = PAIR_SL_RANGE.get(pair, (SL_MIN/100, SL_MAX/100))
-                if entry_price and current_atr > 0:
-                    _atr_sl = atr_stop_loss(entry_price, df_1h_regime,
-                                            multiplier=2.0,
-                                            min_pct=_sl_min_p, max_pct=_sl_max_p)
-                    atr_sl_price   = round(_atr_sl, 4)
-                    atr_sl_pct_val = round((entry_price - _atr_sl) / entry_price * 100, 2)
-
                 state["signals"][pair] = {
                     "strategies":  pair_signals,
                     "trend":       trend,
@@ -1444,19 +1150,7 @@ async def trading_loop():
                     "change_pct":  round(change_pct,  2) if change_pct is not None else None,
                     "sl_level":    round(entry_price * (1 - current_sl_pct / 100), 2) if entry_price else None,
                     "tp_level":    round(entry_price * (1 + current_tp_pct / 100), 2) if entry_price else None,
-                    # Novos campos para o dashboard
-                    "regime":      market_regime,           # 'trending' | 'ranging' | 'neutral'
-                    "mtf_ok":      mtf_bullish,             # True/False — EMA50 > EMA200 no 6H
-                    "atr_sl_level": atr_sl_price,           # preço do ATR stop
-                    "atr_sl_pct":  atr_sl_pct_val,          # % de distância do ATR stop
-                    "atr_value":   round(current_atr, 6) if current_atr else None,
                 }
-
-                # Trades de hoje para circuit breaker no frontend
-                state["trades_today"] = _daily_trade_count.get(now_str[:10], 0)
-                state["max_daily_trades"] = MAX_DAILY_TRADES
-                state["open_slots_count"] = open_slots_count
-                state["max_open_slots"]   = MAX_OPEN_SLOTS
                 log_cycle(logger, state["cycle"], pair, price, pair_signals, trend)
 
             except Exception as e:
@@ -1474,31 +1168,22 @@ async def trading_loop():
         if _dynamic_pcts:
             state["trade_pct"] = round(sum(_dynamic_pcts) / len(_dynamic_pcts), 4)
 
-        # ── Fee dinâmico — atualiza estado para o frontend ───────────
-        _maker, _taker = _get_fee_rates()
-        _vol_30d = sum(t.get("usd", 0) for t in engine.trades
-                       if (t.get("ts") or 0) >= time.time() - 30 * 86400)
-        state["fee_taker"]  = round(_taker * 100, 4)   # ex: 1.20
-        state["fee_maker"]  = round(_maker * 100, 4)   # ex: 0.60
-        state["fee_vol_30d"] = round(_vol_30d, 2)       # volume USD 30 dias
-
         await broadcast(state)
         await asyncio.sleep(CYCLE_INTERVAL)
 
 
 @app.on_event("startup")
 async def startup():
-    # ── Sincronizar initial_balance com cotação BRL atual ──────────────────
-    # Força busca nova ignorando cache (ts=0) para garantir cotação real no startup
-    _usd_brl_cache["ts"] = 0.0
+    # ── Fix Bug 2: Sincronizar initial_balance com cotação BRL atual ──────
     usd_brl_now = _fetch_usd_brl()
     correct_initial_usd = TOTAL_BRL_INITIAL / usd_brl_now
-    logger.info(f"[STARTUP] USD/BRL={usd_brl_now:.4f} → initial_balance={correct_initial_usd:.4f} USD (R${TOTAL_BRL_INITIAL})")
-    engine.initial_balance = correct_initial_usd
-    # Ajusta balance_usd se não houver posições abertas (sessão limpa)
-    if not engine.holdings:
-        engine.balance_usd = correct_initial_usd
-    engine._save_state()
+    if abs(engine.initial_balance - correct_initial_usd) > 1.0:
+        logger.info(f"[STARTUP] Sincronizando initial_balance: {engine.initial_balance:.4f} → {correct_initial_usd:.4f} (R${TOTAL_BRL_INITIAL} @ {usd_brl_now:.4f})")
+        engine.initial_balance = correct_initial_usd
+        # Só ajusta balance_usd se não houver posições abertas (reset limpo)
+        if not engine.holdings:
+            engine.balance_usd = correct_initial_usd
+        engine._save_state()
     state["usd_brl"] = usd_brl_now
 
     # Inicializa preços antes de iniciar trading loop
