@@ -739,29 +739,34 @@
         // Badges de todas as criptos: cinza=sem posição, verde=positivo, vermelho=negativo
         const sPrices = s.prices || {};
         const sSignals = s.signals || {};
-        const pairBadges = CRYPTOS.map(c => {
+        // Separar pares COM posição dos SEM posição
+        const withPos = [], withoutPos = [];
+        CRYPTOS.forEach(c => {
           const sl       = allSlots[`${st.name}:${c.pair}`] || {};
           const hasPos   = (sl.qty || 0) > 0;
           const curPrice = (sPrices[c.pair] || {}).price;
-          // Show regime ADX badge for each pair
-          const cSig    = sSignals[c.pair];
-          const cRegime = cSig ? inferRegime(cSig) : 'NEUTRAL';
-          const regBg   = cRegime === 'TRENDING' ? 'rgba(34,197,94,0.08)' : cRegime === 'RANGING' ? 'rgba(234,179,8,0.08)' : 'rgba(107,114,128,0.08)';
-          const regBord = cRegime === 'TRENDING' ? 'rgba(34,197,94,0.25)' : cRegime === 'RANGING' ? 'rgba(234,179,8,0.25)' : 'rgba(107,114,128,0.2)';
-          const regCol  = cRegime === 'TRENDING' ? '#4ade80' : cRegime === 'RANGING' ? '#facc15' : '#6b7280';
-          const regDot  = cRegime === 'TRENDING' ? '●' : cRegime === 'RANGING' ? '◐' : '○';
+          const cSig     = sSignals[c.pair];
+          const cRegime  = cSig ? inferRegime(cSig) : 'NEUTRAL';
+          const regBg    = cRegime==='TRENDING' ? 'rgba(34,197,94,0.08)' : cRegime==='RANGING' ? 'rgba(234,179,8,0.08)' : 'rgba(107,114,128,0.08)';
+          const regBord  = cRegime==='TRENDING' ? 'rgba(34,197,94,0.25)' : cRegime==='RANGING' ? 'rgba(234,179,8,0.25)' : 'rgba(107,114,128,0.2)';
+          const regCol   = cRegime==='TRENDING' ? '#4ade80' : cRegime==='RANGING' ? '#facc15' : '#6b7280';
 
           if (hasPos && curPrice && sl.entry) {
-            const chg     = (curPrice - sl.entry) / sl.entry * 100;
+            const chg      = (curPrice - sl.entry) / sl.entry * 100;
             const positive = chg >= 0;
-            const bg      = positive ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)';
-            const border  = positive ? 'rgba(74,222,128,0.35)' : 'rgba(248,113,113,0.35)';
-            const color   = positive ? '#4ade80' : '#f87171';
-            return `<span style="background:${bg};border:1px solid ${border};color:${color}" class="text-[9px] font-bold px-1.5 py-0.5 rounded" title="${cRegime}">${c.sym} ${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%</span>`;
+            const bg       = positive ? 'rgba(74,222,128,0.18)' : 'rgba(248,113,113,0.18)';
+            const border   = positive ? 'rgba(74,222,128,0.6)'  : 'rgba(248,113,113,0.6)';
+            const color    = positive ? '#4ade80' : '#f87171';
+            const pyr      = sl.pyramids > 0 ? ` ×${sl.pyramids+1}` : '';
+            // Badge destacado: borda grossa, ícone ▲, nome + % + pyramids
+            withPos.push(`<span style="background:${bg};border:2px solid ${border};color:${color};box-shadow:0 0 6px ${border}" class="text-[9px] font-bold px-2 py-0.5 rounded-md" title="Comprado — ${cRegime}">▲ ${c.sym}${pyr} ${chg>=0?'+':''}${chg.toFixed(1)}%</span>`);
+          } else {
+            // Badge discreto sem posição
+            withoutPos.push(`<span style="background:${regBg};border:1px solid ${regBord};color:${regCol}" class="text-[9px] px-1.5 py-0.5 rounded opacity-50" title="${cRegime}">${c.sym}</span>`);
           }
-          // cinza — sem posição, but show regime dot
-          return `<span style="background:${regBg};border:1px solid ${regBord};color:${regCol}" class="text-[9px] px-1.5 py-0.5 rounded" title="${cRegime}">${regDot}${c.sym}</span>`;
         });
+        // Posições abertas primeiro, depois sem posição
+        const pairBadges = [...withPos, ...withoutPos];
 
         // Filter badge per strategy
         const filterBadge = st.filters.map(f =>
