@@ -226,9 +226,11 @@ BREAKEVEN_ACTIVATE_PCT = 1.5 # após +1.5%, SL sobe para entrada (risco zero)
 SL_COOLDOWN_CYCLES    = 3    # após SL, aguarda 3 ciclos (9min) antes de re-entrar
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
-PYRAMID_MAX          = 3     # máx. 3 adições (175% da entrada total)
-PYRAMID_MIN_GAIN_PCT = 1.0   # só adiciona se ≥ +1.0% no lucro — confirma tendência antes de escalar
-PYRAMID_SIZE_PCT     = 0.25  # cada pyramid = 25% do trade inicial
+PYRAMID_MAX          = 1     # máx. 1 adição por posição (exposição máx: 1.25–1.35×)
+PYRAMID_MIN_GAIN_PCT = 1.0   # só adiciona se ≥ +1.0% no lucro
+PYRAMID_SIZE_MIN     = 0.25  # pyramid mínimo: 25% (alta volatilidade — mais cautela)
+PYRAMID_SIZE_MAX     = 0.35  # pyramid máximo: 35% (baixa volatilidade — aproveita mais)
+PYRAMID_SIZE_PCT     = 0.25  # fallback estático (substituído pelo dinâmico abaixo)
 
 # ── Fear & Greed ─────────────────────────────────────────────────
 FG_FEAR_MAX    = 25   # Medo Extremo: entrada direta, sem restrições
@@ -1102,9 +1104,19 @@ async def trading_loop():
                           elif signal == "BUY" and gain_pct >= PYRAMID_MIN_GAIN_PCT:
                               pdone = slot.get("pyramids", 0)
                               if pdone < PYRAMID_MAX:
-                                  # Pyramid proporcional à entrada original — não varia com dynamic_pct atual
+                                  # Tamanho do pyramid dinâmico por volatilidade (ATR):
+                                  # Alta vol → 25% (cautela) | Baixa vol → 35% (aproveita mais)
+                                  if current_atr > 0 and price > 0:
+                                      atr_pct = current_atr / price  # ATR como % do preço
+                                      # Normaliza: ATR típico crypto ~0.5% (baixa) a ~3% (alta)
+                                      ratio = max(0.0, min(1.0, (atr_pct - 0.005) / (0.03 - 0.005)))
+                                      dyn_pyr_size = PYRAMID_SIZE_MAX - ratio * (PYRAMID_SIZE_MAX - PYRAMID_SIZE_MIN)
+                                  else:
+                                      dyn_pyr_size = PYRAMID_SIZE_PCT  # fallback
                                   base_usd = slot.get("entry_usd") or (portfolio_total * dynamic_pct)
-                                  pyr_usd  = base_usd * PYRAMID_SIZE_PCT
+                                  pyr_usd  = base_usd * dyn_pyr_size
+                                  logger.debug(f"[{pair}][{strat.name}] PYRAMID size={dyn_pyr_size:.0%} "
+                                               f"(atr={current_atr:.4f})")
                                   if engine.balance_usd < pyr_usd * 1.006:
                                       pyr_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
 
