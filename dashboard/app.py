@@ -131,25 +131,20 @@ def _dynamic_tp_by_regime(market_mode: str, fg_value: int) -> float:
 def _detect_market_regime(candles_1h: list, candles_6h: list,
                            breadth=None) -> tuple:
     """
-    Detecta o regime global de mercado baseado no BTC + 4 indicadores adicionais.
+    Detecta o regime global de mercado baseado no BTC (Fase 1 — simplificado).
 
     Retorna: (regime: str, bear_signals: list[str])
       regime       → 'bull' | 'chop' | 'bear'
-      bear_signals → lista de sinais de baixa ativos (para o dashboard)
+      bear_signals → lista informativa (não mais usada para reclassificação)
 
-    Sinal primário (hard-coded):
-      'bear' → BTC < EMA200 no 6H (regra estrutural inviolável)
+    Regras simples e testáveis:
+      'bear' → BTC < EMA200 no 6H  (sinal estrutural único)
       'bull' → BTC > EMA200 + EMA50 > EMA200 + ADX > 20
-      'chop' → ADX < 20 (lateral sem direção)
+      'chop' → qualquer outra condição (ADX < 20 ou EMA50 < EMA200)
 
-    Sinais adicionais de confirmação bear (cada um vale 1 ponto):
-      1. Slope EMA200 negativo    → EMA200 agora < EMA200 há 5 barras (tendência caindo)
-      2. Breadth deteriorando     → score < 0.35 ou OI médio negativo
-      3. OI caindo                → oi_expansion_avg < 0 (saída de capital do mercado)
-      4. Volatilidade implícita↑  → realized vol 1H > 3% (proxy: std log-returns × √24)
-
-    Regime upgrade: 'chop' com ≥ 3 sinais bear → reclassificado como 'bear'
-    Regime downgrade: 'bull' com ≥ 3 sinais bear → reclassificado como 'chop'
+    Fase 1: removidos 4 sinais adicionais e reclassificação chop→bear.
+    Motivo: sinais correlacionados criavam false negatives sem adicionar
+    informação independente. Menos parâmetros = menos overfitting.
     """
     bear_signals: list = []
 
@@ -157,16 +152,12 @@ def _detect_market_regime(candles_1h: list, candles_6h: list,
         return "chop", bear_signals
     try:
         import pandas as _pd
-        import numpy as _np
 
         _COLS = ["start", "low", "high", "open", "close", "volume"]
         _NUM  = ["low", "high", "open", "close", "volume"]
 
         def _to_df(candles: list) -> "_pd.DataFrame":
-            """Cria DataFrame de candles garantindo colunas numéricas.
-            Funciona com candles como lista-de-listas OU lista-de-dicts
-            (API Coinbase retorna strings; converte automaticamente).
-            """
+            """Cria DataFrame de candles garantindo colunas numéricas."""
             df = _pd.DataFrame(candles, columns=_COLS)
             for col in _NUM:
                 df[col] = _pd.to_numeric(df[col], errors="coerce")
@@ -180,65 +171,23 @@ def _detect_market_regime(candles_1h: list, candles_6h: list,
         e50      = float(ema50_s.iloc[-1])
         e200     = float(ema200_s.iloc[-1])
 
-        # ── Sinal estrutural: preço vs EMA200 ────────────────────────────────
-        price_below_ema200 = price < e200
-        if price_below_ema200:
+        # ── Sinal único bear: preço vs EMA200 6H ─────────────────────────────
+        if price < e200:
             bear_signals.append("Preço < EMA200 6H")
+            return "bear", bear_signals
 
-        # ── Sinal 1: Slope EMA200 negativo ───────────────────────────────────
-        slope_bars = 5   # janela de 5 barras 6H = 30h
-        if len(ema200_s) > slope_bars:
-            e200_now  = float(ema200_s.iloc[-1])
-            e200_past = float(ema200_s.iloc[-(slope_bars + 1)])
-            if e200_now < e200_past:
-                bear_signals.append("Slope EMA200 negativo")
-
-        # ── Sinal 2: Breadth deteriorando ────────────────────────────────────
-        if breadth is not None:
-            if breadth.score < 0.35:
-                bear_signals.append(f"Breadth fraco ({breadth.score:.0%})")
-            elif breadth.oi_expansion_avg < -1.0:
-                bear_signals.append(f"Breadth/OI deteriorando")
-
-        # ── Sinal 3: OI caindo ────────────────────────────────────────────────
-        if breadth is not None and breadth.oi_expansion_avg < 0:
-            if f"Breadth/OI deteriorando" not in bear_signals:  # evita duplicata
-                bear_signals.append(f"OI caindo ({breadth.oi_expansion_avg:+.2f}%)")
-
-        # ── Sinal 4: Volatilidade implícita elevada (realized vol proxy) ──────
-        if candles_1h and len(candles_1h) >= 24:
-            df1h    = _to_df(candles_1h)
-            c1h     = df1h["close"].iloc[-24:]
-            log_ret = _np.log(c1h / c1h.shift(1)).dropna()
-            realized_vol_pct = float(log_ret.std() * _np.sqrt(24) * 100)  # vol diária
-            if realized_vol_pct > 5.0:   # > 5% vol diária = mercado com medo
-                bear_signals.append(f"Vol implícita alta ({realized_vol_pct:.1f}%/dia)")
-
-        # ── ADX para bull/chop ────────────────────────────────────────────────
+        # ── ADX para distinguir bull vs chop ──────────────────────────────────
         adx_val = 20.0
         if candles_1h and len(candles_1h) >= 30:
             df1h    = _to_df(candles_1h)
             adx_val = calc_adx(df1h)
 
-        # ── Determinar regime final ────────────────────────────────────────────
-        n_bear = len(bear_signals)
-
-        if price_below_ema200:
-            return "bear", bear_signals          # hard bear — estrutural
-
-        # Chop com 3+ sinais → reclassifica como bear (pressão acumulada)
-        if adx_val < 20:
-            if n_bear >= 3:
-                bear_signals.append("Reclassificado: chop→bear (3+ sinais)")
-                return "bear", bear_signals
-            return "chop", bear_signals
-
-        # Bull com 3+ sinais → downgrade para chop
-        if price > e200 and e50 > e200:
-            if n_bear >= 3:
-                bear_signals.append("Downgrade: bull→chop (3+ sinais bear)")
-                return "chop", bear_signals
+        # ── Bull: EMA alinhadas + tendência forte ──────────────────────────────
+        if price > e200 and e50 > e200 and adx_val >= 20:
             return "bull", bear_signals
+
+        # ── Chop: qualquer outra condição ─────────────────────────────────────
+        return "chop", bear_signals
 
         return "chop", bear_signals
 
@@ -1187,61 +1136,9 @@ async def trading_loop():
         state["tp_objective"] = {"min": 5.0, "max": 18.0, "current": current_tp_pct,
                                  "regime": market_mode}
 
-        # ── MELHORIA 1: Force-close em bear — zera TODAS as posições abertas ──
-        # Quando o regime entra em bear, não basta bloquear novos BUYs.
-        # Posições abertas ficam expostas à queda — fechamento imediato protege o capital.
-        _prev_mode = state.get("_prev_market_mode", market_mode)
-        state["_prev_market_mode"] = market_mode
-        if market_mode == "bear":
-            _forced_closes = 0
-            for _fp in PAIRS:
-                _fsym = _fp.split("-")[0]
-                try:
-                    _fprice_data = state["prices"].get(_fp, {})
-                    _fprice = _fprice_data.get("price", 0)
-                    if not _fprice:
-                        continue
-                    for _fs in all_strategies:
-                        _fkey  = f"{_fs.name}:{_fp}"
-                        _fslot = strategy_slots.get(_fkey, {})
-                        if _fslot.get("qty", 0) > 0:
-                            _fqty = _fslot["qty"]
-                            _fnet = _fqty * _fprice * (1 - _current_taker_fee())
-                            if engine.sell(_fsym, _fqty, _fprice, f"{_fs.name}:bear-exit"):
-                                _fgain = (_fprice - _fslot["entry"]) / _fslot["entry"] * 100
-                                _fpnl  = _fnet - _fslot["entry"] * _fqty
-                                _fslot["realized"] += _fpnl
-                                _attr_pnl(_fs.name, _fpnl)
-                                _record_trade("SELL", _fp, _fqty, _fprice, _fnet,
-                                              f"{_fs.name}:bear-exit")
-                                _fslot.update({"qty": 0.0, "entry": 0.0, "peak": 0.0,
-                                               "pyramids": 0, "be_sl": 0.0})
-                                state["feed"].insert(0, {
-                                    "time": now_str, "cycle": state["cycle"],
-                                    "pair": _fp, "strategy": _fs.name,
-                                    "signal": "SELL", "price": _fprice,
-                                    "executed": True,
-                                    "note": f"bear-exit {_fgain:+.1f}%",
-                                })
-                                state["feed"] = state["feed"][:100]
-                                _forced_closes += 1
-                                logger.info(f"[BEAR-EXIT] {_fp}/{_fs.name} "
-                                            f"gain={_fgain:+.1f}% P&L=${_fpnl:+.2f}")
-                    # Fecha slot manual também
-                    _fms = strategy_slots.get(f"manual:{_fp}", {})
-                    if _fms.get("qty", 0) > 0 and _fprice:
-                        _fqty = _fms["qty"]
-                        _fnet = _fqty * _fprice * (1 - _current_taker_fee())
-                        if engine.sell(_fsym, _fqty, _fprice, "manual:bear-exit"):
-                            _fms["realized"] += _fnet - _fms["entry"] * _fqty
-                            _record_trade("SELL", _fp, _fqty, _fprice, _fnet, "manual:bear-exit")
-                            _fms.update({"qty": 0.0, "entry": 0.0, "peak": 0.0, "be_sl": 0.0})
-                            _forced_closes += 1
-                except Exception as _fe:
-                    logger.warning(f"[BEAR-EXIT] Erro em {_fp}: {_fe}")
-            if _forced_closes:
-                _save_slots(strategy_slots)
-                logger.info(f"[BEAR-EXIT] {_forced_closes} posições fechadas — regime BEAR")
+        # Fase 1: force-close em bear removido.
+        # Posições abertas são protegidas pelo ATR stop-loss normal.
+        # Fechar na força em regime bear causava perdas desnecessárias.
 
         for pair in PAIRS:
             symbol = pair.split("-")[0]
@@ -1584,10 +1481,10 @@ async def trading_loop():
                           # ── Gates de qualidade — avaliados em sequência ──────────
                           _buy_blocked = None
 
-                          # G-0.5: Market Breadth — bloqueia alts em DANGER
-                          if _breadth is not None and pair != "BTC-USD":
-                              if _breadth.should_block_alts():
-                                  _buy_blocked = f"breadth DANGER (score={_breadth.score:.0%})"
+                          # G-0.5: Market Breadth — apenas reduz size (nunca bloqueia hard)
+                          # _breadth_mult já aplica 0.5/0.7/1.0 na execução abaixo.
+                          # Hard-block removido na Fase 1: breadth DANGER não é sinal
+                          # suficiente para zero-trade; o SL protege posições abertas.
 
                           # G-1: News Volatility Guard — bloqueia antes/depois de eventos macro
                           _news_blocked, _news_reason = is_news_blackout(
@@ -1660,19 +1557,8 @@ async def trading_loop():
                               elif _alt_exp >= 0.25:
                                   _buy_blocked = f"alt exposure {_alt_exp:.0%} >= 25%"
 
-                          # G4b: BTC+ETH correlation cap 35% (Melhoria 4)
-                          # BTC e ETH têm correlação ~90% — exposição combinada limitada
-                          if _buy_blocked is None and pair in BTC_PAIRS:
-                              _btceth_sym = {"BTC", "ETH"}
-                              _btceth_val = sum(
-                                  s2["qty"] * (_last_prices.get(k2.split(":")[-1], {}).get("price") or 0)
-                                  for k2, s2 in strategy_slots.items()
-                                  if s2.get("qty", 0) > 0
-                                  and (k2.split(":")[-1].replace("-USD", "") in _btceth_sym)
-                              )
-                              _btceth_exp = _btceth_val / portfolio_total if portfolio_total > 0 else 0
-                              if _btceth_exp >= 0.35:
-                                  _buy_blocked = f"BTC+ETH exposure {_btceth_exp:.0%} >= 35%"
+                          # G4b removido na Fase 1: com apenas 3 pares (BTC/ETH/SOL),
+                          # o cap de 35% BTC+ETH bloqueava demais. G4 (max alts) é suficiente.
 
                           # G5: SL cooldown
                           cooldown = sl_cooldowns.get(key, 0)
