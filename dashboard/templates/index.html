@@ -281,41 +281,71 @@
       </div>
       <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:3px;">
         <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;">Candle · Preço</span>
-        <span style="font-size:9px;color:#4b5563;">— EMA9·21·50 | Donchian 20 | Bollinger (20,2) | Volume OBV</span>
+        <span style="font-size:9px;color:#4b5563;">— EMA9·21·50 | Donchian 20 (1H) | Bollinger (20,2) | Volume</span>
       </div>
       <div id="candle-chart" style="overflow:hidden;"></div>
-      <div class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-[10px] text-gray-500">
+      <div class="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-2 text-[10px] text-gray-500">
+
+        <!-- 1. Candle / Preço -->
         <div class="flex flex-col gap-0.5">
           <p class="text-[9px] text-gray-600 uppercase tracking-wider mb-0.5 font-semibold">Candle · Preço</p>
           <span><span style="color:#06b6d4">—</span> EMA9</span>
           <span><span style="color:#818cf8">—</span> EMA21</span>
-          <span><span style="color:#c084fc">—</span> EMA50 (slope filtro)</span>
-          <span><span style="color:rgba(249,115,22,0.8)">- -</span> Donchian 20 (30min)</span>
+          <span><span style="color:#c084fc">—</span> EMA50</span>
+          <span><span style="color:rgba(249,115,22,0.8)">- -</span> Donchian 20 (1H)</span>
           <span><span style="color:rgba(99,102,241,0.6)">···</span> Bollinger (20,2)</span>
           <span><span style="color:rgba(74,222,128,0.5)">▮</span> Vol ↑ / <span style="color:rgba(248,113,113,0.5)">▮</span> Vol ↓</span>
         </div>
+
+        <!-- 2. MACD -->
         <div class="flex flex-col gap-0.5">
           <p class="text-[9px] text-gray-600 uppercase tracking-wider mb-0.5 font-semibold">MACD (12·26·9)</p>
           <span><span style="color:#3b82f6">—</span> Linha MACD</span>
           <span><span style="color:#f87171">—</span> Linha Sinal</span>
-          <span><span style="color:rgba(74,222,128,0.7)">▮</span> Hist. positivo</span>
-          <span><span style="color:rgba(156,163,175,0.4)">—</span> Zero (filtro linha &gt; 0)</span>
+          <span><span style="color:rgba(74,222,128,0.7)">▮</span> Histograma +</span>
+          <span><span style="color:rgba(156,163,175,0.4)">—</span> Zero</span>
+          <span class="text-gray-600 mt-0.5">Cross-up + ADX↑ = BUY</span>
         </div>
+
+        <!-- 3. RSI -->
         <div class="flex flex-col gap-0.5">
           <p class="text-[9px] text-gray-600 uppercase tracking-wider mb-0.5 font-semibold">RSI (14)</p>
           <span><span style="color:#facc15">—</span> RSI</span>
           <span><span style="color:rgba(248,113,113,0.5)">- -</span> 75 → bloqueia MACD</span>
           <span><span style="color:rgba(74,222,128,0.5)">- -</span> 30 → sobrevenda</span>
           <span><span style="color:rgba(156,163,175,0.25)">—</span> 50 → neutro</span>
+          <span class="text-gray-600 mt-0.5">EMA Pullback usa RSI indireto</span>
         </div>
+
+        <!-- 4. OBV -->
         <div class="flex flex-col gap-0.5">
-          <p class="text-[9px] text-gray-600 uppercase tracking-wider mb-0.5 font-semibold">OBV · ADX</p>
-          <span><span style="color:#38bdf8">—</span> OBV (confirma Donchian)</span>
-          <span><span style="color:#e879f9">—</span> ADX (força tendência)</span>
-          <span><span style="color:rgba(74,222,128,0.6)">- -</span> ADX 20 → TRENDING</span>
-          <span><span style="color:rgba(250,204,21,0.6)">- -</span> ADX 15 → CHOP</span>
-          <span class="text-gray-600">Bull=verde · Chop=amarelo · Bear=vermelho</span>
+          <p class="text-[9px] text-gray-600 uppercase tracking-wider mb-0.5 font-semibold">OBV</p>
+          <span><span style="color:#38bdf8">—</span> On-Balance Volume</span>
+          <span class="text-gray-600">Crescente = acumulação</span>
+          <span class="text-gray-600">Decrescente = distribuição</span>
+          <span class="text-gray-600 mt-0.5">Indicador informativo</span>
         </div>
+
+        <!-- 5. ADX -->
+        <div class="flex flex-col gap-0.5">
+          <p class="text-[9px] text-gray-600 uppercase tracking-wider mb-0.5 font-semibold">ADX (14) — Regime</p>
+          <span><span style="color:#e879f9">—</span> ADX (força)</span>
+          <span><span style="color:rgba(74,222,128,0.6)">- -</span> 20 → TRENDING</span>
+          <span><span style="color:rgba(250,204,21,0.6)">- -</span> 20 → limite CHOP</span>
+          <span class="text-gray-600 mt-0.5">≥20 = Donchian/MACD/EMA</span>
+          <span class="text-gray-600">&lt;20 = BB Reversion</span>
+        </div>
+
+        <!-- 6. BB Reversion -->
+        <div class="flex flex-col gap-0.5">
+          <p class="text-[9px] text-gray-600 uppercase tracking-wider mb-0.5 font-semibold">BB Reversion — RSI</p>
+          <span><span style="color:#a78bfa">—</span> RSI (14) roxo</span>
+          <span><span style="color:rgba(74,222,128,0.6)">- -</span> 35 → zona de entrada</span>
+          <span><span style="color:rgba(248,113,113,0.4)">- -</span> 60 → zona de saída</span>
+          <span class="text-gray-600 mt-0.5">RSI&lt;35 + BB inferior = BUY</span>
+          <span class="text-gray-600">Saída: retorno à BB média</span>
+        </div>
+
       </div>
     </div>
 
@@ -1602,7 +1632,7 @@
 
     // ── 3. RSI (14) — filtro MACD (RSI < 75) e EMA Pullback ─────────────
     const { wrap: rsiWrap, chartDiv: rsiEl } = makeChartWrapper(
-      'RSI (14)', '— MACD bloqueado se RSI > 75 (sobrecomprado) | abaixo de 30 = sobrevenda extrema',
+      'RSI (14)', '— MACD bloqueado se RSI > 75 | linha verde 35 = entrada BB Reversion | linha vermelha 75 = sobrecomprado',
       macdWrap
     );
     rsiChart = LightweightCharts.createChart(rsiEl, { ...commonOpts, height: 80 });
@@ -1622,7 +1652,7 @@
 
     // ── 5. ADX (14) — Market Regime Engine: >20 trending, <20 chop ──────
     const { wrap: adxWrap, chartDiv: adxEl } = makeChartWrapper(
-      'ADX (14) — Regime de Mercado', '— roxo = força da tendência | verde >20 = TRENDING (Donchian+EMA) | amarelo 20 = CHOP',
+      'ADX (14) — Regime de Mercado', '— roxo = força da tendência | verde ≥20 = TRENDING (Donchian/MACD/EMA) | amarelo <20 = CHOP (BB Reversion ativo)',
       obvWrap
     );
     adxChart       = LightweightCharts.createChart(adxEl, { ...commonOpts, height: 80 });
