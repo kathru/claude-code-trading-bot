@@ -6,41 +6,36 @@ class DonchianBreakout(BaseStrategy):
     """
     Donchian Channel Breakout (estilo Turtle Traders) — 1H principal, confirmação 6H.
 
-    BUY  → Candle FECHADO acima da banda superior (close confirmado, não apenas wick)
-           + RVOL >= 1.5 (volume relativo acima da média — breakout real)
+    BUY  → Candle FECHADO acima da banda superior (close confirmado, não wick)
+           + RVOL >= 1.3× média (volume acima da média — participação real)
            + ADX > 20 (tendência confirmada — sem lateralização)
-           + OBV em nova máxima (volume institucional acompanhando)
            + RSI(14) > 45 (momentum positivo)
     SELL → Close < menor low das últimas N barras (saída técnica)
 
-    CLOSE-CONFIRMATION RULE:
-      O sinal só é gerado no candle ANTERIOR ao atual (último candle fechado).
-      O candle em formação (still-open) é descartado antes da análise.
-      Isso garante que apenas fechamentos reais acima da banda geram entrada —
-      nunca wicks intrabar que não sustentaram o preço ao fechar.
+    Fase 2 — simplificações aplicadas:
+      RVOL: threshold simples >= 1.3 (era: aceleração crescente 2-3 candles).
+            Mais estável e menos path-dependent. 30% acima da média
+            já indica breakout com participação real.
+      OBV:  removido — RVOL já confirma participação de volume.
+            Dois indicadores de volume = redundância sem informação extra.
 
-    RVOL Crescente (2–3 candles):
-      Em vez de threshold fixo (>= 1.5), exige que o RVOL esteja ACELERANDO
-      nos últimos 3 candles fechados — delta de volume positivo barra a barra.
-      RVOL[n-2] < RVOL[n-1] < RVOL[n] → acumulação progressiva → breakout real.
-      RVOL estagnado ou decrescente → smart money saindo → ignorar sinal.
+    CLOSE-CONFIRMATION (mantida):
+      Descarta candle em formação (iloc[:-1]) — apenas fechamentos reais.
     """
 
     def __init__(self, period: int = 20, rsi_period: int = 14,
                  rsi_min: float = 45.0, vol_mult: float = 1.0,
                  adx_period: int = 14, adx_min: float = 20.0,
-                 obv_lookback: int = 5,
-                 rvol_period: int = 20, rvol_lookback: int = 3):
+                 rvol_period: int = 20, rvol_min: float = 1.3):
         super().__init__("Donchian Breakout")
-        self.period        = period
-        self.rsi_period    = rsi_period
-        self.rsi_min       = rsi_min
-        self.vol_mult      = vol_mult
-        self.adx_period    = adx_period
-        self.adx_min       = adx_min
-        self.obv_lookback  = obv_lookback
-        self.rvol_period   = rvol_period    # barras para calcular o volume médio de referência
-        self.rvol_lookback = rvol_lookback  # candles consecutivos com RVOL crescente exigidos
+        self.period      = period
+        self.rsi_period  = rsi_period
+        self.rsi_min     = rsi_min
+        self.vol_mult    = vol_mult
+        self.adx_period  = adx_period
+        self.adx_min     = adx_min
+        self.rvol_period = rvol_period
+        self.rvol_min    = rvol_min
 
     # ── Indicadores internos ──────────────────────────────────────────────────
 
@@ -74,105 +69,57 @@ class DonchianBreakout(BaseStrategy):
         adx      = dx.ewm(alpha=1 / p, adjust=False).mean()
         return float(adx.iloc[-1])
 
-    def _rvol_rising(self, df: pd.DataFrame, lookback: int = 3) -> tuple:
+    def _rvol(self, df: pd.DataFrame) -> float:
         """
-        RVOL Crescente — volume relativo deve estar ACELERANDO nos últimos candles.
-
-        Em vez de um threshold fixo (>= 1.5), exige que o RVOL esteja subindo
-        consistentemente nos últimos `lookback` candles (delta positivo).
-
-        Lógica:
-          Para cada um dos últimos `lookback` candles, calcula o RVOL individual
-          (volume_candle / media_volume_N_periodos_anteriores).
-          O breakout é válido somente se RVOL[i] > RVOL[i-1] para todos —
-          ou seja, volume crescente barra a barra → confirmação de acumulação real.
-
-        Retorna: (is_rising: bool, rvol_last: float)
-          is_rising  → True se RVOL cresceu nos últimos `lookback` candles
-          rvol_last  → valor do RVOL no último candle (para logging)
+        Relative Volume = volume_atual / média_N_períodos_anteriores.
+        RVOL >= 1.3 → breakout com participação real (30% acima da média).
         """
-        if len(df) < self.rvol_period + lookback + 2:
-            return True, 1.0  # dados insuficientes → não bloqueia
-
-        rvols = []
-        for i in range(lookback, 0, -1):
-            # Candle alvo: iloc[-(i)]
-            # Média de volume: os N candles ANTES do candle alvo
-            idx_end   = len(df) - i          # índice do candle alvo
-            idx_start = idx_end - self.rvol_period
-            if idx_start < 0:
-                return True, 1.0
-            vol_candle = float(df["volume"].iloc[idx_end])
-            vol_avg    = float(df["volume"].iloc[idx_start:idx_end].mean())
-            if vol_avg <= 0:
-                return True, 1.0
-            rvols.append(vol_candle / vol_avg)
-
-        # RVOL crescente: cada valor maior que o anterior
-        is_rising = all(rvols[i] > rvols[i - 1] for i in range(1, len(rvols)))
-        return is_rising, rvols[-1]
-
-    def _obv_at_new_high(self, df: pd.DataFrame) -> bool:
-        """OBV em nova máxima — confirma volume institucional no breakout."""
-        direction = df["close"].diff().apply(
-            lambda x: 1 if x > 0 else (-1 if x < 0 else 0)
-        )
-        obv = (direction * df["volume"]).cumsum()
-        obv_now  = float(obv.iloc[-1])
-        obv_prev = float(obv.iloc[-(self.obv_lookback + 1)])
-        return obv_now > obv_prev
+        if len(df) < self.rvol_period + 2:
+            return 1.0
+        vol_now = float(df["volume"].iloc[-1])
+        vol_avg = float(df["volume"].iloc[-(self.rvol_period + 1):-1].mean())
+        if vol_avg <= 0:
+            return 1.0
+        return vol_now / vol_avg
 
     # ── Análise principal ─────────────────────────────────────────────────────
 
     def analyze(self, df: pd.DataFrame) -> str:
         min_bars = self.period + self.rsi_period + self.adx_period * 2 + self.rvol_period + 5
-        if len(df) < min_bars + 1:   # +1 para garantir ao menos 1 candle fechado após o drop
+        if len(df) < min_bars + 1:
             return "HOLD"
 
         df = df.copy()
 
-        # ── CLOSE-CONFIRMATION: descarta o candle em formação (ainda não fechado) ──
-        # iloc[-1] = candle atual (open, pode ter wick acima da banda sem fechar lá)
-        # iloc[-2] = último candle CONFIRMADO (fechado) → usado para o sinal
-        # Isso evita entradas baseadas em wicks intrabar que não sustentaram o close.
+        # Close-confirmation: descarta candle em formação
         df = df.iloc[:-1].reset_index(drop=True)
 
         df["dc_upper"] = df["high"].rolling(self.period).max().shift(1)
         df["dc_lower"] = df["low"].rolling(self.period).min().shift(1)
         df["rsi"]      = self._rsi(df["close"])
         df = df.dropna().reset_index(drop=True)
-        if len(df) < self.obv_lookback + self.rvol_period + 2:
+        if len(df) < self.rvol_period + 2:
             return "HOLD"
 
-        # curr = último candle FECHADO (após o drop do candle em formação)
         curr = df.iloc[-1]
 
-        # ── BUY: fechamento real acima da banda — não apenas wick ─────────────
-        # curr["close"] é o preço de fechamento do candle confirmado
-        # curr["dc_upper"] é o máximo dos highs das N barras anteriores (shift=1)
-        # → Somente closes verdadeiros acima da banda geram sinal
+        # ── BUY: close acima da banda (não wick) ─────────────────────────────
         price_breakout = curr["close"] > curr["dc_upper"]
         rsi_ok         = curr["rsi"] >= self.rsi_min
 
         if not (price_breakout and rsi_ok):
-            # Checagem rápida antes de calcular indicadores pesados
             if curr["close"] < curr["dc_lower"]:
                 return "SELL"
             return "HOLD"
 
-        # ── RVOL Crescente: volume deve estar acelerando nos últimos 3 candles ──
-        # Threshold fixo substituído por delta crescente — detecta acumulação real
-        rvol_rising, rvol_last = self._rvol_rising(df, lookback=self.rvol_lookback)
-        if not rvol_rising:
-            return "HOLD"  # Volume estagnado/decrescente — smart money ausente
+        # ── RVOL: threshold simples ≥ 1.3 (Fase 2) ───────────────────────────
+        rvol_value = self._rvol(df)
+        if rvol_value < self.rvol_min:
+            return "HOLD"
 
         # ── ADX: tendência presente ───────────────────────────────────────────
         adx_value = self._adx(df)
         if adx_value < self.adx_min:
-            return "HOLD"  # Mercado lateral — risco de whipsaw
-
-        # ── OBV: volume institucional acompanha ───────────────────────────────
-        if not self._obv_at_new_high(df):
-            return "HOLD"  # Breakout sem OBV crescente — distribuição, não acumulação
+            return "HOLD"
 
         return "BUY"

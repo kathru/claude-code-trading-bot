@@ -505,13 +505,13 @@
   const STRATEGIES = [
     {
       name: 'Donchian Breakout', id: 'Don', icon: '🚀',
-      filters: ['RVOL≥1.5', 'ADX>20', 'OBV↑'],
-      desc: 'Breakout do canal Donchian 20 — 1H + confirmação 6H. RVOL≥1.5× (anti bull-trap), ADX>20, OBV crescente.'
+      filters: ['RVOL≥1.3', 'ADX>20', 'Close✓'],
+      desc: 'Breakout do canal Donchian 20 — 1H + confirmação 6H. RVOL≥1.3× (participação real), ADX>20, close confirmado.'
     },
     {
       name: 'EMA Pullback', id: 'EMA', icon: '📈',
-      filters: ['Slope EMA50', 'Vol✓'],
-      desc: 'Pullback para EMA. Exige slope da EMA50 positivo e volume baixo no pullback, alto na retomada.'
+      filters: ['EMA9>21>50', 'Touch✓'],
+      desc: 'Pullback para EMA21 em uptrend. Condições: uptrend alinhado + toque EMA21 + rejeição (close≥EMA21) + vela verde.'
     },
     {
       name: 'MACD Momentum', id: 'MACD', icon: '⚡',
@@ -1603,7 +1603,7 @@
 
     // ── 4. OBV — filtro de volume do Donchian (OBV em nova máxima = breakout real)
     const { wrap: obvWrap, chartDiv: obvEl } = makeChartWrapper(
-      'OBV — On-Balance Volume', '— crescente = volume confirma breakout Donchian | decrescente = breakout falso (bull trap)',
+      'OBV — On-Balance Volume', '— crescente = acumulação institucional | decrescente = distribuição (informativo)',
       rsiWrap
     );
     obvChart     = LightweightCharts.createChart(obvEl, { ...commonOpts, height: 80 });

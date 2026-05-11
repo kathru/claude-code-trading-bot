@@ -403,11 +403,10 @@ engine = PaperTradingEngine(initial_balance_usd=10000.0)
 # ── 5 estratégias AGRESSIVAS 65/35 independentes ──────────────────────
 # 3 estratégias de tendência — foco em qualidade, menos fees
 all_strategies = [
-    DonchianBreakout(period=20, rsi_min=45.0, vol_mult=1.0,
-                     adx_min=20.0, obv_lookback=5,
-                     rvol_period=20, rvol_lookback=2),  # RVOL crescente 2 candles
-    EMAPullback(fast=9, mid=21, slow=50, touch_tolerance_pct=0.5,
-                slope_bars=5, vol_pullback_mult=1.2, vol_breakout_mult=1.0),
+    DonchianBreakout(period=20, rsi_min=45.0, adx_min=20.0,
+                     rvol_period=20, rvol_min=1.3),   # Fase 2: RVOL simples ≥ 1.3
+    EMAPullback(fast=9, mid=21, slow=50,
+                touch_tolerance_pct=0.3),              # Fase 2: 4 condições limpas
     MACDMomentum(fast=12, slow=26, signal=9, ema_filter=12, rsi_max=75.0),
 ]
 
