@@ -1,46 +1,40 @@
-# Relatório de Simulação de Trading Bot
+# Relatório de Simulação de Trading Bot (Versão V2 Atualizada)
 
 ## Resumo Executivo
 - **Período:** 01/01/2026 a 30/04/2026
 - **Portfolio Inicial:** R$ 5,000.00
-- **Portfolio Final:** R$ 4,088.95
-- **P&L Total:** R$ -911.05 (-18.22%)
+- **Portfolio Final:** R$ 4,510.56
+- **P&L Total:** R$ -489.44 (-9.79%)
 
 ## Métricas de Performance
-- **Quantidade de Trades:** 24
-- **Win Rate:** 12.50%
-- **Profit Factor:** 0.22
+- **Quantidade de Trades:** 2
+- **Win Rate:** 0.00%
+- **Profit Factor:** 0.00
 
 ## Detalhes do Portfolio
-- **Saldo Final em USD:** $825.22
+- **Saldo Final em USD:** $910.31
 - **Cotação Final USD/BRL:** 4.9550
 
-## Análise Técnica e Recomendações
+## Análise Técnica e Recomendações (V2)
 
-### Análise da Performance
-A simulação resultou em um P&L negativo de **-18.22%**, com um win rate de apenas **12.50%**. Durante o período de janeiro a abril de 2026, o mercado de criptomoedas (usando BTC como referência) apresentou uma queda de aproximadamente **14%** ($88,731 para $76,304). O robô performou pior que o "buy and hold" do BTC, o que indica que as estratégias de tendência e momentum sofreram com "whipsaws" (sinais falsos) em um mercado predominantemente de baixa ou lateral descendente.
+### Desempenho em Cenário Realista
+A simulação com a lógica V2 resultou em uma perda de **-9.79%**, um desempenho superior à versão anterior (-18.22%) e ao benchmark BTC no período (-14%). O robô executou apenas **2 trades** (ambos em DOGE-USD), o que indica que os novos "gates" de segurança (Confidence Score > 60%, Filtro de Tendência, Vol Guard) foram extremamente eficazes em manter o bot fora de um mercado hostil.
 
-### Observações sobre as Estratégias
-1.  **Donchian Breakout:** Em mercados de tendência indefinida ou de baixa, breakouts para cima frequentemente falham, resultando em compras no topo seguidas de stop-loss.
-2.  **EMA Pullback:** A estratégia depende de uma tendência de alta clara. No período simulado, a falta de uma tendência macro sustentada fez com que os pullbacks fossem, na verdade, reversões de tendência.
-3.  **MACD Momentum:** Cruzamentos de MACD podem ser indicadores atrasados e gerar muitos sinais falsos em mercados laterais.
+### Pontos Positivos da Lógica V2
+1.  **Preservação de Capital:** Ao contrário da V1, que realizou 24 trades, a V2 foi muito mais seletiva. Em um mercado de baixa, a melhor estratégia é não operar, e os filtros implementados (especialmente o Confidence Score e o Trend Filter) cumpriram esse papel.
+2.  **Redução de Custos:** Menos trades significam menos taxas pagas à exchange, o que preservou o saldo em USD.
+3.  **Gestão de Risco:** O Stop Loss acionou corretamente em DOGE quando a tese de momentum falhou, evitando uma perda maior.
 
-### Recomendações de Melhoria
+### Oportunidades de Melhoria
 
-#### 1. Implementação de Estratégias de Short
-Atualmente, o robô opera apenas no lado da compra (Long). Em um mercado de baixa como o observado no início de 2026, a capacidade de abrir posições de venda (Short) ou pelo menos ser mais agressivo em ficar 100% em caixa (Cash) é essencial.
+#### 1. Ajuste de Sensibilidade em Mercados Laterais
+O bot foi *talvez* seletivo demais. Embora tenha protegido o capital, ele perdeu algumas oportunidades de repique. Recomenda-se testar um Confidence Score mínimo de **55%** (em vez de 60%) para ver se o retorno melhora sem comprometer excessivamente a segurança.
 
-#### 2. Filtro de Regime de Mercado mais Robusto
-Embora o robô utilize o ADX e EMA200 para detectar o regime, o filtro `bear market` bloqueia novos BUYs, mas não protege as posições já abertas de forma agressiva o suficiente. Recomenda-se:
--   **Zerar posições mais rapidamente** quando o BTC cruza abaixo de médias móveis importantes (ex: SMA 200 no gráfico diário).
--   Utilizar indicadores de **sentimento e volume** (como o Fear & Greed Index de forma mais integrada) para evitar entradas em topos de euforia.
+#### 2. Diversificação de Estratégias
+As 3 estratégias atuais (Donchian, EMA Pullback, MACD) são todas de tendência. Para 2026, é crucial adicionar uma estratégia de **Reversão à Média (Mean Reversion)** ou de **Range Trading** (como o Stoch Bounce que estava presente em versões anteriores) para lucrar quando o mercado não tem uma direção clara.
 
-#### 3. Otimização de Gestão de Risco
--   **Trailing Stop Dinâmico:** O trailing stop atual pode ser muito curto para ativos voláteis como SOL ou DOGE, resultando em saídas prematuras antes da retomada da tendência.
--   **Correlation Guard:** Implementar um filtro que impeça a abertura de múltiplas posições em ativos altamente correlacionados (ex: BTC e ETH) para evitar exposição excessiva a um único movimento do mercado.
+#### 3. Cotação USD/BRL
+A queda no valor do portfólio em BRL foi influenciada também pela valorização do Real frente ao Dólar no período simulado. Estratégias de **Hedge cambial** poderiam ser consideradas para investidores que desejam proteger o valor em BRL.
 
-#### 4. Seleção de Ativos
--   Ativos como **DOGE-USD** apresentam ruído excessivo para estratégias de tendência baseadas em indicadores clássicos. Recomenda-se filtros de volume relativo (RVOL) ainda mais rigorosos para ativos de alta volatilidade.
-
-### Conclusão
-O robô possui uma infraestrutura sólida (slots independentes, gestão de risco v2), mas as estratégias subjacentes são otimizadas para "Bull Markets". Para 2026 e além, a inclusão de lógica para mercados laterais (Range-bound) e proteção de capital em tendências de baixa é a prioridade número um para tornar o bot lucrativo em todos os ciclos.
+### Conclusão Final
+A transição para a arquitetura V2 foi um sucesso do ponto de vista de **gerenciamento de risco**. O robô demonstrou maturidade ao ignorar sinais falsos em um mercado descendente. Para os próximos passos, o foco deve ser a calibração fina para capturar movimentos menores em mercados de acumulação.
