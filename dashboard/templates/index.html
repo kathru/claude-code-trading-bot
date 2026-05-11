@@ -509,14 +509,14 @@
       desc: 'Breakout do canal Donchian 20 — 1H + confirmação 6H. RVOL≥1.3× (participação real), ADX>20, close confirmado.'
     },
     {
-      name: 'EMA Pullback', id: 'EMA', icon: '📈',
-      filters: ['EMA9>21>50', 'Touch✓'],
-      desc: 'Pullback para EMA21 em uptrend. Condições: uptrend alinhado + toque EMA21 + rejeição (close≥EMA21) + vela verde.'
-    },
-    {
       name: 'MACD Momentum', id: 'MACD', icon: '⚡',
       filters: ['MACD>0', 'RSI<75', 'ADX↑'],
       desc: 'Cruzamento MACD acima de zero. Exige MACD>0, RSI<75 e ADX rising (tendência em aceleração, não exaustão).'
+    },
+    {
+      name: 'EMA Pullback', id: 'EMA', icon: '📈',
+      filters: ['EMA9>21>50', 'Touch✓'],
+      desc: 'Pullback para EMA21 em uptrend. Condições: uptrend alinhado + toque EMA21 + rejeição (close≥EMA21) + vela verde.'
     },
     {
       name: 'BB Reversion', id: 'BB', icon: '↩️',
@@ -1357,8 +1357,8 @@
       const byStrat = (kpis.by_strategy) || {};
       const stratDefs = [
         { name: 'Donchian Breakout', icon: '🚀', short: 'Donchian' },
-        { name: 'EMA Pullback',      icon: '📋', short: 'EMA PB'  },
         { name: 'MACD Momentum',     icon: '⚡', short: 'MACD'    },
+        { name: 'EMA Pullback',      icon: '📋', short: 'EMA PB'  },
         { name: 'BB Reversion',      icon: '↩️', short: 'BB Rev'  },
       ];
 

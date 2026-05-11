@@ -363,9 +363,9 @@ engine = PaperTradingEngine(initial_balance_usd=10000.0)
 all_strategies = [
     DonchianBreakout(period=20, rsi_min=45.0, adx_min=20.0,
                      rvol_period=20, rvol_min=1.3),   # breakout — market order
+    MACDMomentum(fast=12, slow=26, signal=9, ema_filter=12, rsi_max=75.0),  # momentum — market
     EMAPullback(fast=9, mid=21, slow=50,
                 touch_tolerance_pct=0.3),              # pullback — limit order
-    MACDMomentum(fast=12, slow=26, signal=9, ema_filter=12, rsi_max=75.0),  # momentum — market
     BBReversion(bb_period=20, bb_std=2.0,
                 rsi_period=14, rsi_oversold=35.0),    # mean reversion CHOP — limit order
 ]
