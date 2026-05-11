@@ -14,7 +14,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, FileResponse
 from dotenv import load_dotenv
 
-from exchange.coinbase import CoinbaseClient
+from exchange.okx     import OKXClient
 from paper_trading.engine import PaperTradingEngine, TAKER_FEE
 # ── Estratégias ativas: trend-following + momentum ─────────────────
 from strategies.donchian_breakout      import DonchianBreakout
@@ -381,18 +381,19 @@ PAIR_SL_RANGE = {
     "SOL-USD":    (0.05, 0.07),
 }
 
-# ── Coinbase Advanced Trading — Standard Fee System (2026) ───────
-COINBASE_FEE_TIERS = [
-    (          0,  0.0060, 0.0120),  # $0–$10K
-    (     10_000,  0.0035, 0.0080),  # $10K–$50K
-    (     50_000,  0.0025, 0.0040),  # $50K–$100K
-    (    100_000,  0.0015, 0.0025),  # $100K–$1M
-    (  1_000_000,  0.0010, 0.0020),  # $1M–$15M
-    ( 15_000_000,  0.0007, 0.0016),  # $15M–$50M
-    ( 50_000_000,  0.0005, 0.0014),  # $50M–$100M
-    (100_000_000,  0.0002, 0.0010),  # $100M–$250M
-    (250_000_000,  0.0000, 0.0005),  # $250M+
+# ── OKX — Fee System (Spot Trading, 2026) ────────────────────────
+# vol_30d em USD → (min_vol, maker_fee, taker_fee)
+OKX_FEE_TIERS = [
+    (           0,  0.0008, 0.0010),  # Lv1: $0–$100K      (0.08% / 0.10%)
+    (     100_000,  0.0007, 0.0009),  # Lv2: $100K–$1M     (0.07% / 0.09%)
+    (   1_000_000,  0.0006, 0.0008),  # Lv3: $1M–$5M       (0.06% / 0.08%)
+    (   5_000_000,  0.0005, 0.0007),  # Lv4: $5M–$20M      (0.05% / 0.07%)
+    (  20_000_000,  0.0003, 0.0006),  # Lv5: $20M–$100M    (0.03% / 0.06%)
+    ( 100_000_000,  0.0002, 0.0005),  # Lv6: $100M–$500M   (0.02% / 0.05%)
+    ( 500_000_000,  0.0000, 0.0004),  # Lv7: $500M+        (0.00% / 0.04%)
 ]
+# Alias para compatibilidade com código que usa COINBASE_FEE_TIERS
+COINBASE_FEE_TIERS = OKX_FEE_TIERS
 
 # ── Score ponderado por regime ────────────────────────────────────
 STRATEGY_WEIGHTS = {
@@ -443,7 +444,11 @@ FG_FEAR_MAX    = 25   # Medo Extremo: entrada direta, sem restrições
 FG_GREED_MIN   = 70   # Ganância Moderada: permite entradas agressivas a partir de 70 (entra em uptrends cedo)
 FG_TTL         = 3600 # cache de 1 hora (índice atualiza 1×/dia)
 
-client = CoinbaseClient(os.getenv("API_KEY"), os.getenv("SECRET_KEY"))
+client = OKXClient(
+    api_key    = os.getenv("OKX_API_KEY",    os.getenv("API_KEY", "")),
+    secret_key = os.getenv("OKX_SECRET_KEY", os.getenv("SECRET_KEY", "")),
+    passphrase = os.getenv("OKX_PASSPHRASE", ""),
+)
 engine = PaperTradingEngine(initial_balance_usd=10000.0)
 
 # ── 5 estratégias AGRESSIVAS 65/35 independentes ──────────────────────
