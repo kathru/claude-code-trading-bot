@@ -392,6 +392,11 @@ COINBASE_FEE_TIERS = OKX_FEE_TIERS
 
 # ── Score ponderado por regime ────────────────────────────────────
 STRATEGY_WEIGHTS = {
+    # Chaves alinhadas com o retorno de _detect_market_regime(): "bull"/"chop"/"bear"
+    "bull":  {"Donchian Breakout": 1.5, "EMA Pullback": 1.3, "MACD Momentum": 1.2},
+    "chop":  {"Donchian Breakout": 0.8, "EMA Pullback": 1.0, "MACD Momentum": 0.9},
+    "bear":  {"Donchian Breakout": 0.5, "EMA Pullback": 0.7, "MACD Momentum": 0.8},
+    # Aliases legados (fallback)
     "trending": {"Donchian Breakout": 1.5, "EMA Pullback": 1.3, "MACD Momentum": 1.2},
     "ranging":  {"Donchian Breakout": 0.5, "EMA Pullback": 0.9, "MACD Momentum": 0.8},
     "neutral":  {"Donchian Breakout": 1.0, "EMA Pullback": 1.0, "MACD Momentum": 1.0},
