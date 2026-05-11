@@ -230,7 +230,8 @@ def _detect_market_regime(candles_1h: list, candles_6h: list,
         return "chop", bear_signals
 
     except Exception as _ex:
-        logger.warning(f"[Regime] Erro na detecção: {_ex}")
+        import traceback as _tb
+        logger.warning(f"[Regime] Erro na detecção: {_ex}\n{_tb.format_exc()}")
         return "chop", []
 
 
