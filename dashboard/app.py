@@ -570,28 +570,29 @@ connected_clients: List[WebSocket] = []
 
 
 def _update_portfolio_state():
-    """Calcula P&L considerando que portfolio em BRL é FIXO (R$ 4.000).
+    """Calcula P&L apenas de TRADES — variação cambial USD/BRL não conta.
 
     Lógica:
-    - Portfolio em BRL é sempre R$ 4.000 (fixo)
-    - Portfolio em USD = R$ 4.000 / USD/BRL (varia com cotação)
-    - P&L_BRL = (saldo_atual_em_USD × USD/BRL) - R$ 4.000
-    - P&L_USD = saldo_atual_em_USD - (R$ 4.000 / USD/BRL_inicial)
+    - P&L_USD = portfolio_atual_USD - initial_balance_USD  (puro resultado de trades)
+    - P&L_BRL = P&L_USD × cotação_atual                   (converte só o lucro/perda)
+    - Total_BRL = portfolio_total_USD × cotação_atual      (valor atual em BRL)
 
-    ⚠️ IMPORTANTE: Mudanças em USD/BRL NÃO devem contar como P&L
+    Assim, se não houve trades, P&L = R$0,00 independente do câmbio.
+    A oscilação cambial afeta o "Portfolio Total" (valor patrimonial) mas NÃO o P&L.
     """
     total_usd = engine.portfolio_value()
-    usd_brl_current = state.get("usd_brl", 5.70)  # cotação atual
+    usd_brl_current = state.get("usd_brl", 5.70)
 
-    # Calcular P&L apenas em TRADES, não em cotação
-    # P&L em USD = resultado atual - resultado ao final do último ciclo completo
-    # Mas para simplicidade: P&L = total - initial (que já é em USD no reset)
+    # P&L somente de trades (USD): diferença entre valor atual e capital inicial
     pnl_usd = total_usd - engine.initial_balance
 
-    # Converter tudo para BRL usando cotação ATUAL
+    # P&L em BRL: converte apenas o resultado de trades — NÃO subtrai R$5.000 do total
+    # Isso garante que variação cambial não afeta o P&L exibido
+    pnl_brl = pnl_usd * usd_brl_current
+    pnl_pct  = (pnl_brl / TOTAL_BRL_INITIAL) * 100 if TOTAL_BRL_INITIAL > 0 else 0
+
+    # Valor total atual em BRL (patrimônio — pode variar com câmbio, isso é normal)
     total_brl = total_usd * usd_brl_current
-    pnl_brl = total_brl - TOTAL_BRL_INITIAL  # P&L real em BRL
-    pnl_pct = (pnl_brl / TOTAL_BRL_INITIAL) * 100 if TOTAL_BRL_INITIAL > 0 else 0
 
     state["portfolio"] = {
         "usd":               round(engine.balance_usd, 2),
