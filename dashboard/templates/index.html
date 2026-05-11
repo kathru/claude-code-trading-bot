@@ -211,7 +211,7 @@
         <span>Min RR: <span class="text-indigo-400 font-semibold">2.5:1</span></span>
         <span>Max Alts: <span class="text-yellow-400 font-semibold">2</span></span>
         <span>Exp. Alts: <span class="text-orange-400 font-semibold">≤ 25%</span></span>
-        <span>SL Render: <span class="text-pink-400 font-semibold">6–9%</span></span>
+        <span>SL SOL: <span class="text-purple-400 font-semibold">5–7%</span></span>
         <span>SL BTC: <span class="text-green-400 font-semibold">2–4%</span></span>
       </div>
       <div class="overflow-x-auto">
@@ -267,9 +267,6 @@
             <button onclick="setCandlePair('BTC-USD')" data-pair="BTC-USD" class="candle-pair-btn active px-3 py-1 rounded text-xs font-semibold">BTC</button>
             <button onclick="setCandlePair('ETH-USD')" data-pair="ETH-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold">ETH</button>
             <button onclick="setCandlePair('SOL-USD')" data-pair="SOL-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold">SOL</button>
-            <button onclick="setCandlePair('AVAX-USD')" data-pair="AVAX-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold">AVAX</button>
-            <button onclick="setCandlePair('LINK-USD')" data-pair="LINK-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold">LINK</button>
-            <button onclick="setCandlePair('RENDER-USD')" data-pair="RENDER-USD" class="candle-pair-btn px-3 py-1 rounded text-xs font-semibold">RENDER</button>
           </div>
           <span class="text-gray-700 shrink-0">|</span>
           <div class="flex gap-1 shrink-0">
@@ -503,10 +500,7 @@
     { sym: 'BTC',  name: 'Bitcoin',   pair: 'BTC-USD', icon: '₿',  color: 'text-orange-400', bg: 'bg-orange-500/20' },
     { sym: 'ETH',  name: 'Ethereum',  pair: 'ETH-USD', icon: 'Ξ',  color: 'text-blue-400',   bg: 'bg-blue-500/20'   },
     { sym: 'SOL',  name: 'Solana',    pair: 'SOL-USD', icon: '◎',  color: 'text-purple-400', bg: 'bg-purple-500/20' },
-    { sym: 'AVAX', name: 'Avalanche', pair: 'AVAX-USD',icon: '◈',  color: 'text-yellow-400', bg: 'bg-yellow-500/20' },
-    { sym: 'LINK', name: 'Chainlink', pair: 'LINK-USD',icon: '⬡',  color: 'text-blue-300',   bg: 'bg-blue-400/20'   },
-    { sym: 'RENDER', name: 'Render',  pair: 'RENDER-USD',icon: '⬡',  color: 'text-pink-400',  bg: 'bg-pink-500/20'  },
-  ];
+    ];
 
   const STRATEGIES = [
     {
@@ -1011,8 +1005,7 @@
       // SL range fixo por ativo (espelha PAIR_SL_RANGE do backend)
       const PAIR_SL = {
         'BTC-USD':  '2–4%', 'ETH-USD':  '3–5%',
-        'SOL-USD':  '5–7%', 'AVAX-USD': '5–7%',
-        'LINK-USD': '5–7%', 'RENDER-USD': '6–9%',
+        'SOL-USD':  '5–7%',
       };
 
       filtersBody.innerHTML = CRYPTOS.map(c => {
@@ -1051,7 +1044,7 @@
         const slRange    = PAIR_SL[c.pair] || '—';
         const slRangeCls = c.pair === 'BTC-USD' ? 'text-green-400'
                          : c.pair === 'ETH-USD' ? 'text-cyan-400'
-                         : c.pair === 'RENDER-USD' ? 'text-pink-400' : 'text-orange-400';
+                         : 'text-orange-400';
 
         // ── ATR Stop (dinâmico, dentro do range) ─────────────────────
         let atrTxt = '—', atrCls = 'text-gray-500';
@@ -1107,7 +1100,7 @@
     // ── Allocation Chart ─────────────────────────────────────────────────
     const prices = s.prices || {};
     const labels = ['BRL'], values = [usdAvail * usdBrl], colors = ['#6366f1'];
-    const allocMap = { BTC: '#f97316', ETH: '#3b82f6', SOL: '#a855f7', AVAX: '#eab308', LINK: '#60a5fa', RENDER: '#ec4899' };
+    const allocMap = { BTC: '#f97316', ETH: '#3b82f6', SOL: '#a855f7' };
     CRYPTOS.forEach(c => {
       const qty2 = _holdings[c.sym] || 0;
       if (qty2 > 0 && prices[c.pair]) {

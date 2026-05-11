@@ -308,7 +308,7 @@ def _current_cycle() -> int:
     return (int(time.time()) + SP_OFFSET) % 86400 // CYCLE_INTERVAL
 
 
-PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD", "AVAX-USD", "LINK-USD", "RENDER-USD"]  # 6 pares — DOGE removido, RENDER adicionado
+PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD"]  # 3 pares — foco em ativos de maior liquidez
 
 # ── Portfolio em Real é FIXO em R$ 5.000 ────────────────────────
 TOTAL_BRL_INITIAL = 5000.0  # Portfolio inicial em BRL — FIXO, nunca muda
@@ -371,9 +371,6 @@ PAIR_SL_RANGE = {
     "BTC-USD":    (0.02, 0.04),
     "ETH-USD":    (0.03, 0.05),
     "SOL-USD":    (0.05, 0.07),
-    "AVAX-USD":   (0.05, 0.07),
-    "LINK-USD":   (0.05, 0.07),
-    "RENDER-USD": (0.06, 0.09),
 }
 
 # ── Coinbase Advanced Trading — Standard Fee System (2026) ───────
@@ -403,13 +400,10 @@ PAIR_TRAILING = {
     "BTC-USD":    (4.0, 5.0),   # BTC/ETH — menos voláteis
     "ETH-USD":    (4.0, 5.0),
     "SOL-USD":    (6.0, 7.0),   # Alts — mais voláteis
-    "AVAX-USD":   (6.0, 7.0),
-    "LINK-USD":   (6.0, 7.0),
-    "RENDER-USD": (6.0, 8.0),
 }
 
 # ── Classificação de pares ─────────────────────────────────────────
-ALT_PAIRS = {"SOL-USD", "AVAX-USD", "LINK-USD", "RENDER-USD"}
+ALT_PAIRS = {"SOL-USD"}
 BTC_PAIRS  = {"BTC-USD", "ETH-USD"}
 BREAKEVEN_ACTIVATE_PCT = 1.5  # fallback global (substituído por PAIR_BREAKEVEN abaixo)
 
@@ -421,9 +415,6 @@ PAIR_BREAKEVEN = {
     "BTC-USD":    3.0,   # +3%
     "ETH-USD":    3.0,   # +3%
     "SOL-USD":    4.5,   # +4.5%
-    "AVAX-USD":   4.5,   # +4.5%
-    "LINK-USD":   4.5,   # +4.5%
-    "RENDER-USD": 5.0,   # +5%
 }
 SL_COOLDOWN_CYCLES    = 3     # SL normal: 3h = 3 ciclos de 1h
 
