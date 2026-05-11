@@ -306,8 +306,14 @@ def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float =
 # ── Gestão de risco (Fase 3 — sistema unificado ATR-based) ───────
 # SL = ATR × 2, clampado entre min e max por ativo
 # TP = SL × 2  (RR fixo 2:1)
-# Break-even: gain >= SL% → SL sobe para entrada
-# Trailing:   gain >= 2×SL% → segue pico a SL% de distância
+# Break-even: gain >= SL% × BE_TRIGGER_MULT → SL sobe para entrada
+# Trailing:   gain >= SL% × TRAIL_TRIGGER_MULT → segue pico a SL% de distância
+#
+# BE_TRIGGER_MULT = 1.5  → BE só ativa com 1.5× o SL de distância (era 1.0×)
+#   Exemplo BTC (SL=3%): precisa de +4.5% de ganho antes de proteger o zero a zero
+#   Evita que correções normais de mercado acionem o stop no break-even
+BE_TRIGGER_MULT    = 1.5   # gatilho do break-even (múltiplo do SL%)
+TRAIL_TRIGGER_MULT = 2.5   # gatilho do trailing   (múltiplo do SL%) — era 2.0×
 PAIR_SL_RANGE = {
     "BTC-USD":    (0.02, 0.04),   # SL entre 2% e 4%
     "ETH-USD":    (0.03, 0.05),   # SL entre 3% e 5%
@@ -418,8 +424,8 @@ def _calc_exit(slot: dict, price: float, pair: str) -> tuple:
 
     Regra única derivada do SL% fixado na entrada:
       SL hard:    entry × (1 - sl_pct%)
-      Break-even: quando gain >= sl_pct%, SL sobe para entry
-      Trailing:   quando gain >= 2×sl_pct%, SL segue pico a sl_pct% de distância
+      Break-even: quando gain >= sl_pct% × BE_TRIGGER_MULT (1.5×), SL sobe para entry
+      Trailing:   quando gain >= sl_pct% × TRAIL_TRIGGER_MULT (2.5×), segue pico a sl_pct%
       TP:         entry × (1 + sl_pct% × 2)  → RR fixo 2:1
 
     Retorna: (tp_hit, sl_hit, sl_level, tp_level, sl_pct)
@@ -439,9 +445,9 @@ def _calc_exit(slot: dict, price: float, pair: str) -> tuple:
     # Nível de SL progressivo
     sl_level = entry * (1 - sl_pct / 100)          # SL base
 
-    if gain_pct >= sl_pct:                          # Break-even
+    if gain_pct >= sl_pct * BE_TRIGGER_MULT:        # Break-even (1.5× SL%)
         sl_level = max(sl_level, entry)
-    if gain_pct >= sl_pct * 2:                      # Trailing
+    if gain_pct >= sl_pct * TRAIL_TRIGGER_MULT:     # Trailing (2.5× SL%)
         sl_level = max(sl_level, peak * (1 - sl_pct / 100))
 
     # Ratchet: nunca desce o SL
