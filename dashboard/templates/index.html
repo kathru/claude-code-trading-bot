@@ -1907,6 +1907,7 @@
       try {
         const data = JSON.parse(e.data);
         window._lastPrices = data.prices || {};
+        window._lastState  = data;           // expõe estado completo para debug/inspeção
         updateState(data);
       } catch(err) {
         console.error('[WS] Erro:', err);
