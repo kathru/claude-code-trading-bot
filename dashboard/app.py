@@ -332,14 +332,12 @@ SL_COOLDOWN_CYCLES    = 3     # SL normal: 3h = 3 ciclos de 1h
 # ── Circuit breaker + controles de risco ─────────────────────────
 MAX_DAILY_TRADES      = 10    # máximo de trades por dia (BUY+SELL)
 MAX_OPEN_SLOTS        = 4     # máximo de slots abertos simultaneamente
-BUY_COOLDOWN_SECONDS  = 10800  # 3h entre BUYs no mesmo par/estratégia
+BUY_COOLDOWN_SECONDS  = 7200   # 2h entre BUYs no mesmo par/estratégia (Fase 4)
 _daily_trade_count: dict = {}  # {"YYYY-MM-DD": count}
 last_buy_time:      dict = {}  # {f"{strat}:{pair}": timestamp}
 
 # ── Pyramid (scale-in em posição lucrativa) ──────────────────────
-PYRAMID_MAX          = 1     # máx. 1 adição por posição
-PYRAMID_MIN_GAIN_PCT = 3.0   # pyramid somente após +3% de lucro E ADX > 25
-PYRAMID_SIZE_PCT     = 0.25  # cada pyramid = 25% do trade inicial
+# Pyramid removido na Fase 4 — adiciona complexidade sem edge claro em 3 pares
 
 # ── Fear & Greed ─────────────────────────────────────────────────
 FG_GREED_MIN   = 70   # Acima de 70: bloqueia novas entradas (euforia = risco de topo)
@@ -375,7 +373,7 @@ trend_filter = TrendFilter(period=50)   # EMA50 1H — alinhado com EMA Pullback
 
 # ── Cooldown anti-whipsaw após SL (por slot) ─────────────────────
 sl_cooldowns: dict = {}   # {f"{strat}:{pair}": cycles_remaining}
-sl_history:   dict = {}   # {f"{strat}:{pair}": [timestamps dos SLs]}
+# sl_history removido na Fase 4 — cooldown escalante substituído por cooldown fixo
 
 # Sinaliza ao trading_loop para rodar o próximo ciclo imediatamente (sem esperar CYCLE_INTERVAL)
 _immediate_cycle = asyncio.Event()
@@ -1074,7 +1072,7 @@ async def trading_loop():
         # Fase 3: SL/TP via ATR por par — sem dinâmica F&G global
         state["sl_objective"] = {"info": "ATR×2 por par — ver PAIR_SL_RANGE"}
 
-        _dynamic_pcts = []   # acumula dynamic_pct de cada par para média no final
+        # Fase 4: sizing = TRADE_PCT × regime_mult (sem dynamic_pct)
 
         # ── Pre-fetch paralelo de candles — garante cache populado no 1º ciclo ─
         # Breadth e Regime usam _candle_cache ANTES do loop de pares.
@@ -1318,8 +1316,7 @@ async def trading_loop():
                   open_slots_count = sum(1 for s in strategy_slots.values() if s.get("qty", 0) > 0)
 
                   # Tamanho dinâmico por par — usa candles 1h (mais estável)
-                  dynamic_pct = _calculate_dynamic_position_size(pair, candles_1h)
-                  _dynamic_pcts.append(dynamic_pct)
+                  # dynamic_pct removido — sizing usa TRADE_PCT × regime_mult
 
                   # Expor ao frontend
                   state["trades_today"]    = daily_trades
@@ -1360,21 +1357,8 @@ async def trading_loop():
                                   _daily_trade_count[today_key] = _daily_trade_count.get(today_key, 0) + 1
                                   logger.info(f"[{pair}][{strat.name}] SELL {label} gain={gain_pct:+.2f}% P&L ${pnl:+.2f}")
                                   if is_sl:
-                                      # ── Cooldown inteligente pós-SL ─────────────────────
-                                      now_ts = time.time()
-                                      hist = sl_history.setdefault(key, [])
-                                      hist.append(now_ts)
-                                      # Limpar entradas > 24h
-                                      sl_history[key] = [t for t in hist if now_ts - t < 86400]
-                                      recent_3h = [t for t in sl_history[key] if now_ts - t < 10800]
-                                      if len(sl_history[key]) >= 2:
-                                          sl_cooldowns[key] = 12  # 2+ SLs em 24h → 12h block (12 ciclos × 1h)
-                                          logger.info(f"[{pair}][{strat.name}] BLOCK 12h — {len(sl_history[key])} SLs em 24h")
-                                      elif len(recent_3h) >= 2:
-                                          sl_cooldowns[key] = 6   # SL consecutivo → 6h (6 ciclos × 1h)
-                                          logger.info(f"[{pair}][{strat.name}] COOLDOWN 6h — SL consecutivo")
-                                      else:
-                                          sl_cooldowns[key] = SL_COOLDOWN_CYCLES  # normal → 3h
+                                      # Fase 4: cooldown fixo pós-SL (3 ciclos = 3h)
+                                      sl_cooldowns[key] = SL_COOLDOWN_CYCLES
                                   # Sempre insere novo entry no topo — mesma lógica do BUY executado
                                   state["feed"].insert(0, {
                                       "time": now_str, "cycle": state["cycle"],
@@ -1404,29 +1388,7 @@ async def trading_loop():
                               sell_q  = min(slot["qty"], max_qty)
                               if sell_q > 1e-8:
                                   _sell_slot(sell_q, "SELL")
-                          elif signal == "BUY" and gain_pct >= PYRAMID_MIN_GAIN_PCT and _adx_val > 25:
-                              pdone = slot.get("pyramids", 0)
-                              if pdone < PYRAMID_MAX:
-                                  # Pyramid proporcional à entrada original — não varia com dynamic_pct atual
-                                  base_usd = slot.get("entry_usd") or (portfolio_total * dynamic_pct)
-                                  pyr_usd  = base_usd * PYRAMID_SIZE_PCT
-                                  if engine.balance_usd < pyr_usd * 1.006:
-                                      pyr_usd = max(0, engine.balance_usd - (engine.balance_usd * _current_taker_fee()))
-
-                                  if pyr_usd > 1.0:  # Mínimo de $1 para pyramid
-                                      add_qty = pyr_usd / price
-                                      if engine.buy(symbol, pyr_usd, price,
-                                                    f"{strat.name}:pyramid{pdone+1}"):
-                                          total   = slot["qty"] + add_qty
-                                          slot["entry"] = (slot["qty"]*slot["entry"]+add_qty*price)/total
-                                          slot["qty"]   = total
-                                          slot["peak"]  = max(slot["peak"], price)
-                                          slot["pyramids"] = pdone + 1
-                                          _record_trade("BUY", pair, add_qty, price, pyr_usd,
-                                                        f"{strat.name}:pyramid{pdone+1}")
-                                          _count_buy(strat.name)
-                                          logger.info(f"[{pair}][{strat.name}] 📈 PYRAMID #{pdone+1} "
-                                                      f"(gain {gain_pct:.1f}%)")
+                          # Pyramid removido na Fase 4 — sem re-entry em posição aberta
 
                           slot["unrealized"] = (price - slot["entry"]) * slot["qty"] if slot["qty"] > 0 else 0.0
 
@@ -1523,27 +1485,14 @@ async def trading_loop():
                           if _buy_blocked:
                               logger.debug(f"[{pair}][{strat.name}] BUY bloqueado — {_buy_blocked}")
                           else:
-                              # ── Multiplicador de tamanho por score + regime ──────
-                              if market_mode == "chop":
-                                  _score_mult = min(0.6, pair_score)
-                              elif pair_score >= 0.85:
-                                  _score_mult = 1.4
-                              elif pair_score >= 0.75:
-                                  _score_mult = 1.0
-                              else:
-                                  _score_mult = 0.5
-                              if market_mode == "bull":
-                                  _score_mult = min(1.4, _score_mult * 1.1)
-
-                              # Breadth multiplier: só reduz alts, BTC sempre ×1.0
-                              _breadth_mult = (_breadth.size_multiplier() if _breadth else 1.0) if pair != "BTC-USD" else 1.0
-
-                              # Melhoria 3: F&G > 75 → euforia de mercado → size × 0.5
-                              # Evita entrar pesado em topos de euforia onde reversão é mais provável
-                              _euphoria_mult = 0.5 if fg_value > 75 else 1.0
-
-                              trade_usd = portfolio_total * min(TRADE_PCT,
-                                  dynamic_pct * _score_mult * _breadth_mult * _euphoria_mult)
+                              # ── Sizing: TRADE_PCT × regime_mult (Fase 4) ──────────
+                              # 1 multiplicador claro e interpretável:
+                              #   bull  → 100% do TRADE_PCT (tendência forte)
+                              #   chop  →  70% do TRADE_PCT (mercado lateral)
+                              #   bear  →  50% do TRADE_PCT (entrada seletiva)
+                              _regime_mult = 1.0 if market_mode == "bull" else \
+                                             0.7 if market_mode == "chop" else 0.5
+                              trade_usd = portfolio_total * TRADE_PCT * _regime_mult
                               fee_margin = _current_taker_fee()
                               if engine.balance_usd < trade_usd * (1 + fee_margin):
                                   trade_usd = max(0, engine.balance_usd * (1 - fee_margin))
@@ -1678,8 +1627,9 @@ async def trading_loop():
 
         # Atualizar KPIs e tamanho médio de trade a cada ciclo
         state["kpis"] = _calculate_kpis()
-        if _dynamic_pcts:
-            state["trade_pct"] = round(sum(_dynamic_pcts) / len(_dynamic_pcts), 4)
+        # Fase 4: trade_pct fixo (TRADE_PCT × regime_mult)
+        _regime_display = 1.0 if market_mode == "bull" else 0.7 if market_mode == "chop" else 0.5
+        state["trade_pct"] = round(TRADE_PCT * _regime_display, 4)
 
         # News Guard status para o dashboard
         _nb, _nr = is_news_blackout(custom_events_path=NEWS_EVENTS_FILE)
