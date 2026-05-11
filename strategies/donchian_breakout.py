@@ -6,12 +6,18 @@ class DonchianBreakout(BaseStrategy):
     """
     Donchian Channel Breakout (estilo Turtle Traders) — 1H principal, confirmação 6H.
 
-    BUY  → Close > maior high das últimas N barras (rompimento)
+    BUY  → Candle FECHADO acima da banda superior (close confirmado, não apenas wick)
            + RVOL >= 1.5 (volume relativo acima da média — breakout real)
            + ADX > 20 (tendência confirmada — sem lateralização)
            + OBV em nova máxima (volume institucional acompanhando)
            + RSI(14) > 45 (momentum positivo)
     SELL → Close < menor low das últimas N barras (saída técnica)
+
+    CLOSE-CONFIRMATION RULE:
+      O sinal só é gerado no candle ANTERIOR ao atual (último candle fechado).
+      O candle em formação (still-open) é descartado antes da análise.
+      Isso garante que apenas fechamentos reais acima da banda geram entrada —
+      nunca wicks intrabar que não sustentaram o preço ao fechar.
 
     RVOL (Relative Volume):
       RVOL = volume_atual / media_volume_N_periodos
@@ -101,10 +107,17 @@ class DonchianBreakout(BaseStrategy):
 
     def analyze(self, df: pd.DataFrame) -> str:
         min_bars = self.period + self.rsi_period + self.adx_period * 2 + self.rvol_period + 5
-        if len(df) < min_bars:
+        if len(df) < min_bars + 1:   # +1 para garantir ao menos 1 candle fechado após o drop
             return "HOLD"
 
         df = df.copy()
+
+        # ── CLOSE-CONFIRMATION: descarta o candle em formação (ainda não fechado) ──
+        # iloc[-1] = candle atual (open, pode ter wick acima da banda sem fechar lá)
+        # iloc[-2] = último candle CONFIRMADO (fechado) → usado para o sinal
+        # Isso evita entradas baseadas em wicks intrabar que não sustentaram o close.
+        df = df.iloc[:-1].reset_index(drop=True)
+
         df["dc_upper"] = df["high"].rolling(self.period).max().shift(1)
         df["dc_lower"] = df["low"].rolling(self.period).min().shift(1)
         df["rsi"]      = self._rsi(df["close"])
@@ -112,10 +125,13 @@ class DonchianBreakout(BaseStrategy):
         if len(df) < self.obv_lookback + self.rvol_period + 2:
             return "HOLD"
 
+        # curr = último candle FECHADO (após o drop do candle em formação)
         curr = df.iloc[-1]
 
-        # ── BUY: rompimento confirmado com volume ─────────────────────────────
-
+        # ── BUY: fechamento real acima da banda — não apenas wick ─────────────
+        # curr["close"] é o preço de fechamento do candle confirmado
+        # curr["dc_upper"] é o máximo dos highs das N barras anteriores (shift=1)
+        # → Somente closes verdadeiros acima da banda geram sinal
         price_breakout = curr["close"] > curr["dc_upper"]
         rsi_ok         = curr["rsi"] >= self.rsi_min
 
