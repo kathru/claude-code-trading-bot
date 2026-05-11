@@ -105,11 +105,7 @@ def _get_candles(pair: str, granularity: str, limit: int = 100) -> list:
 _last_prices: dict = {}      # {pair: float}
 
 
-def _dynamic_tp(fg_value: int) -> float:
-    """Legacy fallback — use _dynamic_tp_by_regime when market_mode is known."""
-    if fg_value >= 70: return 7.0
-    if fg_value <= 25: return 10.0
-    return 8.0
+# _dynamic_tp removida — obsoleta após Fase 3 (TP = SL × 2)
 
 # _dynamic_tp_by_regime removida na Fase 3 — TP agora = SL × 2 (RR 2:1 fixo).
 
@@ -346,8 +342,7 @@ PYRAMID_MIN_GAIN_PCT = 3.0   # pyramid somente após +3% de lucro E ADX > 25
 PYRAMID_SIZE_PCT     = 0.25  # cada pyramid = 25% do trade inicial
 
 # ── Fear & Greed ─────────────────────────────────────────────────
-FG_FEAR_MAX    = 25   # Medo Extremo: entrada direta, sem restrições
-FG_GREED_MIN   = 70   # Ganância Moderada: permite entradas agressivas a partir de 70 (entra em uptrends cedo)
+FG_GREED_MIN   = 70   # Acima de 70: bloqueia novas entradas (euforia = risco de topo)
 FG_TTL         = 3600 # cache de 1 hora (índice atualiza 1×/dia)
 
 client = OKXClient(
@@ -1310,8 +1305,8 @@ async def trading_loop():
                       logger.info("[Feed] Force-populate concluído — feed populado com sinais iniciais")
 
                   # ── PASSO 2: execução independente por estratégia ────────
-                  extreme_fear  = fg_value <= FG_FEAR_MAX
                   extreme_greed = fg_value >= FG_GREED_MIN
+                  # extreme_fear removido — não era usado em nenhuma lógica
 
                   # Circuit breaker diário
                   today_str    = now_str[:8] if len(now_str) == 8 else str(now_str)[:10]
