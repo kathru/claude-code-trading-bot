@@ -967,9 +967,11 @@ async def reset_portfolio(token: str = "", brl: float = 0.0):
     state["feed"]    = []
     _save_history(state["history"])
 
-    # ── Reinicia cooldowns e sinais ───────────────────────────────
+    # ── Reinicia cooldowns, sinais e contadores ───────────────────
     sl_cooldowns.clear()
     last_signals.clear()
+    _daily_trade_count.clear()   # zera circuit breaker do dia
+    last_buy_time.clear()        # zera cooldowns de compra
 
     _update_portfolio_state()
     await broadcast(state)
@@ -1095,6 +1097,23 @@ async def trading_loop():
         state["sl_objective"] = {"min": SL_MIN, "max": SL_MAX, "current": current_sl_pct}
 
         _dynamic_pcts = []   # acumula dynamic_pct de cada par para média no final
+
+        # ── Pre-fetch paralelo de candles — garante cache populado no 1º ciclo ─
+        # Breadth e Regime usam _candle_cache ANTES do loop de pares.
+        # Sem este bloco, no primeiro ciclo após restart/reset o cache está vazio
+        # e breadth mostra N/A enquanto regime cai para "chop" sem dados reais.
+        _pf_jobs = (
+            [loop.run_in_executor(None, _get_candles, p, CANDLE_1H, 250) for p in PAIRS] +
+            [loop.run_in_executor(None, _get_candles, p, CANDLE_6H, 100) for p in PAIRS] +
+            [loop.run_in_executor(None, _get_candles, "BTC-USD", CANDLE_1D, 250)]
+        )
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*_pf_jobs, return_exceptions=True),
+                timeout=25.0
+            )
+        except asyncio.TimeoutError:
+            logger.warning("[Loop] Pre-fetch candles timeout — usando cache existente")
 
         # ── Market Breadth — calculado ANTES do regime (alimenta bear signals) ─
         try:
@@ -1822,7 +1841,20 @@ async def startup():
         except Exception as e:
             logger.error(f"[STARTUP] Erro ao buscar {pair}: {type(e).__name__}: {e}")
 
-    # ── Fix Bug 4: Atualizar portfolio state ANTES do primeiro ciclo ──────
+    # ── Pre-fetch candles no startup para que o 1º ciclo tenha dados ────────
+    logger.info("[STARTUP] Pre-fetching candles (1H + 6H) para todos os pares...")
+    loop_startup = asyncio.get_event_loop()
+    _startup_jobs = (
+        [loop_startup.run_in_executor(None, _get_candles, p, CANDLE_1H, 250) for p in PAIRS] +
+        [loop_startup.run_in_executor(None, _get_candles, p, CANDLE_6H, 100) for p in PAIRS]
+    )
+    try:
+        await asyncio.wait_for(asyncio.gather(*_startup_jobs, return_exceptions=True), timeout=30.0)
+        logger.info("[STARTUP] Candles pre-fetched com sucesso")
+    except asyncio.TimeoutError:
+        logger.warning("[STARTUP] Pre-fetch candles timeout — ciclo inicial usará cache parcial")
+
+    # ── Atualizar portfolio state ANTES do primeiro ciclo ─────────────────
     _update_portfolio_state()
     logger.info(f"[STARTUP] Portfolio inicializado — USD: ${engine.balance_usd:.2f} | Total: ${engine.portfolio_value():.2f} | initial_balance: ${engine.initial_balance:.2f}")
     logger.info(f"[STARTUP] state['prices'] após inicialização: {list(state['prices'].keys())}")
