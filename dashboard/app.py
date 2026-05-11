@@ -16,22 +16,16 @@ from dotenv import load_dotenv
 
 from exchange.coinbase import CoinbaseClient
 from paper_trading.engine import PaperTradingEngine, TAKER_FEE
-# ── Suite agressiva v2 (alvo +65%): trend-following + momentum ─────
+# ── Estratégias ativas: trend-following + momentum ─────────────────
 from strategies.donchian_breakout      import DonchianBreakout
 from strategies.ema_pullback           import EMAPullback
 from strategies.macd_momentum          import MACDMomentum
-# StochBounce e RSIDivergenceDetector removidos — excesso de fees
 from strategies.volatility_guard       import VolatilityGuard
 from strategies.trend_filter           import TrendFilter
 from strategies.news_guard             import is_news_blackout, next_event
 from strategies.news_sync              import sync_if_needed as _news_sync_if_needed
 from strategies.market_breadth         import get_market_breadth
 from strategies.market_regime          import calc_adx, calc_atr
-# Estratégias antigas preservadas para referência:
-# from strategies.rsi_divergence import RSIDivergence
-# from strategies.support_resistance import SupportResistance
-# from strategies.bb_squeeze import BBSqueeze
-# from strategies.golden_cross import GoldenCross
 from logger import setup_logger, log_cycle, log_trade, log_portfolio
 from notifier import notify_trade
 
@@ -316,7 +310,7 @@ TOTAL_BRL_INITIAL = 5000.0  # Portfolio inicial em BRL — FIXO, nunca muda
 
 # ── Ciclo e candles ─────────────────────────────────────────────
 CYCLE_INTERVAL    = 3600     # ciclo de 3600s (1 hora)
-CANDLE_30M        = "THIRTY_MINUTE"  # Donchian, Stoch
+CANDLE_30M        = "THIRTY_MINUTE"
 CANDLE_1H         = "ONE_HOUR"       # EMA Pullback, MACD
 CANDLE_6H         = "SIX_HOUR"
 CANDLE_1D         = "ONE_DAY"        # Trend, VolGuard
