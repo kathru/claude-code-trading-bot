@@ -19,28 +19,28 @@ class DonchianBreakout(BaseStrategy):
       Isso garante que apenas fechamentos reais acima da banda geram entrada —
       nunca wicks intrabar que não sustentaram o preço ao fechar.
 
-    RVOL (Relative Volume):
-      RVOL = volume_atual / media_volume_N_periodos
-      RVOL >= 1.5 → volume 50% acima da média → breakout com participação real
-      RVOL < 1.5  → breakout "seco" → alta probabilidade de armadilha (bull trap)
-      Em crypto, breakouts sem RVOL elevado são frequentemente reversões imediatas.
+    RVOL Crescente (2–3 candles):
+      Em vez de threshold fixo (>= 1.5), exige que o RVOL esteja ACELERANDO
+      nos últimos 3 candles fechados — delta de volume positivo barra a barra.
+      RVOL[n-2] < RVOL[n-1] < RVOL[n] → acumulação progressiva → breakout real.
+      RVOL estagnado ou decrescente → smart money saindo → ignorar sinal.
     """
 
     def __init__(self, period: int = 20, rsi_period: int = 14,
                  rsi_min: float = 45.0, vol_mult: float = 1.0,
                  adx_period: int = 14, adx_min: float = 20.0,
                  obv_lookback: int = 5,
-                 rvol_period: int = 20, rvol_min: float = 1.5):
+                 rvol_period: int = 20, rvol_lookback: int = 3):
         super().__init__("Donchian Breakout")
-        self.period       = period
-        self.rsi_period   = rsi_period
-        self.rsi_min      = rsi_min
-        self.vol_mult     = vol_mult
-        self.adx_period   = adx_period
-        self.adx_min      = adx_min
-        self.obv_lookback = obv_lookback
-        self.rvol_period  = rvol_period   # barras para calcular o volume médio
-        self.rvol_min     = rvol_min      # mínimo de RVOL para aceitar o breakout
+        self.period        = period
+        self.rsi_period    = rsi_period
+        self.rsi_min       = rsi_min
+        self.vol_mult      = vol_mult
+        self.adx_period    = adx_period
+        self.adx_min       = adx_min
+        self.obv_lookback  = obv_lookback
+        self.rvol_period   = rvol_period    # barras para calcular o volume médio de referência
+        self.rvol_lookback = rvol_lookback  # candles consecutivos com RVOL crescente exigidos
 
     # ── Indicadores internos ──────────────────────────────────────────────────
 
@@ -74,24 +74,43 @@ class DonchianBreakout(BaseStrategy):
         adx      = dx.ewm(alpha=1 / p, adjust=False).mean()
         return float(adx.iloc[-1])
 
-    def _rvol(self, df: pd.DataFrame) -> float:
+    def _rvol_rising(self, df: pd.DataFrame, lookback: int = 3) -> tuple:
         """
-        Relative Volume (RVOL) = volume_atual / media_volume_N_periodos.
+        RVOL Crescente — volume relativo deve estar ACELERANDO nos últimos candles.
 
-        RVOL >= 1.5 → breakout com participação real (smart money presente)
-        RVOL < 1.5  → breakout fraco → armadilha em potencial
-        RVOL > 2.0  → breakout explosivo (muito confiável em crypto)
+        Em vez de um threshold fixo (>= 1.5), exige que o RVOL esteja subindo
+        consistentemente nos últimos `lookback` candles (delta positivo).
 
-        O RVOL é calculado sobre as últimas N barras excluindo a barra atual,
-        para evitar viés de lookahead.
+        Lógica:
+          Para cada um dos últimos `lookback` candles, calcula o RVOL individual
+          (volume_candle / media_volume_N_periodos_anteriores).
+          O breakout é válido somente se RVOL[i] > RVOL[i-1] para todos —
+          ou seja, volume crescente barra a barra → confirmação de acumulação real.
+
+        Retorna: (is_rising: bool, rvol_last: float)
+          is_rising  → True se RVOL cresceu nos últimos `lookback` candles
+          rvol_last  → valor do RVOL no último candle (para logging)
         """
-        if len(df) < self.rvol_period + 2:
-            return 1.0  # sem dados suficientes → neutro
-        vol_now  = float(df["volume"].iloc[-1])
-        vol_avg  = float(df["volume"].iloc[-(self.rvol_period + 1):-1].mean())
-        if vol_avg <= 0:
-            return 1.0
-        return vol_now / vol_avg
+        if len(df) < self.rvol_period + lookback + 2:
+            return True, 1.0  # dados insuficientes → não bloqueia
+
+        rvols = []
+        for i in range(lookback, 0, -1):
+            # Candle alvo: iloc[-(i)]
+            # Média de volume: os N candles ANTES do candle alvo
+            idx_end   = len(df) - i          # índice do candle alvo
+            idx_start = idx_end - self.rvol_period
+            if idx_start < 0:
+                return True, 1.0
+            vol_candle = float(df["volume"].iloc[idx_end])
+            vol_avg    = float(df["volume"].iloc[idx_start:idx_end].mean())
+            if vol_avg <= 0:
+                return True, 1.0
+            rvols.append(vol_candle / vol_avg)
+
+        # RVOL crescente: cada valor maior que o anterior
+        is_rising = all(rvols[i] > rvols[i - 1] for i in range(1, len(rvols)))
+        return is_rising, rvols[-1]
 
     def _obv_at_new_high(self, df: pd.DataFrame) -> bool:
         """OBV em nova máxima — confirma volume institucional no breakout."""
@@ -141,11 +160,11 @@ class DonchianBreakout(BaseStrategy):
                 return "SELL"
             return "HOLD"
 
-        # ── RVOL: filtro anti bull-trap ───────────────────────────────────────
-        # Breakout sem RVOL elevado = geralmente armadilha em crypto
-        rvol_value = self._rvol(df)
-        if rvol_value < self.rvol_min:
-            return "HOLD"  # Volume fraco — breakout seco, ignorar
+        # ── RVOL Crescente: volume deve estar acelerando nos últimos 3 candles ──
+        # Threshold fixo substituído por delta crescente — detecta acumulação real
+        rvol_rising, rvol_last = self._rvol_rising(df, lookback=self.rvol_lookback)
+        if not rvol_rising:
+            return "HOLD"  # Volume estagnado/decrescente — smart money ausente
 
         # ── ADX: tendência presente ───────────────────────────────────────────
         adx_value = self._adx(df)
