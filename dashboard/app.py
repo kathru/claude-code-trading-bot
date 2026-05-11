@@ -1141,6 +1141,62 @@ async def trading_loop():
         state["tp_objective"] = {"min": 5.0, "max": 18.0, "current": current_tp_pct,
                                  "regime": market_mode}
 
+        # ── MELHORIA 1: Force-close em bear — zera TODAS as posições abertas ──
+        # Quando o regime entra em bear, não basta bloquear novos BUYs.
+        # Posições abertas ficam expostas à queda — fechamento imediato protege o capital.
+        _prev_mode = state.get("_prev_market_mode", market_mode)
+        state["_prev_market_mode"] = market_mode
+        if market_mode == "bear":
+            _forced_closes = 0
+            for _fp in PAIRS:
+                _fsym = _fp.split("-")[0]
+                try:
+                    _fprice_data = state["prices"].get(_fp, {})
+                    _fprice = _fprice_data.get("price", 0)
+                    if not _fprice:
+                        continue
+                    for _fs in all_strategies:
+                        _fkey  = f"{_fs.name}:{_fp}"
+                        _fslot = strategy_slots.get(_fkey, {})
+                        if _fslot.get("qty", 0) > 0:
+                            _fqty = _fslot["qty"]
+                            _fnet = _fqty * _fprice * (1 - _current_taker_fee())
+                            if engine.sell(_fsym, _fqty, _fprice, f"{_fs.name}:bear-exit"):
+                                _fgain = (_fprice - _fslot["entry"]) / _fslot["entry"] * 100
+                                _fpnl  = _fnet - _fslot["entry"] * _fqty
+                                _fslot["realized"] += _fpnl
+                                _attr_pnl(_fs.name, _fpnl)
+                                _record_trade("SELL", _fp, _fqty, _fprice, _fnet,
+                                              f"{_fs.name}:bear-exit")
+                                _fslot.update({"qty": 0.0, "entry": 0.0, "peak": 0.0,
+                                               "pyramids": 0, "be_sl": 0.0})
+                                state["feed"].insert(0, {
+                                    "time": now_str, "cycle": state["cycle"],
+                                    "pair": _fp, "strategy": _fs.name,
+                                    "signal": "SELL", "price": _fprice,
+                                    "executed": True,
+                                    "note": f"bear-exit {_fgain:+.1f}%",
+                                })
+                                state["feed"] = state["feed"][:100]
+                                _forced_closes += 1
+                                logger.info(f"[BEAR-EXIT] {_fp}/{_fs.name} "
+                                            f"gain={_fgain:+.1f}% P&L=${_fpnl:+.2f}")
+                    # Fecha slot manual também
+                    _fms = strategy_slots.get(f"manual:{_fp}", {})
+                    if _fms.get("qty", 0) > 0 and _fprice:
+                        _fqty = _fms["qty"]
+                        _fnet = _fqty * _fprice * (1 - _current_taker_fee())
+                        if engine.sell(_fsym, _fqty, _fprice, "manual:bear-exit"):
+                            _fms["realized"] += _fnet - _fms["entry"] * _fqty
+                            _record_trade("SELL", _fp, _fqty, _fprice, _fnet, "manual:bear-exit")
+                            _fms.update({"qty": 0.0, "entry": 0.0, "peak": 0.0, "be_sl": 0.0})
+                            _forced_closes += 1
+                except Exception as _fe:
+                    logger.warning(f"[BEAR-EXIT] Erro em {_fp}: {_fe}")
+            if _forced_closes:
+                _save_slots(strategy_slots)
+                logger.info(f"[BEAR-EXIT] {_forced_closes} posições fechadas — regime BEAR")
+
         for pair in PAIRS:
             symbol = pair.split("-")[0]
             try:
@@ -1352,8 +1408,25 @@ async def trading_loop():
 
                           tp_hit = price >= slot["entry"] * (1 + current_tp_pct / 100)
                           sl_hit = price <= effective_sl
-                          # ── Trailing por ativo ──────────────────────────────────
-                          _tr_act_pct, _tr_stop_pct = PAIR_TRAILING.get(pair, (4.0, 5.0))
+                          # ── Trailing ATR-based (Melhoria 2) ────────────────────
+                          # Usa ATR × 1.5 como distância do trailing, clampado no range
+                          # PAIR_TRAILING[pair] define (activate%, max_stop%).
+                          # Em alta volatilidade o trailing é mais largo, evitando saídas prematuras.
+                          _tr_act_pct, _tr_stop_max_pct = PAIR_TRAILING.get(pair, (4.0, 5.0))
+                          try:
+                              _atr_trail = calc_atr(
+                                  pd.DataFrame(candles_1h,
+                                               columns=["start","low","high","open","close","volume"]
+                                               ).astype({"low":float,"high":float,
+                                                         "open":float,"close":float,"volume":float})
+                              )
+                              # Trailing stop = ATR × 1.5 como % do preço atual
+                              _atr_trail_pct = (_atr_trail * 1.5 / price * 100) if price > 0 else _tr_stop_max_pct
+                              # Clampa entre 50% e 100% do máximo configurado por ativo
+                              _tr_stop_pct = max(_tr_stop_max_pct * 0.5,
+                                                 min(_tr_stop_max_pct, _atr_trail_pct))
+                          except Exception:
+                              _tr_stop_pct = _tr_stop_max_pct
                           tr_act = gain_pct >= _tr_act_pct
                           tr_hit = tr_act and price <= slot["peak"] * (1 - _tr_stop_pct / 100)
 
@@ -1517,6 +1590,20 @@ async def trading_loop():
                               elif _alt_exp >= 0.25:
                                   _buy_blocked = f"alt exposure {_alt_exp:.0%} >= 25%"
 
+                          # G4b: BTC+ETH correlation cap 35% (Melhoria 4)
+                          # BTC e ETH têm correlação ~90% — exposição combinada limitada
+                          if _buy_blocked is None and pair in BTC_PAIRS:
+                              _btceth_sym = {"BTC", "ETH"}
+                              _btceth_val = sum(
+                                  s2["qty"] * (_last_prices.get(k2.split(":")[-1], {}).get("price") or 0)
+                                  for k2, s2 in strategy_slots.items()
+                                  if s2.get("qty", 0) > 0
+                                  and (k2.split(":")[-1].replace("-USD", "") in _btceth_sym)
+                              )
+                              _btceth_exp = _btceth_val / portfolio_total if portfolio_total > 0 else 0
+                              if _btceth_exp >= 0.35:
+                                  _buy_blocked = f"BTC+ETH exposure {_btceth_exp:.0%} >= 35%"
+
                           # G5: SL cooldown
                           cooldown = sl_cooldowns.get(key, 0)
                           if _buy_blocked is None and cooldown > 0:
@@ -1540,7 +1627,13 @@ async def trading_loop():
 
                               # Breadth multiplier: só reduz alts, BTC sempre ×1.0
                               _breadth_mult = (_breadth.size_multiplier() if _breadth else 1.0) if pair != "BTC-USD" else 1.0
-                              trade_usd = portfolio_total * min(TRADE_PCT, dynamic_pct * _score_mult * _breadth_mult)
+
+                              # Melhoria 3: F&G > 75 → euforia de mercado → size × 0.5
+                              # Evita entrar pesado em topos de euforia onde reversão é mais provável
+                              _euphoria_mult = 0.5 if fg_value > 75 else 1.0
+
+                              trade_usd = portfolio_total * min(TRADE_PCT,
+                                  dynamic_pct * _score_mult * _breadth_mult * _euphoria_mult)
                               fee_margin = _current_taker_fee()
                               if engine.balance_usd < trade_usd * (1 + fee_margin):
                                   trade_usd = max(0, engine.balance_usd * (1 - fee_margin))
