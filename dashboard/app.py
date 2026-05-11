@@ -361,7 +361,7 @@ SL_COOLDOWN_CYCLES    = 3     # SL normal: 3h = 3 ciclos de 1h
 
 # ── Circuit breaker + controles de risco ─────────────────────────
 MAX_DAILY_TRADES      = 10    # máximo de trades por dia (BUY+SELL)
-MAX_OPEN_SLOTS        = 8     # máximo de slots abertos simultaneamente
+MAX_OPEN_SLOTS        = 4     # máximo de slots abertos simultaneamente
 BUY_COOLDOWN_SECONDS  = 3600  # 1h entre BUYs no mesmo par/estratégia
 _daily_trade_count: dict = {}  # {"YYYY-MM-DD": count}
 last_buy_time:      dict = {}  # {f"{strat}:{pair}": timestamp}
