@@ -60,7 +60,7 @@ class EMAPullback(BaseStrategy):
         ema50_now    = float(curr["ema_s"])
         ema50_prev   = float(df["ema_s"].iloc[-(self.slope_bars + 1)])
         ema50_slope  = (ema50_now - ema50_prev) / ema50_prev  # variação % em N barras
-        slope_ok     = ema50_slope > 0.0005  # EMA50 subindo pelo menos 0.05% em slope_bars barras
+        slope_ok     = ema50_slope > 0.0001  # EMA50 subindo pelo menos 0.01% em slope_bars barras
 
         # ── Condições de pullback ─────────────────────────────────────────────
         touched_ema21 = curr["low"] <= curr["ema_m"] * (1 + self.tol)

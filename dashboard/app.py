@@ -396,7 +396,7 @@ STRATEGY_WEIGHTS = {
     "ranging":  {"Donchian Breakout": 0.5, "EMA Pullback": 0.9, "MACD Momentum": 0.8},
     "neutral":  {"Donchian Breakout": 1.0, "EMA Pullback": 1.0, "MACD Momentum": 1.0},
 }
-SCORE_MIN_THRESHOLD = 0.60   # abaixo de 60% → BUY bloqueado
+SCORE_MIN_THRESHOLD = 0.33   # abaixo de 33% → BUY bloqueado (1 estratégia = ~33%)
 SCORE_SIZE_BOOST    = 1.4    # score 85%+ → tamanho +40%
 
 # ── Trailing stop por ativo (activate%, stop_from_peak%) ─────────
@@ -451,7 +451,7 @@ engine = PaperTradingEngine(initial_balance_usd=10000.0)
 all_strategies = [
     DonchianBreakout(period=20, rsi_min=45.0, vol_mult=1.0,
                      adx_min=20.0, obv_lookback=5,
-                     rvol_period=20, rvol_lookback=3),  # RVOL crescente 3 candles
+                     rvol_period=20, rvol_lookback=2),  # RVOL crescente 2 candles
     EMAPullback(fast=9, mid=21, slow=50, touch_tolerance_pct=0.5,
                 slope_bars=5, vol_pullback_mult=1.2, vol_breakout_mult=1.0),
     MACDMomentum(fast=12, slow=26, signal=9, ema_filter=12, rsi_max=75.0),
@@ -1602,17 +1602,33 @@ async def trading_loop():
                           elif time.time() - last_buy_time.get(key, 0) < BUY_COOLDOWN_SECONDS:
                               _buy_blocked = f"cooldown 3h ativo"
 
-                          # G1: Bear market bloqueia TODOS os BUYs
+                          # G1: Bear market — bloqueia BUYs EXCETO se o par está
+                          # individualmente bullish (acima da própria EMA200 1H).
+                          # Permite capturar SOL/ETH em recuperação mesmo com BTC bear.
                           elif market_mode == "bear":
-                              _buy_blocked = f"bear market"
+                              try:
+                                  import pandas as _pd_g1
+                                  _c1h_g1 = _pd_g1.DataFrame(
+                                      candles_1h, columns=["start","low","high","open","close","volume"]
+                                  )
+                                  for _col in ["close"]:
+                                      _c1h_g1[_col] = _pd_g1.to_numeric(_c1h_g1[_col], errors="coerce")
+                                  _ema200_1h = float(
+                                      _c1h_g1["close"].ewm(span=200, adjust=False).mean().iloc[-1]
+                                  )
+                                  _pair_above_ema200 = price > _ema200_1h
+                              except Exception:
+                                  _pair_above_ema200 = False
+                              if not _pair_above_ema200:
+                                  _buy_blocked = f"bear market (par < EMA200 1H)"
 
                           # G1b: Donchian — confirmação obrigatória no 6H (proxy 4H)
                           elif strat.name == "Donchian Breakout" and not donchian_6h_confirmed:
                               _buy_blocked = f"Donchian 6H bearish (proxy 4H)"
 
                           # G2: Score mínimo 60%
-                          elif pair_score < 0.60:
-                              _buy_blocked = f"score {pair_score:.0%} < 60%"
+                          elif pair_score < SCORE_MIN_THRESHOLD:
+                              _buy_blocked = f"score {pair_score:.0%} < {SCORE_MIN_THRESHOLD:.0%}"
 
                           # G3: Min Risk/Reward 2.5:1
                           else:

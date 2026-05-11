@@ -7,11 +7,12 @@ class MACDMomentum(BaseStrategy):
     MACD Momentum Surge — 1H candles.
 
     BUY  → Histograma cruza de negativo para positivo (impulso inicial)
-           + Linha MACD acima de zero (tendência de médio prazo já virou)
            + close > EMA20 (preço acima filtro de curto prazo)
            + momentum positivo (close > close 3 barras atrás)
            + RSI < 75 (não sobrecomprado)
            + ADX rising (força da tendência em crescimento — não em exaustão)
+    Nota: macd_above_zero removido — captura inicio de recuperação mesmo antes
+    de a linha MACD cruzar zero (histograma + ADX já confirmam direção)
     SELL → Histograma cruza de positivo para negativo
 
     ADX Rising:
@@ -95,26 +96,21 @@ class MACDMomentum(BaseStrategy):
         # 1. Histograma cruzou de negativo para positivo
         hist_cross_up = prev["hist"] <= 0 and curr["hist"] > 0
 
-        # 2. Linha MACD acima de zero
-        macd_above_zero = curr["macd"] > 0
-
-        # 3. Preço acima da EMA de curto prazo
+        # 2. Preço acima da EMA de curto prazo
         above_filter = curr["close"] > curr["ema_flt"]
 
-        # 4. Momentum: preço maior que 3 barras atrás
+        # 3. Momentum: preço maior que 3 barras atrás
         momentum_pos = curr["close"] > df["close"].iloc[-4]
 
-        # 5. RSI não sobrecomprado
+        # 4. RSI não sobrecomprado
         rsi_ok = curr["rsi"] < self.rsi_max
 
-        # 6. ADX rising: força da tendência crescendo nos últimos N períodos
-        #    ADX_agora > ADX_N_barras_atrás → tendência em aceleração
-        #    Evita entrar quando o momentum já está esgotando (ADX caindo)
-        adx_now  = float(curr["adx"])
-        adx_prev = float(df["adx"].iloc[-(self.adx_rising_bars + 1)])
+        # 5. ADX rising: força da tendência crescendo nos últimos N períodos
+        adx_now    = float(curr["adx"])
+        adx_prev   = float(df["adx"].iloc[-(self.adx_rising_bars + 1)])
         adx_rising = adx_now > adx_prev
 
-        if hist_cross_up and macd_above_zero and above_filter and momentum_pos and rsi_ok and adx_rising:
+        if hist_cross_up and above_filter and momentum_pos and rsi_ok and adx_rising:
             return "BUY"
 
         # ── SELL: histograma cruzou de positivo para negativo ────────────────
