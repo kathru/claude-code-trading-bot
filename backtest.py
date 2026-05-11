@@ -1,8 +1,10 @@
 import pandas as pd
 import yfinance as yf
-from strategies.ma_crossover import MACrossoverStrategy
-from strategies.rsi import RSIStrategy
-from strategies.scalping import ScalpingStrategy
+from strategies.donchian_breakout import DonchianBreakout
+from strategies.ema_pullback import EMAPullback
+from strategies.macd_momentum import MACDMomentum
+from strategies.stoch_bounce import StochBounce
+from strategies.rsi_divergence_detector import RSIDivergenceDetector
 from datetime import datetime
 
 # Configuration
@@ -12,45 +14,115 @@ END_DATE = "2026-04-30"
 INITIAL_BRL = 5000.0
 USD_BRL_RATE = 5.517
 INITIAL_USD = INITIAL_BRL / USD_BRL_RATE
-TRADE_USD = 500.0 # ACTUAL BOT RULE
 TAKER_FEE = 0.006
 
-class BacktestEngine:
+# Risk Management from app.py
+TRADE_PCT = 0.10
+PYRAMID_MAX = 3
+PYRAMID_SIZE_PCT = 0.25
+TRAILING_STOP_PCT = 2.5
+TRAILING_ACTIVATE_PCT = 2.0
+BREAKEVEN_ACTIVATE_PCT = 1.5
+MAX_OPEN_SLOTS = 8
+
+class BacktestEngineV2:
     def __init__(self, initial_balance):
         self.balance_usd = initial_balance
         self.initial_balance = initial_balance
-        self.holdings = {symbol.split("-")[0]: 0.0 for symbol in PAIRS}
+        self.slots = {} # { "Strategy:Pair": slot_data }
         self.trades = []
 
-    def buy(self, symbol, price, time):
-        fee = TRADE_USD * TAKER_FEE
-        total_cost = TRADE_USD + fee
+    def get_portfolio_value(self, current_prices):
+        total = self.balance_usd
+        for key, slot in self.slots.items():
+            if slot['qty'] > 0:
+                symbol = key.split(":")[1].split("-")[0]
+                total += slot['qty'] * current_prices.get(symbol, 0)
+        return total
+
+    def buy(self, strat_name, pair, price, time, current_prices):
+        symbol = pair.split("-")[0]
+        key = f"{strat_name}:{pair}"
+
+        # Check open slots
+        open_slots = sum(1 for s in self.slots.values() if s['qty'] > 0)
+        if open_slots >= MAX_OPEN_SLOTS: return False
+
+        portfolio_val = self.get_portfolio_value(current_prices)
+        trade_usd = portfolio_val * TRADE_PCT
+        fee = trade_usd * TAKER_FEE
+        total_cost = trade_usd + fee
+
         if self.balance_usd >= total_cost:
-            qty = TRADE_USD / price
+            qty = trade_usd / price
             self.balance_usd -= total_cost
-            self.holdings[symbol] += qty
-            self.trades.append({"time": str(time), "side": "BUY", "symbol": symbol, "qty": qty, "price": price, "usd_spent": total_cost})
+            self.slots[key] = {
+                "qty": qty,
+                "entry": price,
+                "peak": price,
+                "entry_usd": trade_usd,
+                "pyramids": 0,
+                "be_sl": price * 0.95 # initial 5% SL
+            }
+            self.trades.append({"time": str(time), "side": "BUY", "pair": pair, "qty": qty, "price": price, "usd": trade_usd, "strat": strat_name})
             return True
         return False
 
-    def sell(self, symbol, price, time):
-        qty = self.holdings.get(symbol, 0)
-        if qty > 0:
-            gross = qty * price
-            fee = gross * TAKER_FEE
-            net_received = gross - fee
-            self.balance_usd += net_received
-            self.holdings[symbol] = 0.0
-            self.trades.append({"time": str(time), "side": "SELL", "symbol": symbol, "qty": qty, "price": price, "usd_received": net_received})
+    def sell(self, key, price, time, reason):
+        slot = self.slots.get(key)
+        if not slot or slot['qty'] <= 0: return False
+
+        pair = key.split(":")[1]
+        symbol = pair.split("-")[0]
+        strat = key.split(":")[0]
+
+        gross = slot['qty'] * price
+        fee = gross * TAKER_FEE
+        net = gross - fee
+
+        self.balance_usd += net
+        # Calculate P&L relative to cost including entry fee
+        cost_basis = slot['entry'] * slot['qty'] * (1 + TAKER_FEE)
+        pnl = net - cost_basis
+
+        self.trades.append({
+            "time": str(time), "side": "SELL", "pair": pair, "qty": slot['qty'],
+            "price": price, "usd": net, "strat": strat, "reason": reason, "pnl": pnl
+        })
+        slot['qty'] = 0.0
+        return True
+
+    def pyramid(self, key, price, time):
+        slot = self.slots.get(key)
+        if not slot or slot['qty'] <= 0 or slot['pyramids'] >= PYRAMID_MAX: return False
+
+        pair = key.split(":")[1]
+        symbol = pair.split("-")[0]
+        strat = key.split(":")[0]
+
+        pyr_usd = slot['entry_usd'] * PYRAMID_SIZE_PCT
+        fee = pyr_usd * TAKER_FEE
+        total_cost = pyr_usd + fee
+
+        if self.balance_usd >= total_cost:
+            qty = pyr_usd / price
+            self.balance_usd -= total_cost
+            new_qty = slot['qty'] + qty
+            # Update weighted average entry price
+            slot['entry'] = (slot['qty'] * slot['entry'] + qty * price) / new_qty
+            slot['qty'] = new_qty
+            slot['pyramids'] += 1
+            self.trades.append({"time": str(time), "side": "BUY_PYR", "pair": pair, "qty": qty, "price": price, "usd": pyr_usd, "strat": strat})
             return True
         return False
 
-def run_backtest():
-    engine = BacktestEngine(INITIAL_USD)
+def run_backtest_v2():
+    engine = BacktestEngineV2(INITIAL_USD)
     strategies = [
-        MACrossoverStrategy(short_window=9, long_window=21),
-        RSIStrategy(period=14, oversold=30, overbought=70),
-        ScalpingStrategy(bb_period=20, bb_std=2.0),
+        DonchianBreakout(),
+        EMAPullback(),
+        MACDMomentum(),
+        StochBounce(),
     ]
 
     data_frames = {}
@@ -59,63 +131,76 @@ def run_backtest():
         if df.empty: continue
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
         df = df.reset_index().rename(columns={"Datetime": "start", "Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"})
-        data_frames[pair.split("-")[0]] = df
+        data_frames[pair] = df
 
     all_times = sorted(pd.concat([df['start'] for df in data_frames.values()]).unique())
-    last_prices = {}
 
     for current_time in all_times:
-        for symbol, df in data_frames.items():
+        current_prices = {}
+        # Collect all prices for this timestamp first
+        for pair in PAIRS:
+            df = data_frames.get(pair)
+            if df is None: continue
             row = df[df['start'] == current_time]
-            if row.empty: continue
-            price = float(row['close'].iloc[0])
-            last_prices[symbol] = price
+            if not row.empty:
+                current_prices[pair.split("-")[0]] = float(row['close'].iloc[0])
+
+        for pair, df in data_frames.items():
+            price = current_prices.get(pair.split("-")[0])
+            if price is None: continue
+
+            # 1. Update Existing Slots (Risk Management)
+            for strat in strategies:
+                key = f"{strat.name}:{pair}"
+                slot = engine.slots.get(key)
+                if slot and slot['qty'] > 0:
+                    slot['peak'] = max(slot['peak'], price)
+                    gain_pct = (price - slot['entry']) / slot['entry'] * 100
+
+                    # Trailing / SL / BE Logic
+                    be_active = gain_pct >= BREAKEVEN_ACTIVATE_PCT
+                    current_sl = slot['entry'] if be_active else slot['entry'] * 0.95
+
+                    tr_active = gain_pct >= TRAILING_ACTIVATE_PCT
+                    tr_hit = tr_active and price <= slot['peak'] * (1 - TRAILING_STOP_PCT / 100)
+                    sl_hit = price <= current_sl
+
+                    if tr_hit: engine.sell(key, price, current_time, "TRAILING")
+                    elif sl_hit: engine.sell(key, price, current_time, "SL/BE")
+
+            # 2. Check Signals for New Trades or Pyramiding
             hist_df = df[df['start'] <= current_time].tail(100)
-            if len(hist_df) < 30: continue
+            if len(hist_df) < 50: continue
 
-            votes = {"BUY": 0, "SELL": 0, "HOLD": 0}
-            for s in strategies:
-                votes[s.analyze(hist_df)] += 1
+            for strat in strategies:
+                key = f"{strat.name}:{pair}"
+                signal = strat.analyze(hist_df)
+                slot = engine.slots.get(key)
 
-            # STRICT CONSENSUS (>= 2)
-            if votes["BUY"] >= 2: engine.buy(symbol, price, current_time)
-            elif votes["SELL"] >= 2: engine.sell(symbol, price, current_time)
+                if signal == "BUY":
+                    if not slot or slot['qty'] <= 0:
+                        engine.buy(strat.name, pair, price, current_time, current_prices)
+                    else:
+                        gain_pct = (price - slot['entry']) / slot['entry'] * 100
+                        if gain_pct >= 1.0:
+                            engine.pyramid(key, price, current_time)
+                elif signal == "SELL":
+                    if slot and slot['qty'] > 0:
+                        engine.sell(key, price, current_time, "SIGNAL")
 
-    final_portfolio_val = engine.balance_usd + sum(engine.holdings[s] * last_prices.get(s, 0) for s in engine.holdings)
-    pnl_usd = final_portfolio_val - engine.initial_balance
-
-    # Win rate and Profit Factor calc
+    final_val = engine.get_portfolio_value(current_prices)
+    pnl = final_val - engine.initial_balance
     sells = [t for t in engine.trades if t['side'] == 'SELL']
-    wins = 0
-    gross_profit = 0
-    gross_loss = 0
-    temp_buys = {}
-    for t in engine.trades:
-        s = t['symbol']
-        if t['side'] == 'BUY':
-            if s not in temp_buys: temp_buys[s] = []
-            temp_buys[s].append(t)
-        else:
-            if s in temp_buys and temp_buys[s]:
-                b = temp_buys[s].pop(0)
-                net_profit = t['usd_received'] - b['usd_spent']
-                if net_profit > 0:
-                    wins += 1
-                    gross_profit += net_profit
-                else:
-                    gross_loss += abs(net_profit)
+    wins = [t for t in sells if t.get('pnl', 0) > 0]
+    wr = len(wins)/len(sells)*100 if sells else 0
 
-    wr = (wins / len(sells) * 100) if sells else 0
-    pf = (gross_profit / gross_loss) if gross_loss > 0 else (gross_profit if gross_profit > 0 else 0)
+    gp = sum(t['pnl'] for t in wins)
+    gl = abs(sum(t['pnl'] for t in sells if t.get('pnl', 0) <= 0))
+    pf = gp/gl if gl > 0 else gp
 
-    print(f"Final: ${final_portfolio_val:.2f} (R${final_portfolio_val*USD_BRL_RATE:.2f})")
-    print(f"PNL: ${pnl_usd:.2f} ({pnl_usd/engine.initial_balance*100:.2f}%)")
+    print(f"Final V2: ${final_val:.2f} (R${final_val*USD_BRL_RATE:.2f})")
+    print(f"PNL V2: ${pnl:.2f} ({pnl/engine.initial_balance*100:.2f}%)")
     print(f"Trades: {len(engine.trades)}, WR: {wr:.2f}%, PF: {pf:.2f}")
 
-    with open("backtest_results.txt", "w") as f:
-        f.write(f"INITIAL_BRL: {INITIAL_BRL}\nFINAL_BRL: {final_portfolio_val*USD_BRL_RATE}\nPNL_BRL: {pnl_usd*USD_BRL_RATE}\n")
-        f.write(f"INITIAL_USD: {INITIAL_USD}\nFINAL_USD: {final_portfolio_val}\nPNL_USD: {pnl_usd}\n")
-        f.write(f"TRADE_COUNT: {len(engine.trades)}\nWIN_RATE: {wr}\nPROFIT_FACTOR: {pf}\n")
-
 if __name__ == "__main__":
-    run_backtest()
+    run_backtest_v2()

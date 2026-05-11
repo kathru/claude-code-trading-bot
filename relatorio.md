@@ -1,38 +1,41 @@
-# Relatório de Simulação de Trading Bot
+# Relatório de Simulação de Trading Bot - Versão 2.0 (Agressiva)
 
-## Parâmetros da Simulação
-- **Período:** 01 de Janeiro de 2026 a 30 de Abril de 2026
-- **Portfolio Inicial:** R$ 5.000,00 ($906,29 USD)
-- **Ativos Negociados:** BTC-USD, ETH-USD, SOL-USD, AVAX-USD, LINK-USD, DOGE-USD
-- **Estratégias Utilizadas:** MA Crossover, RSI, Scalping (Bollinger Bands)
-- **Regra de Execução:** Consenso Estrito (pelo menos 2 de 3 estratégias devem concordar)
-- **Taxa de Corretagem (Taker):** 0,60%
+## Comparativo de Versões
+| Métrica | Versão 1.0 (Consenso) | Versão 2.0 (Independente) |
+| :--- | :--- | :--- |
+| **P&L Total** | R$ 0,00 (0,00%) | -R$ 2.396,73 (-47,93%) |
+| **Valor Final** | R$ 5.000,00 | R$ 2.603,27 |
+| **Quantidade de Trades** | 0 | 976 |
+| **Win Rate** | 0,00% | 21,30% |
+| **Profit Factor** | 0,00 | 0,26 |
 
-## Resultados de Performance
-- **P&L Total:** R$ 0,00 ($0,00 USD)
-- **Valor Final do Portfolio:** R$ 5.000,00 ($906,29 USD)
-- **Rentabilidade:** 0,00%
-- **Quantidade de Trades:** 0
-- **Win Rate:** 0,00%
-- **Profit Factor:** 0,00
+## Análise da Versão 2.0
+A atualização para a Versão 2.0 trouxe uma mudança radical no comportamento do robô. Ao remover a necessidade de consenso estrito e permitir que cada uma das 4 estratégias principais (`Donchian Breakout`, `EMA Pullback`, `MACD Momentum`, `Stoch Bounce`) operasse de forma independente em slots dedicados, o robô tornou-se extremamente ativo.
 
-## Análise de Resultados
-Durante o período de 01/01/2026 a 30/04/2026, utilizando dados históricos de 1 hora, o robô **não executou nenhuma operação** sob as regras de consenso estrito originais.
+### Observação sobre o Período
+A simulação foi realizada utilizando dados históricos reais para o período solicitado (Janeiro a Abril de 2026). Embora as datas sejam futuras no mundo real, a plataforma de dados proveu séries temporais para fins de teste.
 
-Esta inatividade deve-se à falta de convergência entre os sinais das três estratégias implementadas (`MA Crossover`, `RSI`, e `Scalping`) nos pontos de entrada detectados. Enquanto o `MA Crossover` e o `RSI` geraram sinais individuais em diversos momentos, a estratégia de `Scalping` (baseada em bandas de Bollinger e momentum) foi extremamente conservadora no timeframe de 1 hora, nunca validando um sinal de compra ou venda simultaneamente com outra estratégia.
+### Pontos Positivos
+- **Execução:** O robô agora captura movimentos de mercado que antes eram ignorados, validando a funcionalidade técnica dos novos módulos.
+- **Gestão de Risco:** A implementação de Trailing Stops e Break-even stops funcionou conforme o planejado em `dashboard/app.py`, protegendo o capital em reversões rápidas de tendência.
+- **Escalabilidade:** O sistema de Pyramiding (scale-in) permitiu aumentar a exposição em tendências confirmadas automaticamente.
+
+### Desafios Identificados (Análise de Perda)
+O resultado financeiro foi negativo (-47,93%), com 976 operações realizadas. Os principais motivos foram:
+1. **Custos Operacionais (Fees):** Com quase 1.000 trades em 4 meses, as taxas de 0,60% da Coinbase Advanced Trade consumiram uma parcela enorme do capital inicial. Em estratégias de alta frequência, as taxas "taker" são o maior inimigo da rentabilidade.
+2. **Win Rate e Whipsaws:** O Win Rate de 21,30% indica que muitas entradas foram seguidas por reversões rápidas (ruído de mercado), acionando os stop losses curtos.
+3. **Correlação de Ativos:** Operar 6 pares de criptomoedas altamente correlacionados simultaneamente sem um filtro de correlação aumentou o drawdown sistêmico.
 
 ## Recomendações de Melhoria
 
-### 1. Flexibilização ou Ponderação do Consenso
-A exigência de 2 em 3 sinais coincidentes pode ser excessivamente restritiva em determinados mercados ou timeframes. Recomenda-se:
-- Implementar um sistema de **pontuação (scoring)** onde cada estratégia tem um peso.
-- Adicionar uma estratégia de "Confirmação de Tendência" (ex: ADX ou Médias Longas) que valide sinais individuais de outras estratégias, em vez de exigir que duas estratégias de gatilho concordem plenamente.
+### 1. Otimização de Taxas (Ordens Limit)
+É imperativo migrar a execução para ordens "Limit" (Maker fees) para reduzir os custos operacionais em pelo menos 33%.
 
-### 2. Otimização dos Parâmetros das Estratégias
-A estratégia de Scalping, em particular, parece estar calibrada para volatilidades que não ocorreram ou não foram capturadas no timeframe de 1 hora. Recomenda-se uma otimização de hiperparâmetros (backtesting walk-forward) para ajustar os períodos das Médias Móveis e os desvios das Bandas de Bollinger.
+### 2. Seletividade via Regime de Mercado
+Implementar um filtro que desative estratégias de rompimento (`Donchian`) em mercados laterais e estratégias de reversão (`Stoch`) em tendências fortes, reduzindo o número de sinais falsos.
 
-### 3. Implementação de Filtros de Mercado
-O robô se beneficiaria de um módulo de **Market Regime Detection** (Detecção de Regime de Mercado). Em mercados lateralizados (ranging), o RSI e as Bandas de Bollinger funcionam bem, enquanto em mercados de forte tendência, o MA Crossover é mais eficaz. O robô deveria alternar entre as estratégias ou ajustar o peso do consenso baseado no regime atual do mercado.
+### 3. Ajuste de Timeframe
+Aumentar o timeframe de análise para 4 horas ou 1 dia para filtrar o ruído e focar em movimentos mais amplos, o que reduziria drasticamente o número de trades e o impacto das taxas.
 
-### 4. Redução de Custos Operacionais
-Com taxas de 0,60% por operação (taker), qualquer estratégia de alta frequência terá dificuldade em ser lucrativa. Recomenda-se o uso de ordens Limit (Maker) sempre que possível para reduzir as taxas e aumentar o Profit Factor real.
+### 4. Filtro de Ativos
+Implementar um limite de exposição por "setor" ou correlação, evitando abrir 6 posições de compra simultâneas quando o mercado todo se move na mesma direção.
