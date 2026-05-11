@@ -252,7 +252,7 @@ def _get_fee_rates() -> tuple:
     """Determina maker/taker fee pelo volume dos últimos 30 dias."""
     cutoff  = time.time() - 30 * 86400
     vol_30d = sum(t.get("usd", 0) for t in engine.trades if (t.get("ts") or 0) >= cutoff)
-    maker, taker = 0.0060, 0.0120
+    maker, taker = 0.0010, 0.0040
     for min_vol, m, t_ in reversed(COINBASE_FEE_TIERS):
         if vol_30d >= min_vol:
             maker, taker = m, t_
@@ -381,16 +381,11 @@ PAIR_SL_RANGE = {
     "SOL-USD":    (0.05, 0.07),
 }
 
-# ── OKX — Fee System (Spot Trading, 2026) ────────────────────────
+# ── OKX — Fee System Regular (Spot Trading, 2026) ────────────────
+# Nível Regular: Maker 0.10% / Taker 0.40%
 # vol_30d em USD → (min_vol, maker_fee, taker_fee)
 OKX_FEE_TIERS = [
-    (           0,  0.0008, 0.0010),  # Lv1: $0–$100K      (0.08% / 0.10%)
-    (     100_000,  0.0007, 0.0009),  # Lv2: $100K–$1M     (0.07% / 0.09%)
-    (   1_000_000,  0.0006, 0.0008),  # Lv3: $1M–$5M       (0.06% / 0.08%)
-    (   5_000_000,  0.0005, 0.0007),  # Lv4: $5M–$20M      (0.05% / 0.07%)
-    (  20_000_000,  0.0003, 0.0006),  # Lv5: $20M–$100M    (0.03% / 0.06%)
-    ( 100_000_000,  0.0002, 0.0005),  # Lv6: $100M–$500M   (0.02% / 0.05%)
-    ( 500_000_000,  0.0000, 0.0004),  # Lv7: $500M+        (0.00% / 0.04%)
+    (           0,  0.0010, 0.0040),  # Regular: Maker 0.10% / Taker 0.40%
 ]
 # Alias para compatibilidade com código que usa COINBASE_FEE_TIERS
 COINBASE_FEE_TIERS = OKX_FEE_TIERS
@@ -911,7 +906,7 @@ async def manual_sell(pair: str, qty: float = 0, brl: float = 0):
         sell_qty = min(usd_value / price, held)
     else:
         sell_qty = min(qty, held) if qty > 0 else held   # 0 = vender tudo
-    usd = sell_qty * price * (1 - 0.006)
+    usd = sell_qty * price * (1 - _current_taker_fee())
     if not engine.sell(symbol, sell_qty, price, "manual"):
         return {"ok": False, "error": "Falha na venda"}
     # Venda total: zera slot manual
@@ -1326,7 +1321,7 @@ async def trading_loop():
                         vslot = strategy_slots.get(vkey, _empty_slot())
                         if vslot["qty"] > 0:
                             vqty = min(vslot["qty"], max_usd / price if price > 0 else vslot["qty"])
-                            vnet = vqty * price * (1 - 0.006)
+                            vnet = vqty * price * (1 - _current_taker_fee())
                             if engine.sell(symbol, vqty, price, f"vol_guard:{strat.name}"):
                                 pnl_vg = vnet - vslot["entry"] * vqty
                                 vslot["realized"] += pnl_vg
@@ -1484,7 +1479,7 @@ async def trading_loop():
                           tr_hit = tr_act and price <= slot["peak"] * (1 - _tr_stop_pct / 100)
 
                           def _sell_slot(qty, label, is_sl=False):
-                              net = qty * price * (1 - 0.006)
+                              net = qty * price * (1 - _current_taker_fee())
                               sold = engine.sell(symbol, qty, price, f"{strat.name}:{label}")
                               if sold:
                                   pnl = net - slot["entry"] * qty
@@ -1560,7 +1555,7 @@ async def trading_loop():
                                   base_usd = slot.get("entry_usd") or (portfolio_total * dynamic_pct)
                                   pyr_usd  = base_usd * PYRAMID_SIZE_PCT
                                   if engine.balance_usd < pyr_usd * 1.006:
-                                      pyr_usd = max(0, engine.balance_usd - (engine.balance_usd * 0.006))
+                                      pyr_usd = max(0, engine.balance_usd - (engine.balance_usd * _current_taker_fee()))
 
                                   if pyr_usd > 1.0:  # Mínimo de $1 para pyramid
                                       add_qty = pyr_usd / price
