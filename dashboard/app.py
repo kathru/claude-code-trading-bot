@@ -26,7 +26,7 @@ from strategies.trend_filter           import TrendFilter
 from strategies.news_guard             import is_news_blackout, next_event
 from strategies.news_sync              import sync_if_needed as _news_sync_if_needed
 from strategies.market_breadth         import get_market_breadth
-from strategies.market_regime          import calc_adx
+from strategies.market_regime          import calc_adx, calc_atr
 # Estratégias antigas preservadas para referência:
 # from strategies.rsi_divergence import RSIDivergence
 # from strategies.support_resistance import SupportResistance
@@ -681,6 +681,15 @@ state = {
     "fee_taker":        round(_current_taker_fee() * 100, 4),
     "fee_maker":        round(_current_maker_fee() * 100, 4),
     "fee_vol_30d":      0.0,
+    "news_blackout":    False,
+    "news_reason":      "",
+    "next_news_event":  None,
+    "market_breadth":   {
+        "alts_above_ema50_pct": None, "btc_dominance": None,
+        "funding_rate_btc": None, "funding_rate_avg": None,
+        "oi_expansion_btc": None, "oi_expansion_avg": None,
+        "score": None, "label": "N/A", "size_multiplier": 1.0,
+    },
 }
 
 
@@ -1056,6 +1065,10 @@ async def trading_loop():
                 df_1d      = vol_guard.candles_to_df(candles_1d)
                 vol_signal = vol_guard.analyze(df_1d)
                 pair_signals = {"Trend": trend, "Vol Guard": vol_signal}
+                # Defaults caso vol_guard dispare e o bloco else seja pulado
+                pair_score           = 0.0
+                _adx_val             = 20.0
+                donchian_6h_confirmed = True
 
                 # ── Volatilidade extrema: fecha posição de consenso e PULA ciclo ──
                 if vol_signal == "SELL":
@@ -1379,7 +1392,8 @@ async def trading_loop():
                               if market_mode == "bull":
                                   _score_mult = min(1.4, _score_mult * 1.1)
 
-                              _breadth_mult = _breadth.size_multiplier() if _breadth else 1.0
+                              # Breadth multiplier: só reduz alts, BTC sempre ×1.0
+                              _breadth_mult = (_breadth.size_multiplier() if _breadth else 1.0) if pair != "BTC-USD" else 1.0
                               trade_usd = portfolio_total * min(TRADE_PCT, dynamic_pct * _score_mult * _breadth_mult)
                               fee_margin = _current_taker_fee()
                               if engine.balance_usd < trade_usd * (1 + fee_margin):
@@ -1476,6 +1490,22 @@ async def trading_loop():
                 rsi_val     = get_rsi_value(candles_1h)
                 entry_price = engine.entry_prices.get(symbol)
                 change_pct  = ((price - entry_price) / entry_price * 100) if entry_price else None
+
+                # ATR Stop Loss dinâmico
+                try:
+                    _df_atr = pd.DataFrame(candles_1h, columns=["start","low","high","open","close","volume"]).astype(
+                        {"low": float, "high": float, "open": float, "close": float, "volume": float}
+                    )
+                    _atr_val = calc_atr(_df_atr)
+                    _atr_sl_level = round(price - 2.0 * _atr_val, 2) if _atr_val > 0 else None
+                    _atr_sl_pct   = round((_atr_val * 2.0 / price) * 100, 2) if price > 0 and _atr_val > 0 else None
+                except Exception:
+                    _atr_sl_level = None
+                    _atr_sl_pct   = None
+
+                # Score e MTF para o frontend
+                state["scores"][pair] = round(pair_score, 3)
+
                 state["signals"][pair] = {
                     "strategies":  pair_signals,
                     "trend":       trend,
@@ -1485,6 +1515,11 @@ async def trading_loop():
                     "change_pct":  round(change_pct,  2) if change_pct is not None else None,
                     "sl_level":    round(entry_price * (1 - current_sl_pct / 100), 2) if entry_price else None,
                     "tp_level":    round(entry_price * (1 + current_tp_pct / 100), 2) if entry_price else None,
+                    "atr_sl_level": _atr_sl_level,
+                    "atr_sl_pct":   _atr_sl_pct,
+                    "mtf_ok":       donchian_6h_confirmed,
+                    "score":        round(pair_score, 3),
+                    "adx":          round(_adx_val, 1),
                 }
                 log_cycle(logger, state["cycle"], pair, price, pair_signals, trend)
 

@@ -238,6 +238,19 @@
         <span class="score-normal px-2 py-0.5 rounded font-bold">75-85% NORMAL</span>
         <span class="score-aggr px-2 py-0.5 rounded font-bold">85%+ AGRESSIVO</span>
       </div>
+      <!-- News Guard Banner -->
+      <div id="news-guard-banner" class="hidden mt-3 rounded-lg px-4 py-2 flex items-center justify-between bg-orange-900/40 border border-orange-500/40">
+        <div class="flex items-center gap-2">
+          <span class="text-orange-400 text-sm">📰</span>
+          <span id="news-guard-reason" class="text-xs font-bold text-orange-300">NewsGuard ativo</span>
+        </div>
+        <span class="text-[10px] text-orange-500">Entradas bloqueadas</span>
+      </div>
+      <!-- Próximo evento -->
+      <div id="next-news-row" class="hidden mt-2 text-[10px] text-gray-500 flex items-center gap-2">
+        <span class="text-yellow-500">⏱</span>
+        <span>Próximo evento: <span id="next-news-name" class="text-yellow-400 font-semibold">—</span> em <span id="next-news-mins" class="text-yellow-400 font-semibold">—</span> min</span>
+      </div>
     </div>
 
     <!-- ── Gráfico de Candles ── -->
@@ -878,6 +891,28 @@
           ${tpBrl > 0 ? `<p class="text-[10px] mt-0.5" style="color:#818cf8">TP: falta R$ ${fmtBRL(tpFalta)} (${tpBrl > 0 ? ((tpFalta/tpBrl)*100).toFixed(0) : 0}%)</p>` : ''}
         </div>`;
       }).join('');
+    }
+
+    // ── News Guard banner ─────────────────────────────────────────────────
+    const newsBanner  = document.getElementById('news-guard-banner');
+    const newsReason  = document.getElementById('news-guard-reason');
+    const nextNewsRow = document.getElementById('next-news-row');
+    const nextNewsName = document.getElementById('next-news-name');
+    const nextNewsMins = document.getElementById('next-news-mins');
+    if (newsBanner) {
+      if (s.news_blackout) {
+        newsBanner.classList.remove('hidden');
+        if (newsReason) newsReason.textContent = s.news_reason || 'NewsGuard ativo';
+      } else {
+        newsBanner.classList.add('hidden');
+      }
+    }
+    if (nextNewsRow && s.next_news_event) {
+      nextNewsRow.classList.remove('hidden');
+      if (nextNewsName) nextNewsName.textContent = s.next_news_event.name || '—';
+      if (nextNewsMins) nextNewsMins.textContent  = s.next_news_event.mins_to ?? '—';
+    } else if (nextNewsRow) {
+      nextNewsRow.classList.add('hidden');
     }
 
     // ── Market Breadth panel ──────────────────────────────────────────────
