@@ -134,42 +134,110 @@ def _dynamic_tp_by_regime(market_mode: str, fg_value: int) -> float:
     # chop / neutral
     return 10.0 if fg_value <= 40 else 8.0        # 8–10%
 
-def _detect_market_regime(candles_1h: list, candles_6h: list) -> str:
+def _detect_market_regime(candles_1h: list, candles_6h: list,
+                           breadth=None) -> tuple:
     """
-    Detecta o regime global de mercado baseado no BTC:
-      'bull' → BTC acima EMA200 no 6H + ADX > 25 + EMA50 > EMA200
-      'bear' → BTC abaixo EMA200 no 6H
-      'chop' → ADX < 20 (mercado lateral sem direção clara)
+    Detecta o regime global de mercado baseado no BTC + 4 indicadores adicionais.
+
+    Retorna: (regime: str, bear_signals: list[str])
+      regime       → 'bull' | 'chop' | 'bear'
+      bear_signals → lista de sinais de baixa ativos (para o dashboard)
+
+    Sinal primário (hard-coded):
+      'bear' → BTC < EMA200 no 6H (regra estrutural inviolável)
+      'bull' → BTC > EMA200 + EMA50 > EMA200 + ADX > 20
+      'chop' → ADX < 20 (lateral sem direção)
+
+    Sinais adicionais de confirmação bear (cada um vale 1 ponto):
+      1. Slope EMA200 negativo    → EMA200 agora < EMA200 há 5 barras (tendência caindo)
+      2. Breadth deteriorando     → score < 0.35 ou OI médio negativo
+      3. OI caindo                → oi_expansion_avg < 0 (saída de capital do mercado)
+      4. Volatilidade implícita↑  → realized vol 1H > 3% (proxy: std log-returns × √24)
+
+    Regime upgrade: 'chop' com ≥ 3 sinais bear → reclassificado como 'bear'
+    Regime downgrade: 'bull' com ≥ 3 sinais bear → reclassificado como 'chop'
     """
+    bear_signals: list = []
+
     if not candles_6h or len(candles_6h) < 50:
-        return "chop"
+        return "chop", bear_signals
     try:
         import pandas as _pd
-        df = _pd.DataFrame(candles_6h, columns=["start","low","high","open","close","volume"])
-        closes = df["close"].astype(float)
-        ema50  = closes.ewm(span=50,  adjust=False).mean()
-        ema200 = closes.ewm(span=200, adjust=False).mean()
-        price  = float(closes.iloc[-1])
-        e50    = float(ema50.iloc[-1])
-        e200   = float(ema200.iloc[-1])
+        import numpy as _np
 
-        if price < e200:
-            return "bear"
+        df6 = _pd.DataFrame(candles_6h, columns=["start","low","high","open","close","volume"])
+        closes6 = df6["close"].astype(float)
+        ema50_s  = closes6.ewm(span=50,  adjust=False).mean()
+        ema200_s = closes6.ewm(span=200, adjust=False).mean()
+        price    = float(closes6.iloc[-1])
+        e50      = float(ema50_s.iloc[-1])
+        e200     = float(ema200_s.iloc[-1])
 
-        # Calcular ADX rápido no 1H
+        # ── Sinal estrutural: preço vs EMA200 ────────────────────────────────
+        price_below_ema200 = price < e200
+        if price_below_ema200:
+            bear_signals.append("Preço < EMA200 6H")
+
+        # ── Sinal 1: Slope EMA200 negativo ───────────────────────────────────
+        slope_bars = 5   # janela de 5 barras 6H = 30h
+        if len(ema200_s) > slope_bars:
+            e200_now  = float(ema200_s.iloc[-1])
+            e200_past = float(ema200_s.iloc[-(slope_bars + 1)])
+            if e200_now < e200_past:
+                bear_signals.append("Slope EMA200 negativo")
+
+        # ── Sinal 2: Breadth deteriorando ────────────────────────────────────
+        if breadth is not None:
+            if breadth.score < 0.35:
+                bear_signals.append(f"Breadth fraco ({breadth.score:.0%})")
+            elif breadth.oi_expansion_avg < -1.0:
+                bear_signals.append(f"Breadth/OI deteriorando")
+
+        # ── Sinal 3: OI caindo ────────────────────────────────────────────────
+        if breadth is not None and breadth.oi_expansion_avg < 0:
+            if f"Breadth/OI deteriorando" not in bear_signals:  # evita duplicata
+                bear_signals.append(f"OI caindo ({breadth.oi_expansion_avg:+.2f}%)")
+
+        # ── Sinal 4: Volatilidade implícita elevada (realized vol proxy) ──────
+        if candles_1h and len(candles_1h) >= 24:
+            df1h    = _pd.DataFrame(candles_1h, columns=["start","low","high","open","close","volume"])
+            c1h     = df1h["close"].astype(float).iloc[-24:]
+            log_ret = _np.log(c1h / c1h.shift(1)).dropna()
+            realized_vol_pct = float(log_ret.std() * _np.sqrt(24) * 100)  # vol diária
+            if realized_vol_pct > 5.0:   # > 5% vol diária = mercado com medo
+                bear_signals.append(f"Vol implícita alta ({realized_vol_pct:.1f}%/dia)")
+
+        # ── ADX para bull/chop ────────────────────────────────────────────────
+        adx_val = 20.0
         if candles_1h and len(candles_1h) >= 30:
             df1h = _pd.DataFrame(candles_1h, columns=["start","low","high","open","close","volume"])
-            adx_val = calc_adx(df1h.rename(columns={"low":"low","high":"high","close":"close"}))
-        else:
-            adx_val = 20.0
+            adx_val = calc_adx(df1h)
 
+        # ── Determinar regime final ────────────────────────────────────────────
+        n_bear = len(bear_signals)
+
+        if price_below_ema200:
+            return "bear", bear_signals          # hard bear — estrutural
+
+        # Chop com 3+ sinais → reclassifica como bear (pressão acumulada)
         if adx_val < 20:
-            return "chop"
+            if n_bear >= 3:
+                bear_signals.append("Reclassificado: chop→bear (3+ sinais)")
+                return "bear", bear_signals
+            return "chop", bear_signals
+
+        # Bull com 3+ sinais → downgrade para chop
         if price > e200 and e50 > e200:
-            return "bull"
-        return "chop"
-    except Exception:
-        return "chop"
+            if n_bear >= 3:
+                bear_signals.append("Downgrade: bull→chop (3+ sinais bear)")
+                return "chop", bear_signals
+            return "bull", bear_signals
+
+        return "chop", bear_signals
+
+    except Exception as _ex:
+        logger.warning(f"[Regime] Erro na detecção: {_ex}")
+        return "chop", []
 
 
 def _get_fee_rates() -> tuple:
@@ -384,7 +452,7 @@ engine = PaperTradingEngine(initial_balance_usd=10000.0)
 all_strategies = [
     DonchianBreakout(period=20, rsi_min=45.0, vol_mult=1.0,
                      adx_min=20.0, obv_lookback=5,
-                     rvol_period=20, rvol_min=1.5),  # RVOL >= 1.5x média
+                     rvol_period=20, rvol_lookback=3),  # RVOL crescente 3 candles
     EMAPullback(fast=9, mid=21, slow=50, touch_tolerance_pct=0.5,
                 slope_bars=5, vol_pullback_mult=1.2, vol_breakout_mult=1.0),
     MACDMomentum(fast=12, slow=26, signal=9, ema_filter=12, rsi_max=75.0),
@@ -670,6 +738,7 @@ state = {
     "kpis":             _calculate_kpis(),  # Métricas de performance
     # ── Campos de controle — inicializados para evitar undefined no frontend ──
     "market_mode":      "chop",             # bull / chop / bear
+    "bear_signals":     [],                 # lista de sinais bear ativos
     "scores":           {p: 0.0 for p in PAIRS},
     "trades_today":     0,
     "max_daily_trades": MAX_DAILY_TRADES,
@@ -959,23 +1028,9 @@ async def trading_loop():
         current_sl_pct = _dynamic_sl(fg_value)
         state["sl_objective"] = {"min": SL_MIN, "max": SL_MAX, "current": current_sl_pct}
 
-        # ── Market Regime Engine — detecta bull/chop/bear via BTC ────
-        try:
-            _btc_1h = _candle_cache.get(f"BTC-USD:{CANDLE_1H}", {}).get("data", [])
-            _btc_6h = _candle_cache.get(f"BTC-USD:{CANDLE_6H}", {}).get("data", [])
-            market_mode = _detect_market_regime(_btc_1h, _btc_6h)
-        except Exception:
-            market_mode = "chop"
-        state["market_mode"] = market_mode
-
-        # TP dinâmico pelo regime (substitui _dynamic_tp simples)
-        current_tp_pct = _dynamic_tp_by_regime(market_mode, fg_value)
-        state["tp_objective"] = {"min": 5.0, "max": 18.0, "current": current_tp_pct,
-                                 "regime": market_mode}
-
         _dynamic_pcts = []   # acumula dynamic_pct de cada par para média no final
 
-        # ── Market Breadth — calculado 1× por ciclo com candles do cache ─────
+        # ── Market Breadth — calculado ANTES do regime (alimenta bear signals) ─
         try:
             _breadth_candles = {
                 p: _candle_cache.get(f"{p}:{CANDLE_1H}", {}).get("data", [])
@@ -994,6 +1049,23 @@ async def trading_loop():
             "oi_expansion_btc": None, "oi_expansion_avg": None,
             "score": None, "label": "N/A", "size_multiplier": 1.0,
         }
+
+        # ── Market Regime Engine — bull/chop/bear com 4 sinais adicionais ─────
+        try:
+            _btc_1h = _candle_cache.get(f"BTC-USD:{CANDLE_1H}", {}).get("data", [])
+            _btc_6h = _candle_cache.get(f"BTC-USD:{CANDLE_6H}", {}).get("data", [])
+            market_mode, _bear_signals = _detect_market_regime(_btc_1h, _btc_6h, _breadth)
+        except Exception:
+            market_mode, _bear_signals = "chop", []
+        state["market_mode"]    = market_mode
+        state["bear_signals"]   = _bear_signals
+        if _bear_signals:
+            logger.info(f"[Regime] {market_mode.upper()} | bear signals: {_bear_signals}")
+
+        # TP dinâmico pelo regime (substitui _dynamic_tp simples)
+        current_tp_pct = _dynamic_tp_by_regime(market_mode, fg_value)
+        state["tp_objective"] = {"min": 5.0, "max": 18.0, "current": current_tp_pct,
+                                 "regime": market_mode}
 
         for pair in PAIRS:
             symbol = pair.split("-")[0]
