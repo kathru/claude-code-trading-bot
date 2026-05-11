@@ -38,14 +38,11 @@ CACHE_TTL = {
     "oi":         900,   # Open Interest → 15 min
 }
 
-# Símbolos no Binance Futures para cada par
+# Símbolos no Binance Futures para cada par (apenas os ativos atualmente monitorados)
 BINANCE_SYMBOL = {
     "BTC-USD": "BTCUSDT",
     "ETH-USD": "ETHUSDT",
     "SOL-USD": "SOLUSDT",
-    "AVAX-USD": "AVAXUSDT",
-    "LINK-USD": "LINKUSDT",
-    "RENDER-USD": "RENDERUSDT",
 }
 
 
@@ -99,9 +96,11 @@ class MarketBreadthSnapshot:
 
     def to_dict(self) -> dict:
         return {
-            "alts_above_ema50_pct": round(self.alts_above_ema50_pct, 3),
+            # pairs_above_ema50_pct: enviado como % real (0–100) para o frontend
+            "alts_above_ema50_pct": round(self.alts_above_ema50_pct * 100, 1),
             "alts_above_ema50_n":   self.alts_above_ema50_n,
-            "btc_dominance":        round(self.btc_dominance, 4),
+            # btc_dominance: enviado como % real (0–100), ex: 60.5 para 60.5%
+            "btc_dominance":        round(self.btc_dominance * 100, 1),
             "funding_rate_btc":     round(self.funding_rate_btc, 6),
             "funding_rate_avg":     round(self.funding_rate_avg, 6),
             "oi_expansion_btc":     round(self.oi_expansion_btc, 4),

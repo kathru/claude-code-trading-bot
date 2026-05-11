@@ -164,7 +164,7 @@
       </div>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div class="bg-gray-800 rounded-lg p-3 flex flex-col items-center">
-          <span class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Alts &gt; EMA50</span>
+          <span class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Pairs &gt; EMA50</span>
           <span id="breadth-alts-ema50" class="text-lg font-bold text-white">—</span>
         </div>
         <div class="bg-gray-800 rounded-lg p-3 flex flex-col items-center">
@@ -188,7 +188,7 @@
           <span class="mx-1">·</span>
           <span class="text-yellow-400 font-semibold">40-70% REDUZIDO (×0.7)</span>
           <span class="mx-1">·</span>
-          <span class="text-red-400 font-semibold">&lt;40% BLOQUEADO ALTS</span>
+          <span class="text-red-400 font-semibold">&lt;40% BLOQUEADO SOL</span>
         </span>
       </div>
     </div>
@@ -958,12 +958,14 @@
         mbLabelEl.className = `text-xs font-bold px-2 py-0.5 rounded ${lCls}`;
         mbLabelEl.textContent = mbLabel;
       }
+      // alts_above_ema50_pct agora chega como % real (0-100) do backend
       const altsPct = mb.alts_above_ema50_pct;
       const altsEl  = document.getElementById('breadth-alts-ema50');
       if (altsEl) {
         altsEl.textContent = altsPct != null ? Math.round(altsPct) + '%' : '—';
         altsEl.style.color = altsPct == null ? '#9ca3af' : altsPct >= 60 ? '#4ade80' : altsPct >= 40 ? '#fb923c' : '#f87171';
       }
+      // btc_dominance agora chega como % real (0-100) do backend, ex: 60.5
       const domEl = document.getElementById('breadth-btc-dom');
       if (domEl) {
         const dom = mb.btc_dominance;
