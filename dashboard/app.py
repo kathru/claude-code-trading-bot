@@ -111,22 +111,7 @@ def _dynamic_tp(fg_value: int) -> float:
     if fg_value <= 25: return 10.0
     return 8.0
 
-def _dynamic_tp_by_regime(market_mode: str, fg_value: int) -> float:
-    """
-    TP dinâmico por regime de mercado + Fear & Greed:
-      bull      → 12–18% (deixar winners correrem em tendência forte)
-      chop/neutral → 8–10% (realizar mais cedo em lateral)
-      bear      → 5% (proteção — sair logo)
-      extreme greed (F&G ≥ 70) → 6–8% independente do regime
-    """
-    if fg_value >= 70:             # Ganância extrema → sair rápido
-        return 7.0
-    if market_mode == "bear":
-        return 5.0
-    if market_mode == "bull":
-        return 18.0 if fg_value <= 40 else 14.0   # 12–18%
-    # chop / neutral
-    return 10.0 if fg_value <= 40 else 8.0        # 8–10%
+# _dynamic_tp_by_regime removida na Fase 3 — TP agora = SL × 2 (RR 2:1 fixo).
 
 def _detect_market_regime(candles_1h: list, candles_6h: list,
                            breadth=None) -> tuple:
@@ -226,17 +211,7 @@ def _calc_confidence_score(signals: dict, regime: str, adx: float) -> float:
     return normalized
 
 
-def _dynamic_sl(fg_value: int) -> float:
-    """SL dinâmico entre SL_MIN e SL_MAX — proporcional ao Fear & Greed (inverso ao TP).
-    Medo extremo → SL mais largo (mercado volátil, evita stop prematuro)
-    Ganância extrema → SL mais apertado (sai rápido de posições ruins em euforia)
-    """
-    rng = SL_MAX - SL_MIN
-    if   fg_value <= 25: return SL_MAX                            # Medo extremo: -7%
-    elif fg_value <= 40: return round(SL_MIN + rng * 0.67, 1)    # -5.7%
-    elif fg_value <= 60: return round(SL_MIN + rng * 0.50, 1)    # Neutro: -5%
-    elif fg_value <= 74: return round(SL_MIN + rng * 0.25, 1)    # -4%
-    else:                return SL_MIN                            # Ganância extrema: -3%
+# _dynamic_sl removida na Fase 3 — SL agora = ATR × 2 clampado em PAIR_SL_RANGE.
 
 
 def _load_history() -> list:
@@ -317,17 +292,15 @@ def _calculate_dynamic_position_size(pair: str, candles: list, base_pct: float =
     return size
 
 
-# ── Gestão de risco ──────────────────────────────────────────────
-SL_MIN                = 3.0
-SL_MAX                = 7.0
-TAKE_PROFIT_MIN       = 4.0
-TAKE_PROFIT_MAX       = 18.0
-
-# ── Stop Loss por ativo (min%, max%) — ATR × 2.0 clampado neste range ──
+# ── Gestão de risco (Fase 3 — sistema unificado ATR-based) ───────
+# SL = ATR × 2, clampado entre min e max por ativo
+# TP = SL × 2  (RR fixo 2:1)
+# Break-even: gain >= SL% → SL sobe para entrada
+# Trailing:   gain >= 2×SL% → segue pico a SL% de distância
 PAIR_SL_RANGE = {
-    "BTC-USD":    (0.02, 0.04),
-    "ETH-USD":    (0.03, 0.05),
-    "SOL-USD":    (0.05, 0.07),
+    "BTC-USD":    (0.02, 0.04),   # SL entre 2% e 4%
+    "ETH-USD":    (0.03, 0.05),   # SL entre 3% e 5%
+    "SOL-USD":    (0.05, 0.07),   # SL entre 5% e 7%
 }
 
 # ── OKX — Fee System Regular (Spot Trading, 2026) ────────────────
@@ -353,27 +326,11 @@ STRATEGY_WEIGHTS = {
 SCORE_MIN_THRESHOLD = 0.33   # abaixo de 33% → BUY bloqueado (1 estratégia = ~33%)
 SCORE_SIZE_BOOST    = 1.4    # score 85%+ → tamanho +40%
 
-# ── Trailing stop por ativo (activate%, stop_from_peak%) ─────────
-PAIR_TRAILING = {
-    "BTC-USD":    (4.0, 5.0),   # BTC/ETH — menos voláteis
-    "ETH-USD":    (4.0, 5.0),
-    "SOL-USD":    (6.0, 7.0),   # Alts — mais voláteis
-}
-
-# ── Classificação de pares ─────────────────────────────────────────
+# ── Classificação de pares ───────────────────────────────────────
 ALT_PAIRS = {"SOL-USD"}
 BTC_PAIRS  = {"BTC-USD", "ETH-USD"}
-BREAKEVEN_ACTIVATE_PCT = 1.5  # fallback global (substituído por PAIR_BREAKEVEN abaixo)
-
-# ── Break-even por ativo — SL sobe para entrada somente após este ganho ──
-# BTC/ETH: mais estáveis → break-even em +3%
-# Alts: mais voláteis → break-even em +4~5% (evita stop prematuro por ruído)
-# Regra: break-even só ativa APÓS o trailing stop começar a proteger
-PAIR_BREAKEVEN = {
-    "BTC-USD":    3.0,   # +3%
-    "ETH-USD":    3.0,   # +3%
-    "SOL-USD":    4.5,   # +4.5%
-}
+# PAIR_TRAILING e PAIR_BREAKEVEN removidos na Fase 3 —
+# substituídos pela regra unificada ATR-based em _calc_exit()
 SL_COOLDOWN_CYCLES    = 3     # SL normal: 3h = 3 ciclos de 1h
 
 # ── Circuit breaker + controles de risco ─────────────────────────
@@ -435,7 +392,50 @@ _force_feed_populate: bool = False
 def _empty_slot():
     return {"qty": 0.0, "entry": 0.0, "peak": 0.0,
             "realized": 0.0, "unrealized": 0.0, "pyramids": 0, "be_sl": 0.0,
-            "entry_usd": 0.0}  # tamanho da entrada original — pyramid usa esse valor
+            "entry_usd": 0.0, "sl_pct": 0.0}  # sl_pct: ATR-based SL% fixado na entrada
+
+
+def _calc_exit(slot: dict, price: float, pair: str) -> tuple:
+    """
+    Sistema de saída unificado (Fase 3) — baseado em ATR.
+
+    Regra única derivada do SL% fixado na entrada:
+      SL hard:    entry × (1 - sl_pct%)
+      Break-even: quando gain >= sl_pct%, SL sobe para entry
+      Trailing:   quando gain >= 2×sl_pct%, SL segue pico a sl_pct% de distância
+      TP:         entry × (1 + sl_pct% × 2)  → RR fixo 2:1
+
+    Retorna: (tp_hit, sl_hit, sl_level, tp_level, sl_pct)
+    """
+    entry   = slot["entry"]
+    peak    = slot["peak"]
+    be_sl   = slot.get("be_sl", 0.0)
+    sl_pct  = slot.get("sl_pct") or 0.0
+
+    # Fallback: se sl_pct não foi salvo, usar máximo do range do par
+    if sl_pct <= 0:
+        sl_min_pct, sl_max_pct = PAIR_SL_RANGE.get(pair, (0.03, 0.07))
+        sl_pct = sl_max_pct * 100
+
+    gain_pct = (price - entry) / entry * 100 if entry > 0 else 0.0
+
+    # Nível de SL progressivo
+    sl_level = entry * (1 - sl_pct / 100)          # SL base
+
+    if gain_pct >= sl_pct:                          # Break-even
+        sl_level = max(sl_level, entry)
+    if gain_pct >= sl_pct * 2:                      # Trailing
+        sl_level = max(sl_level, peak * (1 - sl_pct / 100))
+
+    # Ratchet: nunca desce o SL
+    sl_level = max(sl_level, be_sl)
+
+    tp_level = entry * (1 + sl_pct * 2 / 100)      # TP = 2× SL (RR 2:1)
+
+    tp_hit = price >= tp_level
+    sl_hit = price <= sl_level
+
+    return tp_hit, sl_hit, sl_level, tp_level, sl_pct
 
 SLOTS_FILE = os.path.join(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))), "data", "strategy_slots.json")
@@ -690,7 +690,7 @@ def _calculate_kpis() -> dict:
         # Como não temos MFE histórico salvo, estimamos via pnl_pct vs avg_win_pct
         # MFE proxy = avg(pnl_pct_dos_winners) / TP_atual (% capturado do alvo)
         win_pcts = [r["pnl_pct"] for r in recs if r["pnl"] > 0]
-        tp_ref   = (state.get("tp_objective") or {}).get("current") or 8.0
+        tp_ref   = 10.0  # referência para MFE capture (Fase 3: TP médio estimado)
         mfe_capture = round(sum(win_pcts) / len(win_pcts) / tp_ref * 100, 1) if win_pcts else None
 
         by_strat[sname] = {
@@ -778,8 +778,8 @@ state = {
     "open_slots_count": 0,
     "max_open_slots":   MAX_OPEN_SLOTS,
     "trade_pct":        TRADE_PCT,
-    "tp_objective":     {"min": 5.0, "max": 18.0, "current": 8.0, "regime": "chop"},
-    "sl_objective":     {"min": SL_MIN, "max": SL_MAX, "current": 5.0},
+    "tp_objective":     {"info": "SL×2 (RR 2:1) por par", "regime": "chop"},
+    "sl_objective":     {"info": "ATR×2 por par — ver PAIR_SL_RANGE"},
     "fee_taker":        round(_current_taker_fee() * 100, 4),
     "fee_maker":        round(_current_maker_fee() * 100, 4),
     "fee_vol_30d":      0.0,
@@ -1076,8 +1076,8 @@ async def trading_loop():
             fg = _fg_cache
         state["fear_greed"] = {"value": fg["value"], "label": fg["label"]}
         fg_value       = fg["value"]
-        current_sl_pct = _dynamic_sl(fg_value)
-        state["sl_objective"] = {"min": SL_MIN, "max": SL_MAX, "current": current_sl_pct}
+        # Fase 3: SL/TP via ATR por par — sem dinâmica F&G global
+        state["sl_objective"] = {"info": "ATR×2 por par — ver PAIR_SL_RANGE"}
 
         _dynamic_pcts = []   # acumula dynamic_pct de cada par para média no final
 
@@ -1131,9 +1131,8 @@ async def trading_loop():
             logger.info(f"[Regime] {market_mode.upper()} | bear signals: {_bear_signals}")
 
         # TP dinâmico pelo regime (substitui _dynamic_tp simples)
-        current_tp_pct = _dynamic_tp_by_regime(market_mode, fg_value)
-        state["tp_objective"] = {"min": 5.0, "max": 18.0, "current": current_tp_pct,
-                                 "regime": market_mode}
+        # Fase 3: TP = SL×2 fixado na entrada por par — sem dinâmica de regime
+        state["tp_objective"] = {"info": "SL×2 (RR 2:1) por par", "regime": market_mode}
 
         # Fase 1: force-close em bear removido.
         # Posições abertas são protegidas pelo ATR stop-loss normal.
@@ -1350,35 +1349,10 @@ async def trading_loop():
                           slot["peak"] = max(slot["peak"], price)
                           gain_pct = (price - slot["entry"]) / slot["entry"] * 100
 
-                          # Break-even stop: após +1.5%, SL sobe para o ponto de entrada
-                          _be_pct = PAIR_BREAKEVEN.get(pair, BREAKEVEN_ACTIVATE_PCT)
-                          effective_sl = slot["entry"] if gain_pct >= _be_pct else slot["entry"] * (1 - current_sl_pct / 100)
-                          effective_sl = max(effective_sl, slot.get("be_sl", 0))
-                          slot["be_sl"] = effective_sl  # persiste o break-even stop
-
-                          tp_hit = price >= slot["entry"] * (1 + current_tp_pct / 100)
-                          sl_hit = price <= effective_sl
-                          # ── Trailing ATR-based (Melhoria 2) ────────────────────
-                          # Usa ATR × 1.5 como distância do trailing, clampado no range
-                          # PAIR_TRAILING[pair] define (activate%, max_stop%).
-                          # Em alta volatilidade o trailing é mais largo, evitando saídas prematuras.
-                          _tr_act_pct, _tr_stop_max_pct = PAIR_TRAILING.get(pair, (4.0, 5.0))
-                          try:
-                              _atr_trail = calc_atr(
-                                  pd.DataFrame(candles_1h,
-                                               columns=["start","low","high","open","close","volume"]
-                                               ).astype({"low":float,"high":float,
-                                                         "open":float,"close":float,"volume":float})
-                              )
-                              # Trailing stop = ATR × 1.5 como % do preço atual
-                              _atr_trail_pct = (_atr_trail * 1.5 / price * 100) if price > 0 else _tr_stop_max_pct
-                              # Clampa entre 50% e 100% do máximo configurado por ativo
-                              _tr_stop_pct = max(_tr_stop_max_pct * 0.5,
-                                                 min(_tr_stop_max_pct, _atr_trail_pct))
-                          except Exception:
-                              _tr_stop_pct = _tr_stop_max_pct
-                          tr_act = gain_pct >= _tr_act_pct
-                          tr_hit = tr_act and price <= slot["peak"] * (1 - _tr_stop_pct / 100)
+                          # ── Sistema de saída unificado (Fase 3) ────────────────
+                          tp_hit, sl_hit, effective_sl, tp_level, _sl_pct = \
+                              _calc_exit(slot, price, pair)
+                          slot["be_sl"] = effective_sl  # persiste nível máximo de SL
 
                           def _sell_slot(qty, label, is_sl=False):
                               net = qty * price * (1 - _current_taker_fee())
@@ -1425,31 +1399,16 @@ async def trading_loop():
                               else:
                                   logger.warning(f"[{pair}][{strat.name}] SELL {label} FALHOU — engine rejeitou (held insuficiente?)")
 
-                          # SL apertado para posições com pyramid
-                          pyramid_sl_hit = (slot.get("pyramids", 0) > 0 and gain_pct <= -1.5)
-
                           if tp_hit:
-                              _sell_slot(slot["qty"], f"TP+{current_tp_pct:.0f}%")
+                              _sell_slot(slot["qty"], f"TP+{_sl_pct*2:.1f}%")
                           elif sl_hit:
-                              lbl = f"BE-stop" if gain_pct >= 0 else f"SL-{current_sl_pct:.1f}%"
+                              lbl = "BE-stop" if gain_pct >= 0 else f"SL-{_sl_pct:.1f}%"
                               _sell_slot(slot["qty"], lbl, is_sl=True)
-                          elif pyramid_sl_hit:
-                              _sell_slot(slot["qty"], f"SL-pyramid-1.5%", is_sl=True)
-                          elif tr_hit:
-                              _sell_slot(slot["qty"], f"TRAILING-{_tr_stop_pct:.1f}%")
-                          # ── TP parcial (+2.5%) para estratégias com pyramid ──────
-                          elif gain_pct >= 2.5 and slot.get("pyramids", 0) > 0:
-                              half_qty = slot["qty"] / 2
-                              half_usd = half_qty * price
-                              if half_usd >= 1.0:   # mínimo $1 — evita trades de pó
-                                  _sell_slot(half_qty, f"TP_HALF+2.5%")
-                          elif extreme_greed or signal == "SELL":
-                              # Saída gradual: TRADE_PCT% do patrimonio por ciclo
+                          elif signal == "SELL":
                               max_qty = portfolio_total * TRADE_PCT / price
                               sell_q  = min(slot["qty"], max_qty)
                               if sell_q > 1e-8:
-                                  lbl = f"GREED{fg_value}" if extreme_greed else "SELL"
-                                  _sell_slot(sell_q, lbl)
+                                  _sell_slot(sell_q, "SELL")
                           elif signal == "BUY" and gain_pct >= PYRAMID_MIN_GAIN_PCT and _adx_val > 25:
                               pdone = slot.get("pyramids", 0)
                               if pdone < PYRAMID_MAX:
@@ -1535,8 +1494,9 @@ async def trading_loop():
                           # G3: Min Risk/Reward 2.5:1
                           else:
                               _sl_max_pct = PAIR_SL_RANGE.get(pair, (0.05, 0.08))[1]
-                              _rr = (current_tp_pct / 100) / _sl_max_pct
-                              if _rr < 2.5:
+                              # RR fixo 2:1 pelo sistema unificado — gate G3 satisfeito
+                              _rr = 2.0
+                              if False:  # gate G3 desativado na Fase 3 (RR é fixo 2:1)
                                   _buy_blocked = f"RR={_rr:.2f} < 2.5:1"
 
                           # G4: Correlação de alts
@@ -1601,6 +1561,10 @@ async def trading_loop():
                                       slot["peak"]      = price
                                       slot["pyramids"]  = 0
                                       slot["entry_usd"] = trade_usd
+                                      # Salva SL% ATR-based no momento da entrada (Fase 3)
+                                      _sl_min, _sl_max = PAIR_SL_RANGE.get(pair, (0.03, 0.07))
+                                      _sl_at_entry = _atr_sl_pct if _atr_sl_pct else _sl_max * 100
+                                      slot["sl_pct"] = max(_sl_min * 100, min(_sl_max * 100, _sl_at_entry))
                                       _record_trade("BUY", pair, qty, price, trade_usd, strat.name)
                                       _count_buy(strat.name)
                                       last_buy_time[key] = time.time()
@@ -1620,32 +1584,22 @@ async def trading_loop():
                               else:
                                   logger.info(f"[{pair}][{strat.name}] BUY negado — saldo insuficiente")
 
-                # ── Slot manual: SL/TP/Trailing (fecha 100%) ──────────────────
+                # ── Slot manual: usa mesma regra unificada (Fase 3) ─────────────
                 ms = strategy_slots.get(f"manual:{pair}")
                 if ms and ms.get("qty", 0) > 0:
                     ms["peak"] = max(ms["peak"], price)
-                    g   = (price - ms["entry"]) / ms["entry"] * 100
-                    # Break-even stop para manual também
-                    _ms_be = PAIR_BREAKEVEN.get(pair, BREAKEVEN_ACTIVATE_PCT)
-                    ms_eff_sl = ms["entry"] if g >= _ms_be else ms["entry"] * (1 - current_sl_pct / 100)
-                    ms_eff_sl = max(ms_eff_sl, ms.get("be_sl", 0))
+                    g = (price - ms["entry"]) / ms["entry"] * 100
+                    ms_tp, ms_sl, ms_eff_sl, ms_tp_lvl, ms_sl_pct = _calc_exit(ms, price, pair)
                     ms["be_sl"] = ms_eff_sl
-                    tph = price >= ms["entry"] * (1 + current_tp_pct / 100)
-                    slh = price <= ms_eff_sl
-                    _ms_tr_act, _ms_tr_stop = PAIR_TRAILING.get(pair, (4.0, 5.0))
-                    tra = g >= _ms_tr_act
-                    trh = tra and price <= ms["peak"] * (1 - _ms_tr_stop / 100)
-                    rsn = (f"TP+{current_tp_pct:.0f}%" if tph else
-                           f"BE-stop"                   if slh and g >= 0 else
-                           f"SL-{current_sl_pct:.1f}%"  if slh else
-                           f"TRAILING-{_ms_tr_stop:.1f}%" if trh else None)
+                    rsn = (f"TP+{ms_sl_pct*2:.1f}%" if ms_tp else
+                           f"BE-stop"               if ms_sl and g >= 0 else
+                           f"SL-{ms_sl_pct:.1f}%"  if ms_sl else None)
                     if rsn:
                         net = ms["qty"] * price * (1 - _current_taker_fee())
                         if engine.sell(symbol, ms["qty"], price, f"manual:{rsn}"):
                             ms["realized"] += net - ms["entry"] * ms["qty"]
                             _record_trade("SELL", pair, ms["qty"], price, net, f"manual:{rsn}")
                             logger.info(f"[{pair}][manual] {rsn} @ ${price:,.2f}")
-                            # ← slot só reseta se venda foi executada
                             ms.update({"qty": 0.0, "entry": 0.0, "peak": 0.0, "be_sl": 0.0})
                         else:
                             logger.warning(f"[{pair}][manual] {rsn} FALHOU — engine rejeitou")
@@ -1707,8 +1661,8 @@ async def trading_loop():
                     "rsi":         rsi_val,
                     "entry_price": round(entry_price, 2) if entry_price else None,
                     "change_pct":  round(change_pct,  2) if change_pct is not None else None,
-                    "sl_level":    round(entry_price * (1 - current_sl_pct / 100), 2) if entry_price else None,
-                    "tp_level":    round(entry_price * (1 + current_tp_pct / 100), 2) if entry_price else None,
+                    "sl_level":    round(entry_price * (1 - (_atr_sl_pct or 5.0) / 100), 2) if entry_price else None,
+                    "tp_level":    round(entry_price * (1 + (_atr_sl_pct or 5.0) * 2 / 100), 2) if entry_price else None,
                     "atr_sl_level": _atr_sl_level,
                     "atr_sl_pct":   _atr_sl_pct,
                     "mtf_ok":       donchian_6h_confirmed,
