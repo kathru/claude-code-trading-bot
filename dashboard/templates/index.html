@@ -601,7 +601,7 @@
         <span class="text-xs text-gray-600 uppercase tracking-wider">Regime de Mercado</span>
         <span id="regime-${c.sym}" class="regime-neutral text-[10px] font-bold px-2.5 py-0.5 rounded-full">—</span>
       </div>
-      <div class="grid grid-cols-3 gap-1 mb-2">
+      <div class="grid grid-cols-4 gap-1 mb-2">
         ${STRATEGIES.map(s => `
         <div id="slot-${c.sym}-${s.id}" class="signal-hold rounded-lg px-1 py-1.5 text-center text-[9px]">
           <p class="opacity-60 mb-0.5">${s.icon} ${s.id}</p>
@@ -1359,6 +1359,7 @@
         { name: 'Donchian Breakout', icon: '🚀', short: 'Donchian' },
         { name: 'EMA Pullback',      icon: '📋', short: 'EMA PB'  },
         { name: 'MACD Momentum',     icon: '⚡', short: 'MACD'    },
+        { name: 'BB Reversion',      icon: '↩️', short: 'BB Rev'  },
       ];
 
       stTable.innerHTML = stratDefs.map(sd => {
