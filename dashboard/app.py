@@ -458,6 +458,9 @@ trend_filter = TrendFilter(period=50)   # EMA50 1H — alinhado com EMA Pullback
 sl_cooldowns: dict = {}   # {f"{strat}:{pair}": cycles_remaining}
 sl_history:   dict = {}   # {f"{strat}:{pair}": [timestamps dos SLs]}
 
+# Sinaliza ao trading_loop para rodar o próximo ciclo imediatamente (sem esperar CYCLE_INTERVAL)
+_immediate_cycle = asyncio.Event()
+
 # ── Slots independentes: 4 estratégias × 3 pares + 3 manuais ────
 def _empty_slot():
     return {"qty": 0.0, "entry": 0.0, "peak": 0.0,
@@ -970,6 +973,10 @@ async def reset_portfolio(token: str = "", brl: float = 0.0):
 
     _update_portfolio_state()
     await broadcast(state)
+
+    # Dispara ciclo imediato para popular o dashboard sem esperar 1h
+    _immediate_cycle.set()
+    logger.info("[Reset] Ciclo imediato agendado — dashboard será populado em instantes")
 
     summary = {
         "ok":        True,
@@ -1772,7 +1779,14 @@ async def trading_loop():
         } if _nxt else None
 
         await broadcast(state)
-        await asyncio.sleep(CYCLE_INTERVAL)
+        # Sleep interrompível: reset dispara _immediate_cycle e o próximo ciclo
+        # começa imediatamente em vez de esperar CYCLE_INTERVAL completo.
+        try:
+            await asyncio.wait_for(_immediate_cycle.wait(), timeout=CYCLE_INTERVAL)
+            _immediate_cycle.clear()
+            logger.info("[Loop] Ciclo imediato solicitado — executando agora")
+        except asyncio.TimeoutError:
+            pass  # sleep normal completado
 
 
 @app.on_event("startup")
