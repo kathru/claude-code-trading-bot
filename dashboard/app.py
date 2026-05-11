@@ -362,7 +362,7 @@ SL_COOLDOWN_CYCLES    = 3     # SL normal: 3h = 3 ciclos de 1h
 # ── Circuit breaker + controles de risco ─────────────────────────
 MAX_DAILY_TRADES      = 10    # máximo de trades por dia (BUY+SELL)
 MAX_OPEN_SLOTS        = 4     # máximo de slots abertos simultaneamente
-BUY_COOLDOWN_SECONDS  = 3600  # 1h entre BUYs no mesmo par/estratégia
+BUY_COOLDOWN_SECONDS  = 10800  # 3h entre BUYs no mesmo par/estratégia
 _daily_trade_count: dict = {}  # {"YYYY-MM-DD": count}
 last_buy_time:      dict = {}  # {f"{strat}:{pair}": timestamp}
 
@@ -1333,7 +1333,7 @@ async def trading_loop():
 
                           # G0c: Cooldown de 1h entre BUYs
                           elif time.time() - last_buy_time.get(key, 0) < BUY_COOLDOWN_SECONDS:
-                              _buy_blocked = f"cooldown 1h ativo"
+                              _buy_blocked = f"cooldown 3h ativo"
 
                           # G1: Bear market bloqueia TODOS os BUYs
                           elif market_mode == "bear":
