@@ -392,7 +392,7 @@ STRAT_CANDLES = {
 }
 
 # Guard de risco global — só dispara em crashes REAIS (>25% vol = mercado caindo)
-vol_guard    = VolatilityGuard(threshold_pct=25.0, consecutive_days=3)  # 25% — permite volatilidade normal de crypto
+vol_guard    = VolatilityGuard(lookback=24, block_std=1.0, sell_std=2.0)  # 1H candles: BLOCK>1σ, SELL>2σ
 trend_filter = TrendFilter(period=50)   # EMA50 1H — alinhado com EMA Pullback e MACD Momentum
 
 # ── Cooldown anti-whipsaw após SL (por slot) ─────────────────────
@@ -1223,8 +1223,8 @@ async def trading_loop():
                         trend = "HOLD"
                 except Exception:
                     trend = trend_filter.analyze(df_1h_trend)  # fallback
-                df_1d      = vol_guard.candles_to_df(candles_1d)
-                vol_signal = vol_guard.analyze(df_1d)
+                df_1h_vg   = vol_guard.candles_to_df(candles_1h)
+                vol_signal = vol_guard.analyze(df_1h_vg)
                 pair_signals = {"Trend": trend, "Vol Guard": vol_signal}
                 # Defaults caso vol_guard dispare e o bloco else seja pulado
                 pair_score           = 0.0
@@ -1287,7 +1287,8 @@ async def trading_loop():
                         state["feed"] = state["feed"][:100]
                         del pending_orders[_pk]
 
-                # ── Volatilidade extrema: fecha posição de consenso e PULA ciclo ──
+                # ── Volatilidade: BLOCK (1σ) bloqueia entradas; SELL (2σ) fecha posições ──
+                _vol_buy_blocked = vol_signal in ("SELL", "BLOCK")
                 if vol_signal == "SELL":
                     # vol_guard: reduz 5%/ciclo em cada slot aberto deste par
                     max_usd = portfolio_total * TRADE_PCT
@@ -1476,6 +1477,10 @@ async def trading_loop():
                       elif signal == "BUY" and not extreme_greed:
                           # ── Gates de qualidade — avaliados em sequência ──────────
                           _buy_blocked = None
+
+                          # G-Vol: VolatilityGuard BLOCK (1σ) — spread/volatilidade elevada
+                          if _vol_buy_blocked:
+                              _buy_blocked = f"VolGuard: volatilidade {'extrema (SELL)' if vol_signal == 'SELL' else 'elevada (BLOCK)'} — entradas bloqueadas"
 
                           # G-0.5: Market Breadth — apenas reduz size (nunca bloqueia hard)
                           # _breadth_mult já aplica 0.5/0.7/1.0 na execução abaixo.

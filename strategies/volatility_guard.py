@@ -4,29 +4,76 @@ from .base import BaseStrategy
 
 class VolatilityGuard(BaseStrategy):
     """
-    Monitor de volatilidade — candles diários (ONE_DAY).
-    Se a volatilidade diária superar 8% por 3 dias consecutivos,
-    sinaliza SELL para reduzir exposição e mover para estáveis.
+    Monitor de volatilidade e spread intradiário — candles 1H.
 
-    SELL → 3+ dias consecutivos com variação > threshold (padrão 8%).
-    HOLD → volatilidade normal.
+    Usa desvio padrão histórico em vez de threshold fixo:
+      range_pct = (high - low) / close  →  proxy de spread intrabar
+
+    Dois níveis de ação:
+      BLOCK  → range_pct > mean + 1σ  (volatilidade elevada)
+               Bloqueia novos BUYs — spread amplo aumenta custo efetivo
+               e sinaliza instabilidade que reduz probabilidade de fill.
+
+      SELL   → range_pct > mean + 2σ  (volatilidade extrema)
+               Fecha posições abertas — risco de liquidação e slippage
+               intenso justificam saída preventiva.
+
+      HOLD   → volatilidade dentro do normal histórico.
+
+    Vantagem sobre threshold fixo (era 25%):
+      Auto-calibrado por ativo: BTC tolera menos range que SOL.
+      Adapta ao regime atual: períodos calmos têm threshold menor,
+      períodos agitados permitem mais margem sem disparar falso alarme.
     """
 
-    def __init__(self, threshold_pct: float = 8.0, consecutive_days: int = 3):
+    def __init__(self, lookback: int = 24, block_std: float = 1.0,
+                 sell_std: float = 2.0):
+        """
+        lookback  : janela histórica em candles 1H (24 = últimas 24h)
+        block_std : múltiplo de σ para bloquear entradas (padrão 1σ)
+        sell_std  : múltiplo de σ para fechar posições (padrão 2σ)
+        """
         super().__init__("Vol Guard")
-        self.threshold   = threshold_pct / 100
-        self.min_days    = consecutive_days
+        self.lookback   = lookback
+        self.block_std  = block_std
+        self.sell_std   = sell_std
 
     def analyze(self, df: pd.DataFrame) -> str:
-        if len(df) < self.min_days + 1:
+        min_bars = self.lookback + 5
+        if len(df) < min_bars:
             return "HOLD"
 
-        recent = df.tail(self.min_days + 1).copy()
-        recent["pct_change"] = recent["close"].pct_change().abs()
-        recent = recent.dropna()
+        df = df.copy()
+        df["high"]  = pd.to_numeric(df["high"],  errors="coerce")
+        df["low"]   = pd.to_numeric(df["low"],   errors="coerce")
+        df["close"] = pd.to_numeric(df["close"], errors="coerce")
 
-        high_vol_days = (recent["pct_change"] >= self.threshold).sum()
+        # Spread intrabar: quanto o preço oscilou dentro da vela
+        # Normalizado pelo close — comparável entre ativos e preços
+        df["range_pct"] = (df["high"] - df["low"]) / df["close"].replace(0, float("nan"))
+        df = df.dropna(subset=["range_pct"]).reset_index(drop=True)
 
-        if high_vol_days >= self.min_days:
-            return "SELL"   # reduzir posição — volatilidade extrema
+        if len(df) < self.lookback + 2:
+            return "HOLD"
+
+        # Estatísticas históricas: exclui a vela atual (usa lookback anterior)
+        hist = df["range_pct"].iloc[-(self.lookback + 1):-1]
+        mean = float(hist.mean())
+        std  = float(hist.std())
+
+        if std <= 0:
+            return "HOLD"
+
+        # Candle mais recente fechado
+        current = float(df["range_pct"].iloc[-2])
+
+        threshold_sell  = mean + self.sell_std  * std   # 2σ → extremo
+        threshold_block = mean + self.block_std * std   # 1σ → elevado
+
+        if current >= threshold_sell:
+            return "SELL"   # volatilidade extrema → fecha posições
+
+        if current >= threshold_block:
+            return "BLOCK"  # volatilidade elevada → bloqueia entradas
+
         return "HOLD"
