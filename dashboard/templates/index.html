@@ -773,11 +773,7 @@
 
     const subtitleEl = document.getElementById('strategy-panel-subtitle');
     if (subtitleEl) {
-      const tp = s.tp_objective || {};
-      const sl = s.sl_objective || {};
-      const tpStr = tp.current != null ? ` · <span style="color:#818cf8;font-weight:600">TP: ${tp.current.toFixed(1)}%</span>` : '';
-      const slStr = sl.current != null ? ` · <span style="color:#f87171;font-weight:600">SL: ${sl.current.toFixed(1)}%</span>` : ` · <span style="color:#f87171;font-weight:600">SL: 5%</span>`;
-      subtitleEl.innerHTML = `P&L em trades${tpStr}${slStr}`;
+      subtitleEl.textContent = 'P&L em trades';
     }
 
     // Usa kpis.total_trades para o total real — state['trades'] é limitado a 50 para o WebSocket
