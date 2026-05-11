@@ -461,6 +461,9 @@ sl_history:   dict = {}   # {f"{strat}:{pair}": [timestamps dos SLs]}
 # Sinaliza ao trading_loop para rodar o próximo ciclo imediatamente (sem esperar CYCLE_INTERVAL)
 _immediate_cycle = asyncio.Event()
 
+# Quando True, o próximo ciclo força feed entries para TODOS os sinais (ignora change-detection)
+_force_feed_populate: bool = False
+
 # ── Slots independentes: 4 estratégias × 3 pares + 3 manuais ────
 def _empty_slot():
     return {"qty": 0.0, "entry": 0.0, "peak": 0.0,
@@ -976,7 +979,19 @@ async def reset_portfolio(token: str = "", brl: float = 0.0):
     _update_portfolio_state()
     await broadcast(state)
 
-    # Dispara ciclo imediato para popular o dashboard sem esperar 1h
+    # Insere entrada de reset no feed imediatamente (visível antes do ciclo completar)
+    state["feed"].insert(0, {
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "cycle": state["cycle"],
+        "pair": "—", "strategy": "Sistema",
+        "signal": "HOLD", "price": 0,
+        "executed": False,
+        "note": f"Reset R$ {TOTAL_BRL_INITIAL:,.0f} · aguardando sinais...",
+    })
+
+    # Dispara ciclo imediato + flag para forçar feed population
+    global _force_feed_populate
+    _force_feed_populate = True
     _immediate_cycle.set()
     logger.info("[Reset] Ciclo imediato agendado — dashboard será populado em instantes")
 
@@ -1352,11 +1367,13 @@ async def trading_loop():
                       _adx_val = 20.0
                   pair_score = _calc_confidence_score(signals_this_cycle, market_mode, _adx_val)
 
-                  # Feed: registra mudanças de sinal com valor e percentual
+                  # Feed: registra mudanças de sinal (ou força todos no 1º ciclo pós-reset)
+                  global _force_feed_populate
                   for strat in all_strategies:
                       signal  = signals_this_cycle[strat.name]
                       sig_key = f"{pair}:{strat.name}"
-                      if signal != last_signals.get(sig_key):
+                      changed = signal != last_signals.get(sig_key)
+                      if changed or _force_feed_populate:
                           last_signals[sig_key] = signal
                           trade_usd = portfolio_total * TRADE_PCT
                           state["feed"].insert(0, {
@@ -1370,6 +1387,10 @@ async def trading_loop():
                               "note":     f"R${trade_usd*usd_brl:.0f} ({TRADE_PCT*100:.0f}% PL)",
                           })
                           state["feed"] = state["feed"][:100]
+                  # Após processar o último par, desliga o flag
+                  if pair == PAIRS[-1] and _force_feed_populate:
+                      _force_feed_populate = False
+                      logger.info("[Feed] Force-populate concluído — feed populado com sinais iniciais")
 
                   # ── PASSO 2: execução independente por estratégia ────────
                   extreme_fear  = fg_value <= FG_FEAR_MAX
