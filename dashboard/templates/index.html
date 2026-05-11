@@ -716,8 +716,11 @@
   // ─── updateState — principal função de atualização ───────────────────
   function updateState(s) {
     // Countdown sync
+    // Usa next_cycle_ts (timestamp absoluto da próxima hora cheia SP)
+    // para countdown preciso e alinhado ao relógio
+    if (s.next_cycle_ts)  _nextCycleTs  = s.next_cycle_ts;
     if (s.cycle_start_ts) _cycleStartTs = s.cycle_start_ts;
-    if (s.cycle_interval)  _cycleInterval = s.cycle_interval;
+    if (s.cycle_interval) _cycleInterval = s.cycle_interval;
     _synced = true;
 
     // USD/BRL
@@ -1944,7 +1947,7 @@
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTradeModal(); });
 
   // ─── Countdown Timer ──────────────────────────────────────────────────
-  let _cycleStartTs = 0, _cycleInterval = 180, _synced = false;
+  let _cycleStartTs = 0, _cycleInterval = 3600, _nextCycleTs = 0, _synced = false;
   let countdownInterval = null;
 
   function fmtTimer(s) {
@@ -1963,8 +1966,11 @@
         if (hdrEl)   hdrEl.textContent   = '--';
         return;
       }
-      const elapsed   = Math.floor(Date.now() / 1000) - _cycleStartTs;
-      const remaining = Math.max(0, _cycleInterval - elapsed);
+      // Usa next_cycle_ts (hora cheia SP) se disponível; fallback para start+interval
+      const nowTs     = Math.floor(Date.now() / 1000);
+      const remaining = _nextCycleTs > 0
+        ? Math.max(0, _nextCycleTs - nowTs)
+        : Math.max(0, _cycleInterval - (nowTs - _cycleStartTs));
       const executing = remaining === 0;
       if (executing) {
         const pulse = Math.floor(Date.now() / 600) % 2 === 0;

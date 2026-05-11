@@ -230,11 +230,25 @@ def _save_history(history: list):
         pass
 
 
+SP_OFFSET = -3 * 3600   # UTC-3 fixo — SP aboliu horário de verão em 2019
+
+
 def _current_cycle() -> int:
-    """Número do ciclo baseado no horário de São Paulo (UTC-3, fixo).
-    Vai de #0 (meia-noite SP) a #959 (23:58:30 SP), idêntico em todos os servidores."""
-    SP_OFFSET = -3 * 3600   # UTC-3 fixo — SP aboliu horário de verão em 2019
+    """Número da hora atual em SP (UTC-3). Vai de 0 (meia-noite SP) a 23."""
     return (int(time.time()) + SP_OFFSET) % 86400 // CYCLE_INTERVAL
+
+
+def _seconds_to_next_sp_hour() -> float:
+    """
+    Segundos até o início da próxima hora cheia em SP (UTC-3).
+    Garante que os ciclos de 1H fiquem alinhados com o relógio:
+      ex.: se são 14:47 SP → aguarda 13min até 15:00 SP.
+    Mínimo de 30s para evitar re-execução imediata no final de uma hora.
+    """
+    now_sp       = time.time() + SP_OFFSET
+    secs_in_hour = now_sp % 3600
+    wait         = 3600 - secs_in_hour
+    return wait if wait >= 30 else wait + 3600
 
 
 PAIRS = ["BTC-USD", "ETH-USD", "SOL-USD"]  # 3 pares — foco em ativos de maior liquidez
@@ -1757,15 +1771,24 @@ async def trading_loop():
             for k, v in pending_orders.items()
         }
 
+        # Expõe timestamp da próxima hora cheia SP para o countdown do frontend
+        _next_sp = _seconds_to_next_sp_hour()
+        state["next_cycle_ts"]    = int(time.time() + _next_sp)
+        state["cycle_interval"]   = CYCLE_INTERVAL   # mantido para compatibilidade JS
+
         await broadcast(state)
-        # Sleep interrompível: reset dispara _immediate_cycle e o próximo ciclo
-        # começa imediatamente em vez de esperar CYCLE_INTERVAL completo.
+
+        # Sleep alinhado ao relógio SP (UTC-3):
+        # aguarda até a próxima hora cheia em vez de dormir exatamente 3600s.
+        # Interrompível via _immediate_cycle (reset dispara execução imediata).
+        logger.info(f"[Loop] Próximo ciclo em {_next_sp:.0f}s "
+                    f"({_next_sp/60:.1f} min) — alinhado ao relógio SP")
         try:
-            await asyncio.wait_for(_immediate_cycle.wait(), timeout=CYCLE_INTERVAL)
+            await asyncio.wait_for(_immediate_cycle.wait(), timeout=_next_sp)
             _immediate_cycle.clear()
             logger.info("[Loop] Ciclo imediato solicitado — executando agora")
         except asyncio.TimeoutError:
-            pass  # sleep normal completado
+            pass  # hora cheia SP atingida → próximo ciclo
 
 
 @app.on_event("startup")
