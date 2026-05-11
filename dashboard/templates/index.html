@@ -1251,6 +1251,9 @@
               ? 'bg-red-500/15 text-red-400 border border-red-500/20'
               : 'bg-green-500/15 text-green-400 border border-green-500/20';
             noteBadge = `<span class="text-[9px] px-1.5 py-0.5 rounded font-medium ${execCls}">✓ ${note}</span>`;
+          } else if (note && note.includes('LIMIT')) {
+            // Pending limit order — amarelo com ícone de relógio
+            noteBadge = `<span class="text-[9px] px-1.5 py-0.5 rounded font-medium bg-yellow-500/15 text-yellow-400 border border-yellow-500/25">⏳ ${note}</span>`;
           } else {
             noteBadge = `<span class="text-[9px] px-1.5 py-0.5 rounded font-medium bg-gray-700/60 text-gray-400 border border-gray-700">${note}</span>`;
           }

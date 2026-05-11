@@ -343,6 +343,13 @@ last_buy_time:      dict = {}  # {f"{strat}:{pair}": timestamp}
 FG_GREED_MIN   = 70   # Acima de 70: bloqueia novas entradas (euforia = risco de topo)
 FG_TTL         = 3600 # cache de 1 hora (índice atualiza 1×/dia)
 
+# ── Abordagem híbrida Limit/Market ───────────────────────────────
+# EMA Pullback → Limit order ao nível EMA21 (maker 0.10%) — alta prob. de fill
+# Donchian + MACD → Market order (taker 0.40%) — breakouts exigem execução imediata
+LIMIT_STRATEGIES      = {"EMA Pullback"}   # estratégias com limit order
+LIMIT_ORDER_TIMEOUT_H = 2                  # cancela se não preencher em 2 ciclos (2h)
+pending_orders: dict  = {}                 # {f"{strat}:{pair}": {limit_price, ...}}
+
 client = OKXClient(
     api_key    = os.getenv("OKX_API_KEY",    os.getenv("API_KEY", "")),
     secret_key = os.getenv("OKX_SECRET_KEY", os.getenv("SECRET_KEY", "")),
@@ -934,8 +941,9 @@ async def reset_portfolio(token: str = "", brl: float = 0.0):
     # ── Reinicia cooldowns, sinais e contadores ───────────────────
     sl_cooldowns.clear()
     last_signals.clear()
-    _daily_trade_count.clear()   # zera circuit breaker do dia
-    last_buy_time.clear()        # zera cooldowns de compra
+    _daily_trade_count.clear()
+    last_buy_time.clear()
+    pending_orders.clear()       # cancela limit orders pendentes no reset
 
     _update_portfolio_state()
     await broadcast(state)
@@ -1205,6 +1213,62 @@ async def trading_loop():
                 pair_score           = 0.0
                 _adx_val             = 20.0
                 donchian_6h_confirmed = True
+
+                # ── Verificação de Pending Limit Orders (EMA Pullback) ──────────
+                # Verifica se alguma limit order pendente foi preenchida neste ciclo.
+                # Fill condition: candle low ≤ limit_price (preço chegou ao nivel desejado)
+                for _strat in all_strategies:
+                    _pk = f"{_strat.name}:{pair}"
+                    _po = pending_orders.get(_pk)
+                    if not _po:
+                        continue
+                    _candle_low = float(candles_1h[-2][3] if candles_1h and len(candles_1h) >= 2
+                                        else (candles_1h[-1].get("low", price) if candles_1h and isinstance(candles_1h[-1], dict)
+                                              else price))
+                    _now_ts = time.time()
+                    if _candle_low <= _po["limit_price"]:
+                        # ✅ FILLED — executa ao preço limite com MAKER fee
+                        _fill_px  = _po["limit_price"]
+                        _fill_usd = _po["trade_usd"]
+                        _fill_qty = _fill_usd / _fill_px
+                        if engine.buy(symbol, _fill_usd, _fill_px, f"{_strat.name}:limit"):
+                            _slot = strategy_slots.setdefault(_pk, _empty_slot())
+                            _slot["qty"]       = _fill_qty
+                            _slot["entry"]     = _fill_px
+                            _slot["peak"]      = _fill_px
+                            _slot["entry_usd"] = _fill_usd
+                            _slot["sl_pct"]    = _po.get("sl_pct", 0.0)
+                            _slot["be_sl"]     = 0.0
+                            _record_trade("BUY", pair, _fill_qty, _fill_px, _fill_usd, f"{_strat.name}:limit")
+                            _count_buy(_strat.name)
+                            last_buy_time[_pk] = _now_ts
+                            _daily_trade_count[datetime.now().strftime("%Y-%m-%d")] = \
+                                _daily_trade_count.get(datetime.now().strftime("%Y-%m-%d"), 0) + 1
+                            maker_fee_pct = _current_maker_fee() * 100
+                            logger.info(f"[{pair}][{_strat.name}] ✅ LIMIT FILLED @ ${_fill_px:,.2f} "
+                                        f"| fee={maker_fee_pct:.2f}% (maker)")
+                            state["feed"].insert(0, {
+                                "time": now_str, "cycle": state["cycle"],
+                                "pair": pair, "strategy": _strat.name,
+                                "signal": "BUY", "price": _fill_px,
+                                "executed": True,
+                                "note": f"LIMIT filled · maker {maker_fee_pct:.2f}%",
+                            })
+                            state["feed"] = state["feed"][:100]
+                        del pending_orders[_pk]
+                    elif _now_ts > _po["expires_at"]:
+                        # ❌ EXPIRED — cancela sem executar
+                        logger.info(f"[{pair}][{_strat.name}] ⏰ LIMIT expirado sem fill "
+                                    f"(limit=${_po['limit_price']:,.2f} vs low=${_candle_low:,.2f})")
+                        state["feed"].insert(0, {
+                            "time": now_str, "cycle": state["cycle"],
+                            "pair": pair, "strategy": _strat.name,
+                            "signal": "HOLD", "price": _po["limit_price"],
+                            "executed": False,
+                            "note": f"LIMIT expirado (não preencheu em {LIMIT_ORDER_TIMEOUT_H}h)",
+                        })
+                        state["feed"] = state["feed"][:100]
+                        del pending_orders[_pk]
 
                 # ── Volatilidade extrema: fecha posição de consenso e PULA ciclo ──
                 if vol_signal == "SELL":
@@ -1485,48 +1549,81 @@ async def trading_loop():
                           if _buy_blocked:
                               logger.debug(f"[{pair}][{strat.name}] BUY bloqueado — {_buy_blocked}")
                           else:
-                              # ── Sizing: TRADE_PCT × regime_mult (Fase 4) ──────────
-                              # 1 multiplicador claro e interpretável:
-                              #   bull  → 100% do TRADE_PCT (tendência forte)
-                              #   chop  →  70% do TRADE_PCT (mercado lateral)
-                              #   bear  →  50% do TRADE_PCT (entrada seletiva)
+                              # ── Sizing: TRADE_PCT × regime_mult ──────────────────
                               _regime_mult = 1.0 if market_mode == "bull" else \
                                              0.7 if market_mode == "chop" else 0.5
                               trade_usd = portfolio_total * TRADE_PCT * _regime_mult
-                              fee_margin = _current_taker_fee()
-                              if engine.balance_usd < trade_usd * (1 + fee_margin):
-                                  trade_usd = max(0, engine.balance_usd * (1 - fee_margin))
 
-                              if trade_usd > 1.0:
-                                  qty = trade_usd / price
-                                  if engine.buy(symbol, trade_usd, price, strat.name):
-                                      slot["qty"]       = qty
-                                      slot["entry"]     = price
-                                      slot["peak"]      = price
-                                      slot["pyramids"]  = 0
-                                      slot["entry_usd"] = trade_usd
-                                      # Salva SL% ATR-based no momento da entrada (Fase 3)
-                                      _sl_min, _sl_max = PAIR_SL_RANGE.get(pair, (0.03, 0.07))
-                                      _sl_at_entry = _atr_sl_pct if _atr_sl_pct else _sl_max * 100
-                                      slot["sl_pct"] = max(_sl_min * 100, min(_sl_max * 100, _sl_at_entry))
-                                      _record_trade("BUY", pair, qty, price, trade_usd, strat.name)
-                                      _count_buy(strat.name)
-                                      last_buy_time[key] = time.time()
-                                      _daily_trade_count[today_key] = daily_trades + 1
+                              # SL% para usar na ordem
+                              _sl_min, _sl_max = PAIR_SL_RANGE.get(pair, (0.03, 0.07))
+                              _sl_at_entry = _atr_sl_pct if _atr_sl_pct else _sl_max * 100
+                              _sl_pct_entry = max(_sl_min * 100, min(_sl_max * 100, _sl_at_entry))
+
+                              if strat.name in LIMIT_STRATEGIES and key not in pending_orders:
+                                  # ── LIMIT ORDER (EMA Pullback → maker 0.10%) ───────
+                                  # Limit price = EMA21 (nível do pullback que gerou o sinal)
+                                  try:
+                                      _df_lim = pd.DataFrame(candles_1h,
+                                          columns=["start","low","high","open","close","volume"])
+                                      for _c in ["close"]:
+                                          _df_lim[_c] = pd.to_numeric(_df_lim[_c], errors="coerce")
+                                      _limit_px = float(_df_lim["close"].ewm(span=21, adjust=False).mean().iloc[-2])
+                                  except Exception:
+                                      _limit_px = price * 0.9995   # fallback: 0.05% abaixo
+
+                                  fee_margin = _current_maker_fee()
+                                  if engine.balance_usd >= trade_usd * (1 + fee_margin) and trade_usd > 1.0:
+                                      pending_orders[key] = {
+                                          "limit_price": round(_limit_px, 4),
+                                          "trade_usd":   round(trade_usd, 4),
+                                          "expires_at":  time.time() + LIMIT_ORDER_TIMEOUT_H * CYCLE_INTERVAL,
+                                          "sl_pct":      _sl_pct_entry,
+                                      }
+                                      last_buy_time[key] = time.time()  # previne re-sinalização imediata
                                       pct_used = (trade_usd / engine.initial_balance) * 100 if engine.initial_balance > 0 else 0
-                                      logger.info(f"[{pair}][{strat.name}] ✅ BUY {pct_used:.1f}% "
-                                                  f"R${trade_usd*usd_brl:.0f} @ ${price:,.2f} "
-                                                  f"[{market_mode} score={pair_score:.0%} RR={_rr:.1f}]")
+                                      logger.info(f"[{pair}][{strat.name}] 📋 LIMIT @ ${_limit_px:,.4f} "
+                                                  f"(market=${price:,.2f}) | R${trade_usd*usd_brl:.0f} | maker fee")
                                       state["feed"].insert(0, {
                                           "time": now_str, "cycle": state["cycle"],
                                           "pair": pair, "strategy": strat.name,
-                                          "signal": "BUY", "price": price,
-                                          "executed": True,
-                                          "note": f"R${trade_usd*usd_brl:.0f} ({pct_used:.1f}% PL)",
+                                          "signal": "BUY", "price": _limit_px,
+                                          "executed": False,
+                                          "note": f"LIMIT R${trade_usd*usd_brl:.0f} | maker 0.10%",
                                       })
                                       state["feed"] = state["feed"][:100]
-                              else:
-                                  logger.info(f"[{pair}][{strat.name}] BUY negado — saldo insuficiente")
+
+                              elif strat.name not in LIMIT_STRATEGIES:
+                                  # ── MARKET ORDER (Donchian, MACD → taker 0.40%) ────
+                                  fee_margin = _current_taker_fee()
+                                  if engine.balance_usd < trade_usd * (1 + fee_margin):
+                                      trade_usd = max(0, engine.balance_usd * (1 - fee_margin))
+
+                                  if trade_usd > 1.0:
+                                      qty = trade_usd / price
+                                      if engine.buy(symbol, trade_usd, price, strat.name):
+                                          slot["qty"]       = qty
+                                          slot["entry"]     = price
+                                          slot["peak"]      = price
+                                          slot["entry_usd"] = trade_usd
+                                          slot["sl_pct"]    = _sl_pct_entry
+                                          slot["be_sl"]     = 0.0
+                                          _record_trade("BUY", pair, qty, price, trade_usd, strat.name)
+                                          _count_buy(strat.name)
+                                          last_buy_time[key] = time.time()
+                                          _daily_trade_count[today_key] = daily_trades + 1
+                                          pct_used = (trade_usd / engine.initial_balance) * 100 if engine.initial_balance > 0 else 0
+                                          logger.info(f"[{pair}][{strat.name}] ✅ MARKET BUY {pct_used:.1f}% "
+                                                      f"R${trade_usd*usd_brl:.0f} @ ${price:,.2f} | taker fee")
+                                          state["feed"].insert(0, {
+                                              "time": now_str, "cycle": state["cycle"],
+                                              "pair": pair, "strategy": strat.name,
+                                              "signal": "BUY", "price": price,
+                                              "executed": True,
+                                              "note": f"MARKET R${trade_usd*usd_brl:.0f} | taker 0.40%",
+                                          })
+                                          state["feed"] = state["feed"][:100]
+                                  else:
+                                      logger.info(f"[{pair}][{strat.name}] BUY negado — saldo insuficiente")
 
                 # ── Slot manual: usa mesma regra unificada (Fase 3) ─────────────
                 ms = strategy_slots.get(f"manual:{pair}")
@@ -1639,6 +1736,11 @@ async def trading_loop():
         state["next_news_event"] = {
             "name": _nxt["name"], "mins_to": _nxt["mins_to"]
         } if _nxt else None
+        state["pending_limit_orders"] = {
+            k: {"limit_price": v["limit_price"], "trade_usd": v["trade_usd"],
+                "expires_in_min": max(0, int((v["expires_at"] - time.time()) / 60))}
+            for k, v in pending_orders.items()
+        }
 
         await broadcast(state)
         # Sleep interrompível: reset dispara _immediate_cycle e o próximo ciclo
