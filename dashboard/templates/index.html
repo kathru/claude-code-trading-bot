@@ -380,58 +380,89 @@
       </div>
     </div>
 
-    <!-- ── KPIs ── -->
+    <!-- ── KPIs em Tempo Real ── -->
     <div class="card p-5">
       <div class="flex items-center justify-between mb-4">
         <h3 class="font-semibold text-white">KPIs em Tempo Real</h3>
-        <span class="text-xs text-gray-500">Atualizado a cada ciclo</span>
+        <div class="flex items-center gap-3">
+          <span class="text-[10px] text-gray-600">Circuit Breaker: <span id="kpi-circuit-breaker" class="text-cyan-400 font-bold">—/10</span></span>
+          <span class="text-[10px] text-gray-600">Slots: <span id="kpi-open-slots" class="text-cyan-400 font-bold">—/4</span></span>
+          <span class="text-xs text-gray-500">atualizado a cada ciclo</span>
+        </div>
       </div>
-      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-3">
+
+      <!-- Overview global — 4 cards compactos -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
-          <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Win Rate</p>
-          <p id="kpi-win-rate" class="text-xl font-bold text-gray-300">—</p>
-          <p class="text-[10px] mt-0.5"><span class="text-yellow-500">Meta: 55%+</span> · <span class="text-gray-600">Target: 60%</span></p>
+          <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Win Rate Global</p>
+          <p id="kpi-win-rate" class="text-2xl font-bold text-gray-300">—</p>
+          <div class="mt-1.5 h-1 bg-gray-700 rounded-full overflow-hidden">
+            <div id="kpi-win-rate-bar" class="h-1 rounded-full bg-green-500 transition-all" style="width:0%"></div>
+          </div>
+          <p class="text-[10px] text-gray-600 mt-1">Meta: <span class="text-yellow-500">55%+</span></p>
         </div>
         <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
           <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Profit Factor</p>
-          <p id="kpi-profit-factor" class="text-xl font-bold text-gray-300">—</p>
-          <p class="text-[10px] mt-0.5"><span class="text-yellow-500">Meta: 1.5+</span> · <span class="text-gray-600">Aceitável: 1.0+</span></p>
+          <p id="kpi-profit-factor" class="text-2xl font-bold text-gray-300">—</p>
+          <p id="kpi-avg-win" class="text-[10px] text-green-400 mt-1">Ganho méd: —</p>
+          <p id="kpi-avg-loss" class="text-[10px] text-red-400">Perda méd: —</p>
         </div>
         <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
-          <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Ganho / Perda Médios</p>
-          <p id="kpi-avg-win" class="text-xl font-bold text-green-400">—</p>
-          <p id="kpi-avg-loss" class="text-[10px] text-red-400 mt-0.5">Perda: —</p>
-          <p class="text-[10px] text-gray-600 mt-0.5">Risco/retorno positivo</p>
+          <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Max Drawdown</p>
+          <p id="kpi-max-dd" class="text-2xl font-bold text-red-400">—</p>
+          <p class="text-[10px] text-gray-600 mt-1">Regime: <span id="kpi-market-mode" class="text-yellow-400 font-bold">—</span> · TP: <span id="kpi-market-mode-tp" class="text-indigo-400 font-bold">—</span></p>
         </div>
         <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
-          <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Market Regime</p>
-          <p id="kpi-market-mode" class="text-xl font-bold text-yellow-400">—</p>
-          <p id="kpi-market-mode-tp" class="text-[10px] text-indigo-400 mt-0.5">TP: —</p>
-          <p class="text-[10px] text-gray-600 mt-0.5">bull / chop / bear</p>
+          <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Trade Size Dinâmico</p>
+          <p id="kpi-trade-pct" class="text-2xl font-bold text-yellow-400">—</p>
+          <p id="kpi-open-slots-sub" class="text-[10px] text-gray-600 mt-1">slots abertos</p>
         </div>
-        <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
-          <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Dynamic Trade Size</p>
-          <p id="kpi-trade-pct" class="text-xl font-bold text-yellow-400">—</p>
-          <p class="text-[10px] mt-0.5"><span class="text-yellow-500">Mín: 2%</span> · <span class="text-gray-600">Máx: 10%</span></p>
-        </div>
-        <!-- NEW KPI: Circuit Breaker -->
-        <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
-          <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Circuit Breaker</p>
-          <p id="kpi-circuit-breaker" class="text-xl font-bold text-cyan-400">—/10</p>
-          <p id="kpi-circuit-breaker-sub" class="text-[10px] text-gray-600 mt-0.5">trades hoje</p>
-        </div>
-        <!-- NEW KPI: Slots Abertos -->
-        <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
-          <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Slots Abertos</p>
-          <p id="kpi-open-slots" class="text-xl font-bold text-cyan-400">—/4</p>
-          <p id="kpi-open-slots-sub" class="text-[10px] text-gray-600 mt-0.5">simultâneos</p>
-        </div>
-        <!-- NEW KPI: Regime Predominante -->
-        <div class="bg-gray-800/50 border border-gray-700 rounded-xl p-3">
-          <p class="text-[10px] text-gray-500 uppercase tracking-wide mb-1">Regime</p>
-          <p id="kpi-regime" class="text-xl font-bold text-gray-300">—</p>
-          <p class="text-[10px] text-gray-600 mt-0.5">Mercado predominante</p>
-        </div>
+      </div>
+
+      <!-- Tabela por estratégia -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="text-gray-500 uppercase tracking-wider text-[9px] border-b border-gray-800">
+              <th class="text-left pb-2 pr-3">Estratégia</th>
+              <th class="text-center pb-2 px-3">
+                Win Rate
+                <div class="text-[8px] text-gray-600 font-normal normal-case">total · últ.10</div>
+              </th>
+              <th class="text-center pb-2 px-3">
+                Profit Factor
+                <div class="text-[8px] text-gray-600 font-normal normal-case">lucro / perda</div>
+              </th>
+              <th class="text-center pb-2 px-3">
+                Edge Decay
+                <div class="text-[8px] text-gray-600 font-normal normal-case">recente vs total</div>
+              </th>
+              <th class="text-center pb-2 px-3">
+                DD Contrib.
+                <div class="text-[8px] text-gray-600 font-normal normal-case">% do drawdown</div>
+              </th>
+              <th class="text-center pb-2 px-3">
+                MFE Capture
+                <div class="text-[8px] text-gray-600 font-normal normal-case">realizado / potencial</div>
+              </th>
+              <th class="text-center pb-2 pl-3">
+                P&L
+                <div class="text-[8px] text-gray-600 font-normal normal-case">realizado</div>
+              </th>
+            </tr>
+          </thead>
+          <tbody id="kpi-strategy-table">
+            <!-- populated by JS -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Legenda -->
+      <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[9px] text-gray-600 border-t border-gray-800 pt-2">
+        <span><span class="text-green-400">▲</span> Edge Decay positivo = melhora recente</span>
+        <span><span class="text-red-400">▼</span> Edge Decay negativo = deterioração nos últimos 10 trades</span>
+        <span>MFE Capture = % do alvo TP que foi efetivamente realizado</span>
+        <span>DD Contrib = % do drawdown máximo originado desta estratégia</span>
       </div>
     </div>
 
@@ -1251,89 +1282,166 @@
     const tp   = s.tp_objective || {};
 
     const el = id => document.getElementById(id);
-    const setKpi = (id, val, suffix = '') => { const e = el(id); if (e) e.textContent = val + suffix; };
-
-    const hasTrades = (kpis.total_trades || 0) > 0;
     const hasSells  = (kpis.sell_trades  || 0) > 0;
     const hasWins   = (kpis.win_count    || 0) > 0;
     const hasLosses = (kpis.loss_count   || 0) > 0;
 
-    // Win Rate
+    // ── Overview global cards ─────────────────────────────────────────────
     const wr = kpis.win_rate || 0;
-    if (el('kpi-win-rate')) {
-      el('kpi-win-rate').textContent = hasSells ? (wr * 100).toFixed(1) + '%' : '—';
-      el('kpi-win-rate').style.color = wr >= 0.55 ? '#4ade80' : wr >= 0.45 ? '#fb923c' : hasSells ? '#f87171' : '';
-    }
-
-    // Profit Factor
     const pf = kpis.profit_factor || 0;
-    if (el('kpi-profit-factor')) {
-      el('kpi-profit-factor').textContent = hasSells ? (pf > 0 ? pf.toFixed(2) : '0.00') : '—';
-      el('kpi-profit-factor').style.color = pf >= 1.5 ? '#4ade80' : pf >= 1.0 ? '#fb923c' : hasSells ? '#f87171' : '';
-    }
-
-    // Ganho / Perda médios
     const avgW = kpis.avg_win  || 0;
     const avgL = kpis.avg_loss || 0;
-    if (el('kpi-avg-win'))  el('kpi-avg-win').textContent  = hasWins   ? '+R$ ' + fmtBRL(avgW * usdBrl) : (hasSells ? 'Sem ganhos' : '—');
-    if (el('kpi-avg-loss')) el('kpi-avg-loss').textContent = hasLosses ? '-R$ ' + fmtBRL(Math.abs(avgL) * usdBrl) : (hasSells ? 'Sem perdas' : '—');
 
-    // Market Regime KPI (substitui TP Dinâmico)
-    if (el('kpi-market-mode')) {
-      const mm   = (s.market_mode || '').toLowerCase();
-      const mmUp = mm ? mm.toUpperCase() : '—';
-      el('kpi-market-mode').textContent = mmUp || '—';
-      el('kpi-market-mode').style.color = mm === 'bull' ? '#4ade80' : mm === 'bear' ? '#f87171' : '#facc15';
-      const tpEl = el('kpi-market-mode-tp');
-      if (tpEl && tp.current != null) {
-        tpEl.textContent = `TP: ${tp.current.toFixed(1)}% · ${mm === 'bull' ? 'agressivo' : mm === 'bear' ? 'conservador' : 'neutro'}`;
-      } else if (tpEl) {
-        tpEl.textContent = tp.current != null ? `TP: ${tp.current.toFixed(1)}%` : 'TP: —';
-      }
+    if (el('kpi-win-rate')) {
+      el('kpi-win-rate').textContent = hasSells ? (wr * 100).toFixed(1) + '%' : '—';
+      el('kpi-win-rate').style.color = wr >= 0.55 ? '#4ade80' : wr >= 0.45 ? '#fb923c' : hasSells ? '#f87171' : '#9ca3af';
+    }
+    const wrBar = el('kpi-win-rate-bar');
+    if (wrBar) {
+      wrBar.style.width = Math.round(wr * 100) + '%';
+      wrBar.style.background = wr >= 0.55 ? '#4ade80' : wr >= 0.45 ? '#fb923c' : '#f87171';
+    }
+    if (el('kpi-profit-factor')) {
+      el('kpi-profit-factor').textContent = hasSells ? (pf > 0 ? pf.toFixed(2) : '0.00') : '—';
+      el('kpi-profit-factor').style.color = pf >= 1.5 ? '#4ade80' : pf >= 1.0 ? '#fb923c' : hasSells ? '#f87171' : '#9ca3af';
+    }
+    if (el('kpi-avg-win'))  el('kpi-avg-win').textContent  = hasWins   ? 'Ganho méd: +R$ ' + fmtBRL(avgW * usdBrl) : '—';
+    if (el('kpi-avg-loss')) el('kpi-avg-loss').textContent = hasLosses ? 'Perda méd: -R$ ' + fmtBRL(Math.abs(avgL) * usdBrl) : '—';
+
+    // Max Drawdown
+    const ddEl = el('kpi-max-dd');
+    if (ddEl) {
+      const dd = kpis.max_drawdown || 0;
+      ddEl.textContent = dd > 0 ? '-R$ ' + fmtBRL(dd * usdBrl) : '—';
+      ddEl.style.color = dd > 0 ? '#f87171' : '#9ca3af';
     }
 
-    // Tamanho Trade
+    // Market Regime
+    if (el('kpi-market-mode')) {
+      const mm = (s.market_mode || '').toLowerCase();
+      el('kpi-market-mode').textContent = mm ? mm.toUpperCase() : '—';
+      el('kpi-market-mode').style.color = mm === 'bull' ? '#4ade80' : mm === 'bear' ? '#f87171' : '#facc15';
+      const tpEl = el('kpi-market-mode-tp');
+      if (tpEl) tpEl.textContent = tp.current != null ? tp.current.toFixed(1) + '%' : '—';
+    }
+
+    // Trade Size
     if (el('kpi-trade-pct') && s.trade_pct != null) {
       el('kpi-trade-pct').textContent = (s.trade_pct * 100).toFixed(0) + '%';
     }
 
-    // ── NEW: Circuit Breaker ──────────────────────────────────────────────
+    // Circuit Breaker & Slots (agora no header do card)
     if (el('kpi-circuit-breaker')) {
       const maxTrades = s.max_daily_trades || 10;
-      const tdToday   = s.trades_today != null ? s.trades_today
-        : (s.trades || []).filter(t => (t.time||'').startsWith(new Date().toISOString().slice(0,10))).length;
+      const tdToday   = s.trades_today != null ? s.trades_today : 0;
       el('kpi-circuit-breaker').textContent = tdToday + '/' + maxTrades;
       el('kpi-circuit-breaker').style.color = tdToday >= maxTrades - 2 ? '#f87171' : tdToday >= maxTrades * 0.6 ? '#fb923c' : '#22d3ee';
-      const subCB = el('kpi-circuit-breaker-sub');
-      if (subCB) subCB.textContent = tdToday >= maxTrades ? '🔴 Bloqueado' : 'trades hoje';
     }
-
-    // ── NEW: Slots Abertos ────────────────────────────────────────────────
     if (el('kpi-open-slots')) {
       const maxSlots  = s.max_open_slots || 4;
       const openCount = s.open_slots_count != null
         ? s.open_slots_count
         : Object.values(allSlots).filter(sl => (sl.qty || 0) > 0).length;
       el('kpi-open-slots').textContent = openCount + '/' + maxSlots;
-      el('kpi-open-slots').style.color = openCount >= maxSlots - 1 ? '#f87171' : openCount >= maxSlots * 0.6 ? '#fb923c' : '#22d3ee';
+      el('kpi-open-slots').style.color = openCount >= maxSlots ? '#f87171' : openCount >= maxSlots - 1 ? '#fb923c' : '#22d3ee';
       const subOS = el('kpi-open-slots-sub');
-      if (subOS) subOS.textContent = openCount >= maxSlots ? '🔴 Cheio' : 'simultâneos';
+      if (subOS) subOS.textContent = openCount >= maxSlots ? '🔴 Cheio' : openCount + ' slots abertos';
     }
 
-    // ── NEW: Regime ADX Predominante (pair-level) ────────────────────────
-    if (el('kpi-regime')) {
-      const sigs    = s.signals || {};
-      const rCounts = { TRENDING: 0, RANGING: 0, NEUTRAL: 0 };
-      CRYPTOS.forEach(c => {
-        const sg = sigs[c.pair];
-        const r = sg && sg.regime
-          ? sg.regime.toUpperCase()
-          : (sg ? inferRegime(sg) : 'NEUTRAL');
-        rCounts[r] = (rCounts[r] || 0) + 1;
-      });
-      const dominant = Object.entries(rCounts).sort((a,b) => b[1]-a[1])[0][0];
-      el('kpi-regime').textContent = dominant;
-      el('kpi-regime').style.color = dominant==='TRENDING' ? '#4ade80' : dominant==='RANGING' ? '#facc15' : '#9ca3af';
+    // ── Tabela por estratégia ─────────────────────────────────────────────
+    const stTable = el('kpi-strategy-table');
+    if (stTable) {
+      const byStrat = (kpis.by_strategy) || {};
+      const stratDefs = [
+        { name: 'Donchian Breakout', icon: '🚀', short: 'Donchian' },
+        { name: 'EMA Pullback',      icon: '📋', short: 'EMA PB'  },
+        { name: 'MACD Momentum',     icon: '⚡', short: 'MACD'    },
+      ];
+
+      stTable.innerHTML = stratDefs.map(sd => {
+        const d = byStrat[sd.name] || {};
+        const n = d.n || 0;
+
+        // Win Rate — total e recente
+        const wrTot = d.win_rate != null ? (d.win_rate * 100).toFixed(1) + '%' : '—';
+        const recentWr = d.win_rate != null && d.edge_decay != null
+          ? ((d.win_rate + d.edge_decay) * 100).toFixed(1) + '%' : '—';
+        const wrCol = d.win_rate == null ? '#6b7280'
+          : d.win_rate >= 0.55 ? '#4ade80' : d.win_rate >= 0.45 ? '#fb923c' : '#f87171';
+
+        // Profit Factor
+        const pfVal = d.profit_factor != null ? d.profit_factor.toFixed(2) : '—';
+        const pfCol = d.profit_factor == null ? '#6b7280'
+          : d.profit_factor >= 1.5 ? '#4ade80' : d.profit_factor >= 1.0 ? '#fb923c' : '#f87171';
+
+        // Edge Decay
+        let edgeTxt = '—', edgeCol = '#6b7280', edgeIcon = '';
+        if (d.edge_decay != null && n >= 3) {
+          const pct = (d.edge_decay * 100).toFixed(1);
+          edgeIcon = d.edge_decay >= 0.02 ? '▲' : d.edge_decay <= -0.05 ? '▼▼' : d.edge_decay < 0 ? '▼' : '→';
+          edgeTxt  = edgeIcon + ' ' + (d.edge_decay >= 0 ? '+' : '') + pct + '%';
+          edgeCol  = d.edge_decay >= 0.02 ? '#4ade80' : d.edge_decay <= -0.05 ? '#f87171' : d.edge_decay < 0 ? '#fb923c' : '#9ca3af';
+        }
+
+        // Drawdown Contribution
+        const ddC = d.drawdown_contrib != null ? d.drawdown_contrib.toFixed(1) + '%' : '—';
+        const ddCCol = d.drawdown_contrib == null ? '#6b7280'
+          : d.drawdown_contrib >= 60 ? '#f87171' : d.drawdown_contrib >= 30 ? '#fb923c' : '#4ade80';
+
+        // MFE Capture
+        let mfeTxt = '—', mfeCol = '#6b7280';
+        if (d.mfe_capture != null) {
+          mfeTxt = d.mfe_capture.toFixed(1) + '%';
+          mfeCol = d.mfe_capture >= 80 ? '#4ade80' : d.mfe_capture >= 50 ? '#fb923c' : '#f87171';
+        }
+
+        // P&L realizado
+        const pnl    = d.realized_usd || 0;
+        const pnlBrl = pnl * usdBrl;
+        const pnlTxt = n > 0 ? (pnlBrl >= 0 ? '+' : '-') + 'R$ ' + fmtBRL(Math.abs(pnlBrl)) : '—';
+        const pnlCol = pnl > 0 ? '#4ade80' : pnl < 0 ? '#f87171' : '#6b7280';
+
+        // Barra win rate horizontal (40px)
+        const barW = d.win_rate != null ? Math.round(d.win_rate * 40) : 0;
+
+        return `<tr class="border-t border-gray-800/60 hover:bg-gray-800/20 transition-colors">
+          <td class="py-3 pr-3">
+            <div class="flex items-center gap-1.5">
+              <span>${sd.icon}</span>
+              <div>
+                <p class="text-xs font-semibold text-white">${sd.short}</p>
+                <p class="text-[9px] text-gray-600">${n} trades</p>
+              </div>
+            </div>
+          </td>
+          <td class="py-3 px-3 text-center">
+            <p class="text-xs font-bold font-mono" style="color:${wrCol}">${wrTot}</p>
+            <p class="text-[9px] text-gray-500">últ.10: ${recentWr}</p>
+            <div style="width:40px;height:2px;background:#21262d;border-radius:2px;margin:3px auto 0">
+              <div style="width:${barW}px;height:2px;background:${wrCol};border-radius:2px"></div>
+            </div>
+          </td>
+          <td class="py-3 px-3 text-center">
+            <p class="text-xs font-bold font-mono" style="color:${pfCol}">${pfVal}</p>
+            <p class="text-[9px] text-gray-600">${d.wins || 0}W · ${d.losses || 0}L</p>
+          </td>
+          <td class="py-3 px-3 text-center">
+            <p class="text-xs font-bold font-mono" style="color:${edgeCol}">${edgeTxt}</p>
+            <p class="text-[9px] text-gray-600">${n >= 3 ? 'últ.' + Math.min(10,n) + ' vs total' : 'aguardando'}</p>
+          </td>
+          <td class="py-3 px-3 text-center">
+            <p class="text-xs font-bold font-mono" style="color:${ddCCol}">${ddC}</p>
+            <p class="text-[9px] text-gray-600">do DD máx</p>
+          </td>
+          <td class="py-3 px-3 text-center">
+            <p class="text-xs font-bold font-mono" style="color:${mfeCol}">${mfeTxt}</p>
+            <p class="text-[9px] text-gray-600">do potencial TP</p>
+          </td>
+          <td class="py-3 pl-3 text-center">
+            <p class="text-xs font-bold font-mono" style="color:${pnlCol}">${pnlTxt}</p>
+          </td>
+        </tr>`;
+      }).join('');
     }
 
     // ── Market Mode global — header badge + banner ───────────────────────

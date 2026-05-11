@@ -604,88 +604,162 @@ def _update_portfolio_state():
 
 
 def _calculate_kpis() -> dict:
-    """Calcula métricas de performance usando strategy_pnl e preços de entrada/saída."""
-    all_trades  = engine.trades
-    sell_trades = [t for t in all_trades if t.get("side") == "SELL"]
+    """
+    Calcula métricas avançadas de performance por estratégia e globais.
 
-    if not sell_trades:
-        return {
-            "total_trades": len(all_trades),
-            "sell_trades":  0,
-            "win_rate":     0.0,
-            "win_count":    0,
-            "loss_count":   0,
-            "avg_win":      0.0,
-            "avg_loss":     0.0,
-            "profit_factor": 0.0,
-            "expected_value": 0.0,
-        }
+    Métricas por estratégia:
+      win_rate        → % trades vencedores
+      profit_factor   → gross_profit / gross_loss
+      edge_decay      → win_rate últimos 10 trades vs win_rate total (detecta deterioração)
+      drawdown_contrib → % do drawdown máximo atribuível à estratégia
+      mfe_capture     → P&L realizado / MFE estimado (quanto do movimento foi capturado)
+    """
+    all_trades_list = list(engine.trades)
+    sell_trades     = [t for t in all_trades_list if t.get("side") == "SELL"]
 
-    # Reconstrói custo médio de entrada por símbolo a partir de engine.trades
-    # engine.trades usa campo "symbol" (ex: "LINK") e tem "qty"
-    def _avg_entry_at_sell(trades_history, sell_idx):
-        """Calcula preço médio de entrada no momento do SELL usando trades anteriores."""
-        sell   = trades_history[sell_idx]
-        # engine.trades usa "symbol" (ex:"LINK"), não "pair" (ex:"LINK-USD")
+    # ── Helper: preço médio de entrada na época do SELL ─────────────────────
+    def _avg_entry_at_sell(history, sell_idx):
+        sell   = history[sell_idx]
         symbol = sell.get("symbol") or sell.get("pair", "").replace("-USD", "")
-        running_qty, running_cost = 0.0, 0.0
-        for t in trades_history[:sell_idx]:
-            t_sym = t.get("symbol") or t.get("pair", "").replace("-USD", "")
-            if t_sym != symbol:
+        rqty, rcost = 0.0, 0.0
+        for t in history[:sell_idx]:
+            tsym = t.get("symbol") or t.get("pair", "").replace("-USD", "")
+            if tsym != symbol:
                 continue
             if t.get("side") == "BUY":
                 q = t.get("qty", 0)
-                running_qty  += q
-                running_cost += q * t.get("price", 0)
+                rqty  += q
+                rcost += q * t.get("price", 0)
             elif t.get("side") == "SELL":
-                q = min(t.get("qty", 0), running_qty)
-                if running_qty > 1e-10:
-                    running_cost *= (running_qty - q) / running_qty
-                running_qty = max(0, running_qty - q)
-        return running_cost / running_qty if running_qty > 1e-10 else 0.0
+                q = min(t.get("qty", 0), rqty)
+                if rqty > 1e-10:
+                    rcost *= (rqty - q) / rqty
+                rqty = max(0, rqty - q)
+        return rcost / rqty if rqty > 1e-10 else 0.0
 
-    # Calcula P&L por trade de SELL (engine.trades tem "qty")
-    all_trades_list = list(all_trades)
-    trade_pnls = []
+    # ── Calcula P&L real por SELL com estratégia e metadados ────────────────
+    trade_records = []   # {pnl, strategy, sell_price, entry_price, qty, pnl_pct}
     for idx, t in enumerate(all_trades_list):
         if t.get("side") != "SELL":
             continue
         sell_usd = t.get("usd", 0)
         qty      = t.get("qty", 0)
+        sell_px  = t.get("price", 0)
         entry    = _avg_entry_at_sell(all_trades_list, idx)
+        strategy = t.get("strategy", t.get("note", "")).split(":")[0] or "unknown"
         if entry > 0 and qty > 0:
-            # buy_fee: custo da compra (0.6% sobre o valor de compra)
-            # sell_usd já é líquido da taxa de venda
             buy_fee  = qty * entry * TAKER_FEE
             cost_usd = qty * entry + buy_fee
             pnl      = sell_usd - cost_usd
+            pnl_pct  = (sell_px - entry) / entry * 100 if entry > 0 else 0.0
         else:
-            pnl = 0.0
-        trade_pnls.append(pnl)
+            pnl = pnl_pct = 0.0
+        trade_records.append({
+            "pnl": pnl, "pnl_pct": pnl_pct,
+            "strategy": strategy,
+            "entry": entry, "sell_px": sell_px, "qty": qty,
+        })
 
-    win_pnls  = [p for p in trade_pnls if p > 0]
-    loss_pnls = [p for p in trade_pnls if p <= 0]
+    # ── Global overview ──────────────────────────────────────────────────────
+    all_pnls  = [r["pnl"] for r in trade_records]
+    win_pnls  = [p for p in all_pnls if p > 0]
+    loss_pnls = [p for p in all_pnls if p <= 0]
+    n         = len(all_pnls)
     wins      = len(win_pnls)
     losses    = len(loss_pnls)
+    avg_win   = sum(win_pnls)  / wins   if wins   else 0.0
+    avg_loss  = sum(loss_pnls) / losses if losses else 0.0
+    sum_wins  = sum(win_pnls)
+    sum_loss  = abs(sum(loss_pnls)) if loss_pnls else 0.0
 
-    avg_win  = sum(win_pnls)  / wins   if wins   > 0 else 0.0
-    avg_loss = sum(loss_pnls) / losses if losses > 0 else 0.0
+    # ── Drawdown máximo global (sequência de equity) ─────────────────────────
+    equity   = [0.0]
+    for r in trade_records:
+        equity.append(equity[-1] + r["pnl"])
+    peak  = 0.0
+    max_dd = 0.0
+    for e in equity:
+        if e > peak:
+            peak = e
+        dd = peak - e
+        if dd > max_dd:
+            max_dd = dd
 
-    sum_wins      = sum(win_pnls)       if win_pnls  else 0.0
-    sum_losses    = abs(sum(loss_pnls)) if loss_pnls else 0.0
-    profit_factor = sum_wins / sum_losses if sum_losses > 0 else 0.0
+    # ── Métricas por estratégia ──────────────────────────────────────────────
+    strat_names = ["Donchian Breakout", "EMA Pullback", "MACD Momentum"]
+    by_strat = {}
 
-    n = len(sell_trades)
+    for sname in strat_names:
+        recs = [r for r in trade_records if sname in r["strategy"]]
+        if not recs:
+            by_strat[sname] = {
+                "win_rate": None, "profit_factor": None,
+                "edge_decay": None, "drawdown_contrib": None,
+                "mfe_capture": None, "n": 0,
+            }
+            continue
+
+        s_pnls  = [r["pnl"] for r in recs]
+        s_wins  = [p for p in s_pnls if p > 0]
+        s_loss  = [p for p in s_pnls if p <= 0]
+        s_n     = len(s_pnls)
+        s_wr    = len(s_wins) / s_n if s_n else 0.0
+        s_gp    = sum(s_wins)
+        s_gl    = abs(sum(s_loss)) if s_loss else 0.0
+        s_pf    = round(s_gp / s_gl, 3) if s_gl > 0 else None
+
+        # Edge decay: win_rate últimos N vs total
+        # Detecta se a estratégia está perdendo efetividade recentemente
+        recent_n = min(10, s_n)
+        recent   = [r["pnl"] for r in recs[-recent_n:]]
+        recent_wr = len([p for p in recent if p > 0]) / len(recent) if recent else s_wr
+        edge_decay = round(recent_wr - s_wr, 4)   # negativo = edge caindo
+
+        # Drawdown contribution: % do drawdown máximo que veio desta estratégia
+        s_equity = [0.0]
+        for r in recs:
+            s_equity.append(s_equity[-1] + r["pnl"])
+        s_peak = 0.0
+        s_dd   = 0.0
+        for e in s_equity:
+            if e > s_peak: s_peak = e
+            s_dd = max(s_dd, s_peak - e)
+        dd_contrib = round(s_dd / max_dd * 100, 1) if max_dd > 0 else 0.0
+
+        # MFE Capture: quanto do movimento máximo favorável foi capturado
+        # Estimativa: MFE = TP alvo × qty × entry_price (usa TP configurado no momento)
+        # Como não temos MFE histórico salvo, estimamos via pnl_pct vs avg_win_pct
+        # MFE proxy = avg(pnl_pct_dos_winners) / TP_atual (% capturado do alvo)
+        win_pcts = [r["pnl_pct"] for r in recs if r["pnl"] > 0]
+        tp_ref   = (state.get("tp_objective") or {}).get("current") or 8.0
+        mfe_capture = round(sum(win_pcts) / len(win_pcts) / tp_ref * 100, 1) if win_pcts else None
+
+        by_strat[sname] = {
+            "win_rate":        round(s_wr, 4),
+            "profit_factor":   s_pf,
+            "edge_decay":      edge_decay,
+            "drawdown_contrib": dd_contrib,
+            "mfe_capture":     mfe_capture,
+            "n":               s_n,
+            "wins":            len(s_wins),
+            "losses":          len(s_loss),
+            "realized_usd":    round(sum(s_pnls), 2),
+        }
+
     return {
-        "total_trades":  len(all_trades),
-        "sell_trades":   n,
-        "win_rate":      (wins / n) if n > 0 else 0.0,   # decimal 0-1 (frontend multiplica por 100)
-        "win_count":     wins,
-        "loss_count":    losses,
-        "avg_win":       avg_win,
-        "avg_loss":      avg_loss,
-        "profit_factor": profit_factor,
-        "expected_value": (avg_win * wins + avg_loss * losses) / n if n > 0 else 0.0,
+        # Global
+        "total_trades":   len(all_trades_list),
+        "sell_trades":    n,
+        "win_rate":       round(wins / n, 4) if n else 0.0,
+        "win_count":      wins,
+        "loss_count":     losses,
+        "avg_win":        round(avg_win,  2),
+        "avg_loss":       round(avg_loss, 2),
+        "profit_factor":  round(sum_wins / sum_loss, 3) if sum_loss else 0.0,
+        "expected_value": round((avg_win * wins + avg_loss * losses) / n, 2) if n else 0.0,
+        "max_drawdown":   round(max_dd, 2),
+        # Por estratégia
+        "by_strategy":    by_strat,
     }
 
 
