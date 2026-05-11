@@ -518,6 +518,11 @@
       filters: ['MACD>0', 'RSI<75', 'ADX↑'],
       desc: 'Cruzamento MACD acima de zero. Exige MACD>0, RSI<75 e ADX rising (tendência em aceleração, não exaustão).'
     },
+    {
+      name: 'BB Reversion', id: 'BB', icon: '↩️',
+      filters: ['BB<Lower', 'RSI<35', 'CHOP'],
+      desc: 'Reversão à média via Bollinger Band(20,2). Ativo exclusivamente em CHOP. Compra na banda inferior (RSI<35), realiza na banda média (EMA20). Limit order.'
+    },
   ];
 
   // ─── Helpers de regime (pair-level ADX regime) ──────────────────────────
@@ -1516,9 +1521,10 @@
   }
 
   // ─── Candle Chart ─────────────────────────────────────────────────────
-  let candleChart = null, macdChart = null, rsiChart = null, adxChart = null, obvChart = null;
+  let candleChart = null, macdChart = null, rsiChart = null, adxChart = null, obvChart = null, bbRevChart = null;
   let candleSeries = null, macdFastSeries = null, macdSlowSeries = null, macdHistSeries = null;
   let rsiSeries = null, adxSeries = null, obvSeries = null, obvZeroSeries = null;
+  let bbRevRsiSeries = null, bbRevOversoldLine = null, bbRevMidLine = null;
   let ema9Series = null, ema21Series = null, ema50Series = null;
   let donchUpperSeries = null, donchLowerSeries = null;
   let bbUpperSeries = null, bbLowerSeries = null, bbMidSeries = null;
@@ -1623,8 +1629,19 @@
     adxTrendSeries = adxChart.addLineSeries({ color: 'rgba(74,222,128,0.5)',  lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
     adxRangeSeries = adxChart.addLineSeries({ color: 'rgba(250,204,21,0.5)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
 
+    // ── 6. BB Reversion — RSI com zona oversold (sinal de reversão) ──────
+    const { wrap: bbRevWrap, chartDiv: bbRevEl } = makeChartWrapper(
+      'BB Reversion — RSI (14)',
+      '— RSI < 35 + preço < BB inferior = sinal de reversão CHOP | linha verde = zona de entrada | linha vermelha = saída na média BB',
+      adxWrap
+    );
+    bbRevChart       = LightweightCharts.createChart(bbRevEl, { ...commonOpts, height: 80 });
+    bbRevRsiSeries   = bbRevChart.addLineSeries({ color: '#a78bfa', lineWidth: 1.5, priceLineVisible: false, lastValueVisible: true });
+    bbRevOversoldLine = bbRevChart.addLineSeries({ color: 'rgba(74,222,128,0.6)',  lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+    bbRevMidLine      = bbRevChart.addLineSeries({ color: 'rgba(248,113,113,0.4)', lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+
     // ── Sync scroll entre todos os charts ────────────────────────────────
-    const subCharts = [macdChart, rsiChart, obvChart, adxChart];
+    const subCharts = [macdChart, rsiChart, obvChart, adxChart, bbRevChart];
     subCharts.forEach(ch => {
       candleChart.timeScale().subscribeVisibleTimeRangeChange(range => {
         try { ch.timeScale().setVisibleRange(range); } catch(e) {}
@@ -1634,7 +1651,7 @@
     // ── ResizeObserver ────────────────────────────────────────────────────
     new ResizeObserver(() => {
       const nw = container.clientWidth;
-      [candleChart, ...subCharts].forEach(c => {
+      [candleChart, ...subCharts, bbRevChart].filter(Boolean).forEach(c => {
         try { c.applyOptions({ width: nw }); } catch(e) {}
       });
     }).observe(container);
@@ -1816,6 +1833,32 @@
       })();
       obvSeries.setData(candles.map((c,i) => ({ time: c.time, value: obvVals[i] })));
       obvZeroSeries.setData(candles.map(c => ({ time: c.time, value: 0 })));
+
+      // ── BB Reversion — RSI(14) com zonas oversold/saída ─────────────────
+      if (bbRevRsiSeries && bbRevChart) {
+        // RSI 14 (mesmo cálculo do sub-chart RSI existente, mas em roxo claro)
+        const rsiPeriod = 14;
+        const bbRevRsiVals = (() => {
+          const r = new Array(closes.length).fill(50);
+          for (let i = rsiPeriod; i < closes.length; i++) {
+            const sl = closes.slice(i - rsiPeriod, i);
+            let gains = 0, losses = 0;
+            for (let j = 1; j < sl.length; j++) {
+              const d = sl[j] - sl[j-1];
+              if (d > 0) gains += d; else losses -= d;
+            }
+            const avgG = gains / rsiPeriod;
+            const avgL = losses / rsiPeriod;
+            r[i] = avgL === 0 ? 100 : 100 - (100 / (1 + avgG / avgL));
+          }
+          return r;
+        })();
+        bbRevRsiSeries.setData(candles.map((c,i) => ({ time: c.time, value: bbRevRsiVals[i] })));
+        // Linha 35 — zona de entrada BB Reversion (RSI oversold)
+        bbRevOversoldLine.setData(candles.map(c => ({ time: c.time, value: 35 })));
+        // Linha 60 — zona de saída / retorno à média
+        bbRevMidLine.setData(candles.map(c => ({ time: c.time, value: 60 })));
+      }
 
     } catch(e) { console.error('[Candles]', e); }
   }

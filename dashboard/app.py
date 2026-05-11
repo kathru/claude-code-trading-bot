@@ -26,6 +26,7 @@ from strategies.news_guard             import is_news_blackout, next_event
 from strategies.news_sync              import sync_if_needed as _news_sync_if_needed
 from strategies.market_breadth         import get_market_breadth
 from strategies.market_regime          import calc_adx, calc_atr
+from strategies.bb_reversion           import BBReversion
 from logger import setup_logger, log_cycle, log_trade, log_portfolio
 from notifier import notify_trade
 
@@ -346,7 +347,7 @@ FG_TTL         = 3600 # cache de 1 hora (índice atualiza 1×/dia)
 # ── Abordagem híbrida Limit/Market ───────────────────────────────
 # EMA Pullback → Limit order ao nível EMA21 (maker 0.10%) — alta prob. de fill
 # Donchian + MACD → Market order (taker 0.40%) — breakouts exigem execução imediata
-LIMIT_STRATEGIES      = {"EMA Pullback"}   # estratégias com limit order
+LIMIT_STRATEGIES      = {"EMA Pullback", "BB Reversion"}  # limit order (maker 0.10%)
 LIMIT_ORDER_TIMEOUT_H = 2                  # cancela se não preencher em 2 ciclos (2h)
 pending_orders: dict  = {}                 # {f"{strat}:{pair}": {limit_price, ...}}
 
@@ -361,10 +362,12 @@ engine = PaperTradingEngine(initial_balance_usd=10000.0)
 # 3 estratégias de tendência — foco em qualidade, menos fees
 all_strategies = [
     DonchianBreakout(period=20, rsi_min=45.0, adx_min=20.0,
-                     rvol_period=20, rvol_min=1.3),   # Fase 2: RVOL simples ≥ 1.3
+                     rvol_period=20, rvol_min=1.3),   # breakout — market order
     EMAPullback(fast=9, mid=21, slow=50,
-                touch_tolerance_pct=0.3),              # Fase 2: 4 condições limpas
-    MACDMomentum(fast=12, slow=26, signal=9, ema_filter=12, rsi_max=75.0),
+                touch_tolerance_pct=0.3),              # pullback — limit order
+    MACDMomentum(fast=12, slow=26, signal=9, ema_filter=12, rsi_max=75.0),  # momentum — market
+    BBReversion(bb_period=20, bb_std=2.0,
+                rsi_period=14, rsi_oversold=35.0),    # mean reversion CHOP — limit order
 ]
 
 # Mapa de candles por estratégia
@@ -1508,6 +1511,11 @@ async def trading_loop():
                           elif strat.name == "Donchian Breakout" and not donchian_6h_confirmed:
                               _buy_blocked = f"Donchian 6H bearish (proxy 4H)"
 
+                          # G1c: BB Reversion — exclusivo do regime CHOP
+                          # Em BULL, trend-following domina; mean reversion luta contra a tendência
+                          elif strat.name == "BB Reversion" and market_mode == "bull":
+                              _buy_blocked = f"BB Reversion bloqueado em BULL (use Donchian/MACD)"
+
                           # G2: Score mínimo 60%
                           elif pair_score < SCORE_MIN_THRESHOLD:
                               _buy_blocked = f"score {pair_score:.0%} < {SCORE_MIN_THRESHOLD:.0%}"
@@ -1561,13 +1569,20 @@ async def trading_loop():
 
                               if strat.name in LIMIT_STRATEGIES and key not in pending_orders:
                                   # ── LIMIT ORDER (EMA Pullback → maker 0.10%) ───────
-                                  # Limit price = EMA21 (nível do pullback que gerou o sinal)
+                                  # Limit price: EMA21 para EMA Pullback, Banda Inferior BB para BB Reversion
                                   try:
                                       _df_lim = pd.DataFrame(candles_1h,
                                           columns=["start","low","high","open","close","volume"])
-                                      for _c in ["close"]:
-                                          _df_lim[_c] = pd.to_numeric(_df_lim[_c], errors="coerce")
-                                      _limit_px = float(_df_lim["close"].ewm(span=21, adjust=False).mean().iloc[-2])
+                                      _df_lim["close"] = pd.to_numeric(_df_lim["close"], errors="coerce")
+                                      _closes_lim = _df_lim["close"]
+                                      if strat.name == "BB Reversion":
+                                          # Limit = Banda Inferior BB(20,2) do último candle fechado
+                                          _bb_mid = _closes_lim.rolling(20).mean()
+                                          _bb_std = _closes_lim.rolling(20).std()
+                                          _limit_px = float((_bb_mid - 2.0 * _bb_std).iloc[-2])
+                                      else:
+                                          # EMA Pullback: limit = EMA21
+                                          _limit_px = float(_closes_lim.ewm(span=21, adjust=False).mean().iloc[-2])
                                   except Exception:
                                       _limit_px = price * 0.9995   # fallback: 0.05% abaixo
 
