@@ -159,8 +159,21 @@ def _detect_market_regime(candles_1h: list, candles_6h: list,
         import pandas as _pd
         import numpy as _np
 
-        df6 = _pd.DataFrame(candles_6h, columns=["start","low","high","open","close","volume"])
-        closes6 = df6["close"].astype(float)
+        _COLS = ["start", "low", "high", "open", "close", "volume"]
+        _NUM  = ["low", "high", "open", "close", "volume"]
+
+        def _to_df(candles: list) -> "_pd.DataFrame":
+            """Cria DataFrame de candles garantindo colunas numéricas.
+            Funciona com candles como lista-de-listas OU lista-de-dicts
+            (API Coinbase retorna strings; converte automaticamente).
+            """
+            df = _pd.DataFrame(candles, columns=_COLS)
+            for col in _NUM:
+                df[col] = _pd.to_numeric(df[col], errors="coerce")
+            return df
+
+        df6 = _to_df(candles_6h)
+        closes6 = df6["close"]
         ema50_s  = closes6.ewm(span=50,  adjust=False).mean()
         ema200_s = closes6.ewm(span=200, adjust=False).mean()
         price    = float(closes6.iloc[-1])
@@ -194,8 +207,8 @@ def _detect_market_regime(candles_1h: list, candles_6h: list,
 
         # ── Sinal 4: Volatilidade implícita elevada (realized vol proxy) ──────
         if candles_1h and len(candles_1h) >= 24:
-            df1h    = _pd.DataFrame(candles_1h, columns=["start","low","high","open","close","volume"])
-            c1h     = df1h["close"].astype(float).iloc[-24:]
+            df1h    = _to_df(candles_1h)
+            c1h     = df1h["close"].iloc[-24:]
             log_ret = _np.log(c1h / c1h.shift(1)).dropna()
             realized_vol_pct = float(log_ret.std() * _np.sqrt(24) * 100)  # vol diária
             if realized_vol_pct > 5.0:   # > 5% vol diária = mercado com medo
@@ -204,7 +217,7 @@ def _detect_market_regime(candles_1h: list, candles_6h: list,
         # ── ADX para bull/chop ────────────────────────────────────────────────
         adx_val = 20.0
         if candles_1h and len(candles_1h) >= 30:
-            df1h = _pd.DataFrame(candles_1h, columns=["start","low","high","open","close","volume"])
+            df1h    = _to_df(candles_1h)
             adx_val = calc_adx(df1h)
 
         # ── Determinar regime final ────────────────────────────────────────────
@@ -1363,6 +1376,8 @@ async def trading_loop():
                   try:
                       import pandas as _pdx
                       _df_adx = _pdx.DataFrame(candles_1h, columns=["start","low","high","open","close","volume"])
+                      for _c in ["low","high","open","close","volume"]:
+                          _df_adx[_c] = _pdx.to_numeric(_df_adx[_c], errors="coerce")
                       _adx_val = calc_adx(_df_adx)
                   except Exception:
                       _adx_val = 20.0
